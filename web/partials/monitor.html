@@ -1,0 +1,135 @@
+<!-- 流量監控分頁。搭配 js/monitor.js;可整組抽出成獨立頁。 -->
+  <div class="panel" id="panel-monitor">
+  <div class="card">
+    <div id="notifybanner" class="banner banner-danger banner-x" onclick="this.style.display='none'; refreshAlertDot();"
+         style="display:none;"></div>
+    <div id="surgebanner" class="banner banner-warn banner-x" onclick="dismissSurge()"
+         title="點此關閉(再有新的暴增會重新跳出)" style="display:none;"></div>
+    <h2>今日網路流量(全部網卡加總)</h2>
+    <div class="calc-hero">
+      <div class="col" style="flex:1 1 auto;">
+        <div class="big"><span id="used">—</span> <span class="unit">/ <span id="quota">—</span> GB</span></div>
+        <div class="sub">日期 <span id="date">—</span> ・ 最後更新 <span id="updated">—</span></div>
+        <div class="row">
+          <div class="stat"><div class="k">剩餘</div><div class="v" id="remain">—</div></div>
+          <div class="stat"><div class="k">即時下載</div><div class="v" id="down">—</div></div>
+          <div class="stat"><div class="k">即時上傳</div><div class="v" id="up">—</div></div>
+          <div class="stat" title="今日已從額度扣除的內網(私有 IP)流量估計值;GPSS 檢索 10.65.x 不在此列"><div class="k">已排除(內網)</div><div class="v" id="lanexcl">—</div></div>
+        </div>
+      </div>
+      <div class="donutarea" style="flex:0 0 auto;">
+        <div class="donutwrap">
+          <div class="donut" id="u-donut">
+            <div class="hole"><div class="pct" id="pct">—</div></div>
+          </div>
+          <div class="donuttip">
+            <div id="u-rem">—</div>
+            <div id="u-ratio">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="toggles">
+      <div class="switchrow" title="走內網(NAS/區網 FTP 等)的傳輸不計入對外額度。偵測到某程序當下連的對方位址全是內網網段(10.75/172.16/192.168/169.254)時,用它的 io 收發增量估其流量並從當日額度扣除;同支程序若同時連到外網則整支照算。GPSS 檢索連 10.65.x 在白名單內,不受影響。">
+        <span class="switch on" id="lanswitch" role="switch" onclick="toggleExcludeLan()"><span class="knob"></span></span>
+        <span>排除內網流量</span>
+      </div>
+
+      <div class="switchrow" title="檢索被降速或連續失敗時,在最上方跳警告橫幅(只提示、不自動停)">
+        <span class="switch on" id="limitdetect" role="switch" onclick="toggleDetect()"><span class="knob"></span></span>
+        <span>可用上限偵測</span>
+      </div>
+
+      <div class="switchrow" title="今日用量達設定比例時跳頁內提醒視窗;桌面通知若已授權會一併發出">
+        <span class="switch" id="notifyswitch" role="switch" onclick="toggleNotify()"><span class="knob"></span></span>
+        <span>用量通知 ・ 達
+          <input type="number" id="notifythreshold" min="1" max="100" value="80"
+                 onchange="saveNotifyThreshold()"> %
+          <span class="hint" id="notifyhint"></span></span>
+      </div>
+
+      <div class="switchrow" title="某分鐘流量突然暴增(超過門檻且達近期中位數數倍)時提醒,並列出當下耗流量最多的程式">
+        <span class="switch" id="surgeswitch" role="switch" onclick="toggleSurge()"><span class="knob"></span></span>
+        <span>流量暴增預警 ・ 單分鐘
+          <input type="number" id="surgethreshold" min="1" value="50"
+                 onchange="saveSurgeThreshold()"> MB
+          <span class="hint" id="surgehint"></span></span>
+      </div>
+    </div>
+
+    <!-- 網卡明細 + 用量明細:整合成可切換頁籤的可收合面板(預設展開、停在「網卡」)。 -->
+    <div id="detailbox" class="detailbox open">
+      <div class="detailhd">
+        <span class="caret" onclick="toggleCalcLog()" title="收合/展開">▸</span>
+        <span class="subtabs">
+          <button class="subtab on" id="tab-nics" onclick="switchMonitorTab('nics', true)">網卡</button>
+          <button class="subtab" id="tab-calclog" onclick="switchMonitorTab('calclog', true)">用量明細</button>
+          <button class="subtab" id="tab-surges" onclick="switchMonitorTab('surges', true)">暴增紀錄<span class="hint" id="surgecount"></span></button>
+          <i class="info down left calclog-tip" tabindex="0" data-tip="「下載計算/上傳計算」為真正算進今日額度的量。"></i>
+          <i class="info down left surge-tip" tabindex="0" data-tip="依應用程式與時間收合當日暴增紀錄；展開後可查看各 IP、PID 與流量。"></i>
+        </span>
+      </div>
+      <div class="detailbody">
+        <!-- 網卡分頁:各網卡即時收發加總 -->
+        <div class="tabpane" id="pane-nics">
+          <table>
+            <thead><tr><th>網卡</th><th class="num">下載</th><th class="num">上傳</th><th class="num">小計</th></tr></thead>
+            <tbody id="nics"></tbody>
+          </table>
+        </div>
+        <!-- 用量明細分頁:計費明細與流量暴增合併成同一張時間軸表(近 5 分鐘)。 -->
+        <div class="tabpane" id="pane-calclog" style="display:none;">
+          <div class="nic-scroll" style="max-height:280px; overflow:auto;">
+          <table>
+            <thead><tr>
+              <th>時間</th>
+              <th class="num" title="這次結算網卡實際下載的總量(內網 + 外網)">網卡下載</th>
+              <th class="num" title="判定為內網、已從額度扣掉、不計費的部分">內網(不計費)</th>
+              <th class="num" title="真正算進今日額度的下載量(= 網卡下載 − 內網)">下載計算</th>
+              <th class="num" title="真正算進今日額度的上傳量">上傳計算</th>
+              <th>狀態</th>
+            </tr></thead>
+            <tbody id="calclogbody"></tbody>
+          </table>
+          </div>
+        </div>
+        <!-- 暴增紀錄分頁:先依應用程式與時間收合,展開後才顯示各 IP 的完整明細。 -->
+        <div class="tabpane" id="pane-surges" style="display:none;">
+          <div class="nic-scroll" style="max-height:280px; overflow:auto;">
+          <table>
+            <thead><tr>
+              <th class="surge-expand-col" aria-label="展開明細"></th>
+              <th>應用程式</th>
+              <th>時間</th>
+              <th class="num">明細筆數</th>
+              <th class="num">使用流量</th>
+            </tr></thead>
+            <tbody id="surgelogbody"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <div class="switchrow" style="margin-top:0; justify-content:space-between;">
+      <span title="近 N 分鐘觀測到的最高下載速率。曾達正常速率即可確定未被限速;偏低可能只是閒置(被動、不耗流量)。">
+        近 <b id="peakwin">—</b> 分最高下載 <b id="peakdown">—</b>
+        <span class="hint" id="peakverdict">—</span>
+      </span>
+      <span style="display:inline-flex; align-items:center; gap:8px;">
+        <button class="btn btn-go btn-sm" id="spbtn" onclick="runSpeedTest()"
+                title="抓一小段量實際速率(每次約 8MB),最準的限速判斷">測速</button>
+        <span class="hint" style="display:inline-flex; align-items:center; gap:5px;">下限
+          <input type="number" id="spfloor" min="0" step="0.1" value="5"
+                 onchange="saveSpeedFloor()">M</span>
+      </span>
+    </div>
+    <div class="hint" style="margin-top:var(--sp-xs);">
+      <span id="sptresult" style="font-weight:600;">—</span>
+      <span id="sptverdict">尚未測速</span>
+      <span id="sptoast"></span>
+    </div>
+  </div>
+  </div>

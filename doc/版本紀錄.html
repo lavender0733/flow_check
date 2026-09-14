@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flow Check — 版本紀錄</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20x='4'%20y='4'%20width='56'%20height='56'%20rx='14'%20fill='%239e80db'/%3E%3Cg%20fill='%23fff'%20fill-opacity='.92'%3E%3Crect%20x='15'%20y='36'%20width='9'%20height='14'/%3E%3Crect%20x='28'%20y='27'%20width='9'%20height='23'/%3E%3Crect%20x='41'%20y='18'%20width='9'%20height='32'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root {
+    --fg: #24292f;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --bg-code: #f6f8fa;
+    --accent: #0969da;
+  }
+  * { box-sizing: border-box; }
+  html {
+    min-height: 100%;
+    background: linear-gradient(160deg, #eef2f8 0%, #e6ecf4 45%, #eceef3 100%) no-repeat fixed;
+  }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--fg);
+    max-width: 920px;
+    margin: 2.5rem auto;
+    padding: 2.4rem 2.2rem 4rem;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(27, 43, 75, 0.04), 0 14px 40px rgba(54, 73, 110, 0.10);
+  }
+  @media (max-width: 640px) {
+    body { margin: 0 auto; border-radius: 0; border-left: 0; border-right: 0; padding: 1.6rem 1.1rem 3rem; }
+  }
+  h1, h2, h3 { line-height: 1.3; margin-top: 1.8em; margin-bottom: 0.6em; }
+  h1 { font-size: 1.9rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4em; }
+  h2 { font-size: 1.45rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  h3 { font-size: 1.15rem; }
+  h1 code.ver {
+    font-size: 1rem;
+    background: var(--accent);
+    color: #fff;
+    padding: 0.1em 0.5em;
+    border-radius: 6px;
+    vertical-align: middle;
+  }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2.2rem 0; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--bg-code);
+    padding: 0.15em 0.4em;
+    border-radius: 6px;
+    font-size: 0.88em;
+  }
+  pre {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    line-height: 1.45;
+  }
+  pre code { background: none; padding: 0; font-size: 0.85em; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.5em 0.8em;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--bg-code); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  blockquote {
+    margin: 1rem 0;
+    padding: 0.4em 1em;
+    color: var(--muted);
+    border-left: 4px solid var(--border);
+    background: var(--bg-code);
+    border-radius: 0 6px 6px 0;
+  }
+  blockquote p { margin: 0.3em 0; }
+  ul { padding-left: 1.5em; }
+  li { margin: 0.3em 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .star { color: #bf8700; }
+  .lead { font-size: 1.05rem; }
+  .steps li { margin: 0.5em 0; }
+  .backlink { font-size: 0.95rem; margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+
+<p class="backlink"><a href="../README.html">← 回說明首頁</a></p>
+
+<h1>版本紀錄</h1>
+
+<h3>7.2.1 — 2026-09-14</h3>
+<ul>
+  <li><strong>修正「達標情況分析的月份選單只剩當月、之前的月份不見了」</strong>:8 月的數據是在另一台電腦上按「更新計算」留下的,換到這台電腦看,月份選單就只列得出當月。原因是每台電腦的快照各自存成一個檔(這是為了避免兩台同時按更新、在 Google Drive 上互相覆蓋),但<strong>畫圖時只讀了自己這台的檔</strong>。其實這頁的數字全部來自你手動下載的後台匯出檔,是<strong>全站總量</strong>,跟哪台電腦跑過檢索沒有關係。現在改成畫圖時<strong>把所有電腦的快照合併起來</strong>,之前的月份就都回來了(存檔仍然分開,防覆蓋不受影響,圖上也不會出現機器名稱)。同一個資料日期若兩台都按過更新,只顯示較晚的那一筆,不會長出兩個點。<strong>要重跑 <code>stop_monitor.bat</code> → <code>start_monitor.bat</code> 才生效</strong>(這次改的是程式本體,不是只重整瀏覽器就好)。</li>
+</ul>
+
+<h3>7.2.0 — 2026-08-17</h3>
+<ul>
+  <li><strong>新增「達標情況分析」圖表</strong>(檢索進度頁):按一次「更新計算」,就把當下由最新「簡易版 / API」匯出檔算出的累積筆數留成一個點,連成折線看進度走勢。橫軸是<strong>匯出檔的資料最後日期</strong>,不是你按按鈕的時間;同一份資料重複按只算一個點。快照從這個功能上線後才開始累積,不會回推以前的資料。</li>
+  <li><strong>兩種看法可切換</strong>:「總數」只畫總累積筆數與金色虛線的月目標兩條線,滑鼠移上去顯示當下總數與月達成率;「簡易版＋API」用藍線 / 橘線比較兩種檢索方式的累積筆數,可以用「顯示」勾選鈕單獨隱藏其中一條。</li>
+  <li><strong>可切換月份</strong>:右上角下拉選單列出已經有快照的月份。切月份或切圖表只是看資料,不會多存快照。</li>
+</ul>
+
+<h3>7.0.4 — 2026-06-29</h3>
+<ul>
+  <li><strong>修正「流量監控頁面靜悄悄不更新、卻完全沒有提示」</strong>:有人回報頁面過了好幾分鐘都沒更新數據、也沒跳任何訊息。原因是頁面每 5 秒會去跟程式要一次最新數據,但若<strong>程式被關掉、連線中斷,或電腦剛從睡眠喚醒</strong>導致要不到數據時,頁面以前會把錯誤<strong>默默吞掉</strong>—— 數字和「最後更新」就停在原地,卻一個字都沒提醒,看起來像還在跑其實已經斷了。現在改成:<strong>連續要不到數據超過約 30 秒就跳橫幅「⚠️ 已 N 秒無法連線到流量監控」</strong>,提醒你確認執行視窗是否還開著、或重新執行 <code>start_monitor.bat</code>;重新連上後橫幅會自動消失。純前端,重整瀏覽器(Ctrl+F5)即生效。</li>
+</ul>
+
+<h3>7.0.3 — 2026-06-26</h3>
+<ul>
+  <li><strong>新增「今日進度」小區塊</strong>(爬取統計頁上方):把「今日該檢索多少 / 今日已完成多少」一眼呈現,配進度條 —— 還沒做完顯示「今日還需 N 筆」、做到了顯示「🎉 今日已達標」、照目前速度月底就能達標則顯示「✓ 今日無需額外檢索」。沒放匯出檔、算不出月目標時只顯示「今日已完成 N 筆」。</li>
+  <li><strong>新增「今日達標慶祝」</strong>:當天檢索筆數達到「每個工作日需檢索」時跳彩帶 + 祝賀橫幅,一天最多一次。</li>
+  <li><strong>流量明細改「網卡 / 用量明細」可切換頁籤</strong>:把 7.0.2 的「計費明細」整合進可收合、可切頁籤的面板;「用量明細」把計費明細與流量暴增合併成同一張近 5 分鐘時間軸表,暴增的列標 🔺 並列出推估兇手程式。純前端,重整瀏覽器即生效。</li>
+</ul>
+
+<h3>7.0.2 — 2026-06-22</h3>
+<ul>
+  <li><strong>修正「走內網下載大檔卻仍被算進 2GB 額度」</strong>:有人回報用 FileZilla/SFTP 走內網下載,流量還是被計入,單日一度衝到 ~6GB(303%)。問題出在偵測短命內網連線(像 FTP 每個檔案開一條、很快就關)時會被整條漏掉。已修正:這類連線一出現就立刻計量、把內網探測調得更密、網段設定改得更穩妥(內網確實排除、同時釘死 GPSS 對外流量永遠計入)。</li>
+  <li><strong>新增頁內「計費明細」記錄</strong>(每分鐘一列:NIC 收 / 內網收 / 外網收 / 實扣收 / 計入收 / 計入送),方便現場核對。實測一筆 3.14GB 內網下載,計入額度的部分趨近於 0,確認修好。</li>
+</ul>
+
+<h3>7.0.0 — 2026-06-18</h3>
+<ul>
+  <li><strong>程式內部大整理(功能不變)</strong>:把原本擠在單一大檔的程式拆成幾個各司其職的小檔(流量量測、設定/統計資料、API 額度計算等),較好維護;對使用方式沒有任何影響。</li>
+  <li><strong>修正「額度已滿提醒關掉後又一直跳回來」</strong>:檢索撞到 TIPO 額度上限時會跳提醒,以前按「關閉」只是暫時藏起來、重整網頁又冒出來。現在按關閉就真的消失,之後再撞額度才會再提醒。</li>
+  <li><strong>減少「程式碼有更新、請重啟」誤報</strong>:雲端硬碟同步有時只動了檔案時間、內容沒變也會誤判要重啟。改成比對內容,只有真的改了程式才提醒。</li>
+  <li><strong>修正啟動批次檔(.bat)在某些情況下閃退</strong>(換行格式問題)。</li>
+</ul>
+
+<h3>5.4.0 — 2026-06-17</h3>
+<ul>
+  <li><strong>新增「流量暴增預警」——「是什麼東西突然把流量吃掉」一眼看見</strong>:在流量監控頁開啟後,某一分鐘的網路用量若<strong>突然暴增</strong>(同時超過你設的門檻、且達近期平常用量的好幾倍),就會跳橫幅提醒(桌面通知若已授權也會發),並<strong>列出當下最可能在吃流量的程式</strong>(例如某個瀏覽器分頁、雲端同步、更新程式)。
+    <ul>
+      <li><strong>怎麼抓兇手</strong>:Windows 沒有「每支程式用了多少網路」的現成數字,工具改看「<strong>目前正在連網的程式</strong>當下讀寫量增加最多的是哪幾個」來推估 —— 只看正在連網的程式,排除純粹在動硬碟的;這是<strong>最佳推估、不是精準數字</strong>,清單會把「沒在連網」的候選標出來(可能只是剛好在動硬碟)。</li>
+      <li><strong>不會洗版</strong>:同一波長時間下載只提醒一次;一打開頁面看到的「之前就發生過」的暴增只會列在清單、不會硬跳橫幅(可手動按掉)。</li>
+      <li><strong>可調</strong>:開關與「單分鐘達幾 MB 才算暴增」(預設 50MB)就在流量監控頁,設定<strong>各台電腦自己記、重開留得住</strong>,改完即時生效、不必重啟。</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>5.3.1 — 2026-06-17</h3>
+<ul>
+  <li><strong>修正「檢索明明跑完、summary 也出來了,任務卻不會自動停,還要手動按停」</strong>:檢索程式跑完後,會把這輪零散的結果檔(CSV)併進「當月一個 Excel」。那個 Excel 放在 Google Drive 同步夾、又會越長越大,<strong>整份讀進來再整份存回去</strong>很慢、有時還會被雲端同步鎖住 —— 而這段併檔是接在 summary 後面、在檢索程式裡做的,所以 summary 都印出來了,程式還卡在併檔沒結束,網頁的任務狀態就一直停在「執行中」、不會自動停;等不到只能手動按停,還可能正好砍在存檔中途、害這輪結果沒併進去。現在<strong>併檔改由常駐的監控程式在「任務結束後丟到背景慢慢做」</strong>:檢索程式印完 summary 就立刻收工 → 任務即時轉「完成」並自動停,併檔在背景進行、從不卡住你。併檔存檔也改成<strong>先寫暫存檔、寫好才一次換上</strong>,萬一中途被中斷也不會留下半截的壞檔。筆數/流量統計不受影響(本來就直接讀得到尚未併入的結果檔)。</li>
+</ul>
+
+<h3>5.3.0 — 2026-06-17</h3>
+<ul>
+  <li><strong>剛重開機、第一次打開工具時「爬取統計」載入很慢 → 開好就先在背景幫你算好</strong>:電腦剛開機時,程式記在記憶體裡的暫存都還是空的、當月資料又要重算,加上檔案放在 Google Drive 同步夾、剛開機常常還是「用到才下載」,第一次讀每個月份的檔都得即時抓下來 —— 這些等待以前全擠在你按下「爬取統計」那一刻的轉圈圈上。現在<strong>工具一啟動,就會在背景先把爬取統計算一遍、把檔案先抓下來熱好</strong>。一開始看到的是流量監控頁,通常過幾秒才會點到爬取統計,這段時間剛好讓背景把重活做完,點開時就是現成的。純粹加速:背景沒算成不影響任何數字,真的一開就馬上點,也只是跟以前一樣等一下、不會更慢。</li>
+</ul>
+
+<h3>5.2.0 — 2026-06-16</h3>
+<ul>
+  <li><strong>「爬取統計」與「檢索進度」載入變快</strong>:這兩頁原本每次都把同一份檔案從頭重算一遍,檔案越大越慢。改成<strong>記住上次算好的結果,檔案沒變就直接用、不重算</strong>(下載了新的匯出檔、或又跑了新檢索讓資料變動,才會重算),所以數字一樣準。
+    <ul>
+      <li><strong>檢索進度</strong>快很多:它要讀的簡易版匯出檔常有 2MB 左右,以前開這頁、按「更新計算」都要重讀整份;現在沒換新檔就秒開,換了新檔按「更新計算」才重讀(不會給你舊數字)。</li>
+      <li><strong>爬取統計</strong>也較快:同一份當月檔以前會被重複拆好幾次,現在一次請求只拆一次、共用;檢索進行中也不再每寫一批就重抓一次統計,改成<strong>最多每 12 秒更新一次</strong>(切到這頁、或檢索一結束會立刻更新到最新)。</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>5.1.2 — 2026-06-16</h3>
+<ul>
+  <li><strong>改用量通知的提醒 % 時,旁邊會跳出確認文字</strong>:例如「✓ 已更新:用量達 80% 時提醒」,幾秒後自動消失。讓你一眼確認設定有改到、改成幾 %。</li>
+</ul>
+
+<h3>5.1.1 — 2026-06-16</h3>
+<ul>
+  <li><strong>修正「重整網頁卻還是跑到舊版」</strong>:網頁程式檔原本會被瀏覽器快取住,改了東西重整有時不生效、甚至新舊混用(例如用量通知開關記得了、門檻數字卻沒套用)。已讓程式端要求瀏覽器<strong>不要快取、每次都拿最新版</strong>。<strong>升級後請先強制重新整理一次(Ctrl+F5)或完全關掉瀏覽器再開</strong>,把舊的清掉一次,之後就會自動更新。</li>
+</ul>
+
+<h3>5.1.0 — 2026-06-16</h3>
+<ul>
+  <li><strong>「用量通知」開關現在重開一定維持上次設定</strong>:原本只記在瀏覽器裡,若瀏覽器設成「關閉時清除網站資料」或換了瀏覽器就會掉。改成<strong>記在程式端(各台電腦自己記自己的)</strong>,重新打開就還原上次的開關與門檻;舊設定會自動帶過去,不必重設。</li>
+</ul>
+
+<h3>5.0.1 — 2026-06-15</h3>
+<ul>
+  <li><strong>修正啟動時偶發「無法連上 127.0.0.1」、要重整才載得出來</strong>:原本啟動批次檔在伺服器還沒準備好之前就先開瀏覽器,瀏覽器搶先連線就會撲空。改成<strong>由程式在伺服器就緒後才自動開瀏覽器</strong>,第一下就連得上。重新連上網路、Google Drive 正忙著同步時尤其明顯,此版一併解決。</li>
+</ul>
+
+<h3>5.0.0 — 2026-06-15 (原 v1.9)</h3>
+<ul>
+  <li><strong>網頁前端模組化重構</strong>:原本單一網頁檔(含一大包程式與內嵌樣式)拆成「外殼 + 各分頁(<code>partials/</code>)+ 各功能 JS(<code>js/</code>)+ 外部 CSS(<code>style.css</code>)」。仍是<strong>免打包的純 HTML/JS</strong>(相容 Google Drive 同步),改某個分頁重整瀏覽器即生效、不必重啟。純整理,使用上沒有差別。</li>
+  <li><strong>檢索結果改「每月一個 Excel」</strong>:從各機一個大檔改成<strong>每台每月一個</strong>(<code>summary_&lt;機器&gt;_&lt;YYYY-MM&gt;.xlsx</code>,仍一天一張工作表),歷史月份不再被反覆改寫、同步更輕;首次會自動把舊單檔依日期拆成各月檔。統計快取也移出同步資料夾、改放本機,避免一直洗版雲端。</li>
+  <li><strong>伺服器健康提醒搬到頁面</strong>:後端出錯,或程式碼改過(需重啟才生效)時,頁面會<strong>直接跳橫幅提醒</strong>,不必再去翻黑色執行視窗。</li>
+</ul>
+
+<h3>4.0.0 — 2026-06-12 (原 v1.8)</h3>
+<ul>
+  <li><strong>API 驗證碼改「驗證碼池」</strong>:原本一台電腦填一組 <code>userCode</code>,改成集中一份<strong>驗證碼池</strong>(<code>api_keys.json</code>),各機只記目前選用哪一組;要切換在控制台<strong>下拉直接換</strong>、不必改設定檔。驗證碼一律只顯示前 4 碼。</li>
+  <li><strong>傳統檢索(前端)流量大幅優化</strong>:500 筆從約 900 MB 壓到約 <strong>11.5 MB(省約 98%)</strong>,與 API 版同量級。主要靠把每筆查詢都重抓的前端 JS 在程式內快取(第一次下載後存記憶體、之後從記憶體餵回),並改用更精準的流量計量方式。</li>
+</ul>
+
+<h3>3.3.0 — 2026-06-11 (原 v1.7)</h3>
+<ul>
+  <li><strong>流量監控新增「限速偵測(網速)」</strong>:超過每日額度後局網是用<strong>降速</strong>來執行上限,故改用網速判斷有沒有被限速、加給生效了沒。被動看近幾分鐘的最高下載速率(不耗流量),或按「<strong>測速</strong>」實際量一小段(較可靠,每次約耗 8MB)。</li>
+  <li><strong>流量監控新增「用量通知」</strong>:可設定用量達某比例(預設 80%)就提醒;用<strong>頁內視窗 + 紅色橫幅 + 分頁圖示紅點</strong>三管齊下,不依賴桌面通知權限(桌機封鎖桌面通知也照樣會提醒)。</li>
+  <li><strong>傳統檢索抗管制調校</strong>:降低瞬時負載、被管制時改「先冷卻再續跑」而非立刻中止,提高長跑的成功率。</li>
+</ul>
+
+<h3>3.2.0 — 2026-06-10 (原 v1.6)</h3>
+<ul>
+  <li><strong>檢索改兩段式(公開號 + 申請號)</strong>:每批先用公開/公告號(<code>PN</code>)查,沒命中的再用申請號(<code>AN</code>)補查一次,清單裡的申請號不再靜默查無;查無不耗額度,只多花真正找到的那些。</li>
+  <li><strong>撞額度立即停止</strong>:收到 <code>Over download quantity</code> 就停本輪、不暫停重試(<code>stop_on_quota</code>,預設開),待額度恢復自行重跑;撞牆 / 恢復都會記事件到 <code>run_log</code>(含機器、時間)供排查重置週期。</li>
+  <li><strong>兩張 API 卡合併為「API 用量」</strong>:每支驗證碼一列顯示「本月查詢 / 當前時段輸出 / 本小時單筆案號最多次」三項;驗證碼一律只顯示前 4 碼。</li>
+  <li><strong>額度依官方時段制顯示</strong>:時段輸出總筆數(上班 10,000 / 下班 30,000,於 08:00、18:00 重置)、單筆案號每小時(上班 300 / 下班 1,000,每整點重置;接近上限會列出是哪些案號)。下載額度只計 API 檢索(傳統檢索不耗 API 額度);用量改數結果檔的成功列,連被中途停掉的執行也算得到。可用 <code>data/config/api_quota_baseline.json</code> 以後台真實值校正。</li>
+  <li><strong>檢索進度即時顯示</strong>:逐筆 <code>[idx/總數]</code> 即時出現(不再被緩衝拖到整批才冒出),log 框最底釘一行進度百分比。</li>
+  <li>節點預設改 <code>aps=[1,2]</code>(實測 gpss3/4 長期故障,跳過省時)。</li>
+</ul>
+
+<h3>3.1.0 — 2026-06-09 (原 v1.5)</h3>
+<ul>
+  <li><strong>API 檢索改為批次查詢</strong>:從「一筆一請求」改成「一個請求一次查多筆」(預設 30 筆/請求),1000 筆從 1000 個請求降到約 30 個。CSV / Excel / 統計的結果不變(每筆仍一列)。設 <code>batch_size=1</code> 即回到舊版行為。</li>
+  <li><strong>大幅降低檢索失敗率</strong>:針對實測到的根因——TIPO 節點會整台壞掉(改成本輪內持久跳過壞節點,四台全壞則等一下重試整批)、超過官方額度(依時段自動控速,取代寫死的間隔秒數)、看不出失敗原因(<code>status=fail</code> 連同 TIPO 訊息一起記錄並另存 <code>output/_fail_response.json</code>,連續整批失敗則停止本輪不再空燒清單)。</li>
+  <li><strong>設定更新</strong>:<code>api_config.json</code> 新增 <code>batch_size</code>、<code>quota_counts</code> 等控速與容錯參數,移除已不用的 <code>delay_seconds</code> 等;詳見〈設定速查〉。</li>
+</ul>
+
+<h3>3.0.0 — 2026-06-09 (原 v1.4)</h3>
+<ul>
+  <li><strong>API 檢索開跑前自動選最快 AP</strong>:開跑前先測各台伺服器回應速度、挑最快(通常=最不忙)的起跑;壞節點自動跳過。</li>
+  <li><strong>本月 API 用量即時更新</strong>:以後台匯出檔為基礎,加上匯出後本工具自己跑掉的 API 檢索,不必重新下載也能反映最新。</li>
+  <li><strong>進度估算不再每天飄</strong>:改以「資料最後日期」為基準推估,沒下載新匯出檔時數字就不變;「檢索進度」分頁開啟即自動顯示。</li>
+  <li><strong>前端介面調整</strong>:檢索控制台改版(標題簡化、檢索清單改成彈窗編輯、版面重排為設定 / 執行兩欄、執行情形整頁寬置於最下、執行狀態改顯示執行時間);介面文字精簡;頁面最底顯示系統版本號。</li>
+  <li><strong>輸出整理成 Excel</strong>:檢索結果不再是一堆零散檔案,改成<strong>每台電腦一個 Excel、一天一張工作表</strong>;同一天不同時間的執行會附加到當天那張工作表,新的一天自動多一張。</li>
+</ul>
+
+<h3>2.2.0 — 2026-06-08 (原 v1.3)</h3>
+<ul>
+  <li><strong>新增「本月檢索進度」</strong>:目標改為每月達標(預設 45 萬筆),依手動下載的匯出檔加總本月檢索次數,推估後算出每個工作日還需檢索多少。</li>
+  <li><strong>「爬取統計」新增「本月 API 查詢筆數」</strong>:只列實際在用的驗證碼、僅顯示前 4 碼。</li>
+</ul>
+
+<h3>2.1.0 — 2026-06-08 (原 v1.2)</h3>
+<ul>
+  <li><strong>新增第二種檢索方式「傳統檢索(前端)」</strong>:用瀏覽器操作 GPSS 前端,不需驗證碼,當沒有 API 額度時的備援;與 API 檢索共用清單、護欄與統計。</li>
+</ul>
+
+<h3>2.0.0 — 2026-06-08 (原 v1.1)</h3>
+<ul>
+  <li><strong>多機協作(Google Drive 同步)</strong>:多台資料自動分流、不互蓋,統計自動合計、可分台看。</li>
+  <li><strong>各機可用不同 API 驗證碼</strong>,並讓檢索更穩(更多錯誤情況自動換台、偵測吃緊時自動放慢)。</li>
+</ul>
+
+<h3>1.0.0 (原 v1.0)</h3>
+<ul>
+  <li>流量監控 + GPSS API 批次檢索 + 爬取統計 + 檢索進度,單機版。</li>
+</ul>
+
+<p class="backlink"><a href="../README.html">← 回說明首頁</a></p>
+
+</body>
+</html>

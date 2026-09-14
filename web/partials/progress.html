@@ -1,0 +1,58 @@
+<!-- 檢索進度分頁(本月)。搭配 js/progress.js。 -->
+  <div class="panel hidden" id="panel-calc">
+
+    <!-- 本月進度(來自後台手動下載的匯出檔:簡易版 + API) -->
+    <div class="card">
+      <h2>本月檢索進度 <span class="hint">(<span id="m-month">—</span>;月目標 <span id="m-target">—</span> 筆)</span></h2>
+      <div style="margin:var(--sp-sm) 0 0;">
+        <button class="btn btn-go btn-sm" onclick="refreshMonthly(true)">更新計算</button>
+        <span class="spinner spinner-sm" id="m-spin" style="display:none;"></span>
+        <span class="hint" id="m-status">把新下載的簡易版/API 檔直接放進 data/exports/ 後,按「更新計算」。</span>
+      </div>
+      <div class="calc-hero">
+        <div class="col">
+          <table class="mtable"><tbody>
+            <tr><td>本月累積(簡易版+API)</td><td class="num" id="m-total">—</td></tr>
+            <tr><td>我還需檢索(扣自然增加)</td><td class="num" id="m-crawl">—</td></tr>
+            <tr><td>本月剩餘工作日</td><td class="num" id="m-workdays">—</td></tr>
+          </tbody></table>
+        </div>
+        <div class="donutarea">
+          <div class="donutwrap">
+            <div class="donut" id="m-donut">
+              <div class="hole"><div class="pct" id="m-pct">—</div></div>
+            </div>
+            <div class="donuttip">
+              <div id="m-rem">—</div>
+              <div id="m-ratio">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 達標情況分析:只顯示功能啟用後、按「更新計算」留下的月進度快照。 -->
+    <div class="card" id="goal-analysis-card">
+      <div class="goal-chart-head">
+        <h2>達標情況分析 <span class="spinner spinner-sm" id="ga-spin" style="display:none;"></span></h2>
+        <label class="goal-month-label">月份
+          <select id="ga-month" onchange="changeGoalMonth(this.value)"></select>
+        </label>
+      </div>
+      <div class="goal-mode-tabs" role="tablist" aria-label="圖表方式">
+        <button class="goal-mode on" id="ga-mode-total" onclick="setGoalMode('total')" role="tab" aria-selected="true">總數</button>
+        <button class="goal-mode" id="ga-mode-methods" onclick="setGoalMode('methods')" role="tab" aria-selected="false">簡易版＋API</button>
+      </div>
+      <div class="goal-display-toggle" id="ga-display-toggle" style="display:none;">
+        <span>顯示：</span>
+        <label><input type="checkbox" id="ga-show-simple" checked onchange="toggleMethodLine('simple', this.checked)">簡易版</label>
+        <label><input type="checkbox" id="ga-show-api" checked onchange="toggleMethodLine('api', this.checked)">API</label>
+      </div>
+      <div class="goal-chart-wrap" id="ga-chart-wrap">
+        <svg id="ga-chart" class="goal-chart" viewBox="0 0 760 300" role="img" aria-labelledby="ga-chart-title ga-chart-desc"></svg>
+        <div class="goal-tooltip" id="ga-tooltip" style="display:none;"></div>
+      </div>
+      <div class="goal-legend" id="ga-legend"></div>
+      <div class="hint" id="ga-status"></div>
+    </div>
+  </div>

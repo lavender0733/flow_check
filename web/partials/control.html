@@ -1,0 +1,101 @@
+<!-- 檢索控制台分頁。搭配 js/control.js。含底部的檢索清單編輯視窗(modal)。 -->
+  <div class="panel hidden" id="panel-control">
+  <div class="card">
+    <h2 id="ctl-title" style="margin-bottom:var(--sp-sm);">GPSS檢索（API）</h2>
+
+    <div class="modes" id="method-sel" style="margin-bottom:var(--sp-sm);">
+      <button id="meth-api" class="on" onclick="setMethod('api')">API 檢索</button>
+      <button id="meth-web" onclick="setMethod('web')">傳統檢索（前端）<i class="info" tabindex="0" data-tip="操作前端網頁,流量較大、較慢"></i></button>
+    </div>
+
+    <!-- API 驗證碼設定(只在 API 模式顯示;驗證碼一律遮罩,只顯示前四碼) -->
+    <div class="apibox" id="keysel-row" style="margin-bottom:var(--sp-md);">
+      <div class="apibox-row">
+        <span class="hint">使用驗證碼</span>
+        <select id="keysel" onchange="switchKey()"
+          style="border:1px solid var(--line); border-radius:8px; background:#fff;"></select>
+        <!-- 目前選用的驗證碼狀態(和「使用驗證碼」同一排):字樣 + 等寬遮罩碼 -->
+        <span class="apicfg" id="ctl-note">讀取中…</span>
+        <span class="code" id="ctl-code">—</span>
+        <button class="btn btn-go btn-sm" onclick="toggleAddKey()">＋ 新增</button>
+        <span class="hint" id="keytoast"></span>
+      </div>
+      <div class="apibox-row" id="keyadd-form" style="display:none; margin-top:var(--sp-sm);">
+        <input id="keyadd-label" placeholder="名稱(例:備用-3)" autocomplete="off"
+          style="border:1px solid var(--line); border-radius:8px; width:150px;">
+        <input id="keyadd-code" class="code" placeholder="驗證碼(存後只顯示前四碼)" autocomplete="off"
+          style="border:1px solid var(--line); border-radius:8px; width:240px;">
+        <button class="btn btn-go btn-sm" onclick="addKey()">儲存</button>
+        <button class="btn btn-stop btn-sm" onclick="toggleAddKey()">取消</button>
+        <span class="hint" id="keyadd-toast"></span>
+      </div>
+    </div>
+
+    <!-- 檢索清單(整頁寬) -->
+    <div class="patbox" style="margin-bottom:var(--sp-md);">
+      <span class="cnt">檢索清單　目前 <b id="patcount">—</b> 筆</span>
+      <span style="display:flex; align-items:center; gap:12px;">
+        <span class="hint" id="pattoast"></span>
+        <button class="btn btn-go btn-sm" onclick="openPatentsEditor()">編輯清單</button>
+      </span>
+    </div>
+
+    <!-- 設定(左) / 執行(右) -->
+    <div class="ctl2">
+      <div class="col">
+        <div class="collabel">設定 <i class="info" id="guard-tip" tabindex="0" data-tip="護欄:當日剩餘低於保留流量時不開跑、跑到一半也自動停。"></i></div>
+        <div class="modes">
+          <button id="m-count" class="on" onclick="setMode('count')">指定筆數</button>
+          <button id="m-budget" onclick="setMode('budget')">跑到流量剩 X 自動停</button>
+        </div>
+
+        <div class="field show" id="f-count">
+          <label>筆數(上限 <span id="maxcount">—</span>)</label>
+          <input type="number" id="count" min="1" value="500">
+        </div>
+
+        <div class="field" id="f-budget">
+          <label>保留流量</label>
+          <input type="number" id="reserve" min="0" value="100">
+          <span class="hint">MB</span>
+          <i class="info" tabindex="0" data-tip="剩這麼多流量就自動停。"></i>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="collabel">執行</div>
+        <div class="runblock">
+          <div class="actions">
+            <button class="btn btn-go" id="go" onclick="runJob()">▶ 開始</button>
+            <button class="btn btn-stop" id="stop" onclick="stopJob()" disabled>■ 立即停止</button>
+          </div>
+          <div class="toast" id="toast"></div>
+
+          <div class="jobstat" id="jobstat">
+            <span class="js-item"><span class="dot" id="jobdot"></span><b id="jobstate" class="st-idle">idle</b></span>
+            <span class="js-item">方式 <b id="jobmethod">—</b></span>
+            <span class="js-item">模式 <b id="jobmode">—</b></span>
+            <span class="js-item">開始 <b id="jobstart">—</b></span>
+            <span class="js-item">執行時間 <b id="jobelapsed">—</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 執行情形(log,整頁寬,最下面) -->
+    <pre class="log" id="log" style="height:38vh; min-height:240px; margin-top:var(--sp-md);">（尚未執行）</pre>
+  </div>
+  </div>
+
+  <!-- ===== 檢索清單編輯視窗 ===== -->
+  <div class="modal-mask" id="patmodal" onclick="if(event.target===this)closePatentsEditor()">
+    <div class="modal">
+      <h3>編輯檢索清單 <i class="info" tabindex="0" data-tip="一行一個專利號;# 開頭為註解"></i></h3>
+      <textarea id="patents" rows="9" spellcheck="false"></textarea>
+      <div class="btnrow">
+        <span class="hint" id="patmodaltoast" style="margin-right:auto;"></span>
+        <button class="btn btn-plain" onclick="closePatentsEditor()">取消</button>
+        <button class="btn btn-go" onclick="savePatents()">儲存</button>
+      </div>
+    </div>
+  </div>

@@ -1,0 +1,327 @@
+:root {
+  --bg: #efeaf9; --card: #ffffff; --line: #e7e0f5;
+  --txt: #322c44; --dim: #8b82a6; --accent: #f97316;
+  --accent-soft: #ede7fb; --warn: #d98e04; --danger: #e5484d;
+  --blue: #5b9bd5; --blue-soft: #e7f1fb; --blue-ink: #2f6ca8;
+  /* 金:達成目標的獎勵色,只在「達標」時出現(平常以紫為主,金因稀少而有份量)。
+     仿 --blue/--blue-ink:亮色 --gold 作色塊填充(圓環/進度條),深色 --gold-ink 作白底文字(百分比/標題) */
+  --gold: #e6a817; --gold-ink: #b8860b;
+  --btn: #9e80db;
+  /* ── 字級階梯(全站只用這 8 級,別再寫死 px)──
+     hero 裸數字主角(監控今日用量大數字)
+     donut 圓環中央百分比(被圓框限制,單獨一級;含小數會較長故略小)
+     xl 句子型主角(統計頁 headline「今日還需 X 筆」,比裸數字小一些)
+     num 數字值(統計值・月累積)/ h2 區塊標題 / body 內文・表格・輸入框・頁籤
+     sm 次要說明・子頁籤 / hint 提示 */
+  --fs-hero: 40px; --fs-donut: 32px; --fs-xl: 28px; --fs-num: 20px;
+  --fs-h2: 16px; --fs-body: 14px; --fs-sm: 13px; --fs-hint: 12px;
+  /* ── 間距階梯(4 的倍數)。卡片內段落間距一律用「下段的 margin-top」控制,
+     避免上下邊距相加。xs 緊鄰相關元素 / sm 次要 / md 段落之間 / lg 大分隔 */
+  --sp-xs: 6px; --sp-sm: 10px; --sp-md: 16px; --sp-lg: 24px;
+}
+* { box-sizing: border-box; }
+/* 永遠顯示垂直捲軸軌道,讓可視寬度恆定 —— 切到內容較短的分頁(如檢索進度)時,
+   版面不會因捲軸時有時無而左右偏移。捲軸掛在根元素(html),故設在這裡才有效。 */
+html { overflow-y: scroll; }
+body {
+  margin: 0; background: var(--bg); color: var(--txt);
+  font-family: "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
+  padding: 24px; line-height: 1.5;
+}
+.wrap { max-width: 860px; margin: 0 auto; display: grid; gap: 20px; }
+
+.card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 14px; padding: 22px 24px;
+  box-shadow: 0 2px 12px rgba(124, 58, 237, .07);
+}
+h2 { margin: 0 0 2px; font-size: var(--fs-h2); font-weight: 600; color: var(--dim); letter-spacing: .04em; }
+.big { font-size: var(--fs-hero); font-weight: 700; letter-spacing: -.02em; }
+.big .unit { font-size: var(--fs-num); color: var(--dim); font-weight: 500; }
+.sub { color: var(--dim); font-size: var(--fs-body); margin-top: 4px; }
+/* 統計頁 headline 是「句子型主角」,用 xl 級(比裸數字小);.meta 為小字灰標 */
+.headline { font-size: var(--fs-xl); font-weight: 700; }
+.meta { font-size: var(--fs-sm); color: var(--dim); }
+.bar { height: 14px; background: #ece7f7; border-radius: 8px; overflow: hidden; margin: 16px 0 8px; }
+.bar > div { height: 100%; width: 0; transition: width .4s, background .4s; background: var(--btn); }
+.calc-hero { display: flex; gap: 28px; align-items: stretch; flex-wrap: wrap; margin: 0; }
+/* 檢索進度的圓環在按鈕列下方,給它一段間距(監控頁的 calc-hero 緊貼標題,不套用) */
+#panel-calc .calc-hero { margin-top: var(--sp-md); align-items: center; }
+/* 檢索進度左欄只有 3 列表格,比右邊 208px 圓環矮;置中對齊讓左右視覺高度一致 */
+#panel-calc .calc-hero .col { justify-content: center; }
+/* 左欄(用量數字/日期/剩餘等)拉到與右邊圓環同高:大數字置中,日期+剩餘那排靠底群在一起 */
+.calc-hero .col { flex: 0 1 330px; display: flex; flex-direction: column; }
+.calc-hero .big { margin-top: auto; }           /* 與 .sub 的 auto 一起把空白平均分到大數字上下,使上下間距相同 */
+.calc-hero .sub { margin-top: auto; }           /* 把日期連同其下的剩餘排一起推到底部 */
+.calc-hero .row { margin-top: 6px; }            /* 日期緊貼剩餘用量那排 */
+.donutarea { flex: 1; display: flex; justify-content: center; min-width: 200px; }
+.mtable { width: 100%; border-collapse: collapse; }
+.mtable td { padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: var(--fs-body); color: var(--txt); }
+.mtable td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.mtable tr:first-child td { font-weight: 600; }
+.mtable tr:first-child td.num { color: var(--btn); font-size: var(--fs-num); }
+.mtable tr:last-child td { border-bottom: none; }
+.donutwrap { position: relative; display: inline-block; flex: 0 0 auto; }
+.donut { width: 208px; height: 208px; border-radius: 50%;
+         background: conic-gradient(var(--btn) 0deg, #ece7f7 0deg);
+         display: grid; place-items: center; transition: background .5s; cursor: help; }
+.donut .hole { width: 148px; height: 148px; background: var(--card); border-radius: 50%;
+               display: grid; place-items: center; text-align: center; }
+.donut .pct { font-size: var(--fs-donut); font-weight: 700; color: var(--txt); }
+.donuttip { position: absolute; left: 50%; bottom: -8px; transform: translate(-50%, 100%);
+            background: var(--txt); color: #fff; padding: 7px 12px; border-radius: 8px;
+            font-size: var(--fs-sm); line-height: 1.5; white-space: nowrap; text-align: center;
+            opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 5;
+            box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+.donutwrap:hover .donuttip { opacity: 1; }
+.row { display: flex; gap: 24px; flex-wrap: wrap; margin-top: var(--sp-md); }
+.stat { flex: 1; min-width: 120px; }
+.stat .k { color: var(--dim); font-size: var(--fs-sm); }
+.stat .v { font-size: var(--fs-num); font-weight: 600; margin-top: 2px; }
+#an-q { color: var(--btn); }
+.mfilter { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: var(--sp-md) 0 0; font-size: var(--fs-sm); color: var(--dim); }
+.mfilter label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--txt); }
+.mfilter input { accent-color: var(--btn); width: 15px; height: 15px; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: var(--fs-sm); }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+/* 全站表頭統一:紫底紫字的標題列(各表格一致) */
+th { color: var(--btn); font-weight: 600; background: #ede7fb; box-shadow: inset 0 -1px 0 var(--line); }
+/* 每日明細:固定高度捲動,頁面不被 31 天撐長;表頭 sticky 固定在區塊頂端 */
+.hist-scroll { max-height: 200px; overflow-y: auto; margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.hist-scroll table { margin-top: 0; }
+/* 可捲動的表(每日明細、用量明細):表頭固定在區塊頂端,捲動時不消失 */
+.hist-scroll thead th, .nic-scroll thead th { position: sticky; top: 0; z-index: 1; }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td:first-child, th:first-child { max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+
+.ctl { display: grid; gap: 14px; }
+.modes { display: flex; gap: 8px; }
+.modes button .info { margin-left: 6px; }
+.modes button {
+  flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--line);
+  background: #faf8ff; color: var(--dim); cursor: pointer; font-size: var(--fs-body);
+}
+.modes button.on { border-color: var(--blue); color: var(--blue-ink); background: var(--blue-soft); font-weight: 600; }
+.field { display: none; gap: 8px; align-items: center; flex-wrap: wrap; }
+.field.show { display: flex; }
+.field label { color: var(--dim); font-size: var(--fs-body); min-width: 92px; }
+input[type=number] {
+  background: #faf8ff; border: 1px solid var(--line); color: var(--txt);
+  border-radius: 8px; padding: 9px 12px; font-size: var(--fs-body); width: 84px;
+}
+input[type=number]:focus { outline: none; border-color: var(--btn); }
+textarea#patents {
+  background: #faf8ff; border: 1px solid var(--line); color: var(--txt);
+  border-radius: 8px; padding: 10px 12px; font-size: var(--fs-sm); line-height: 1.5;
+  font-family: "Cascadia Code", Consolas, monospace; resize: vertical; width: 100%;
+  height: 30vh; min-height: 160px;
+}
+textarea#patents:focus { outline: none; border-color: var(--btn); }
+.btn-plain { background: var(--blue-soft); color: var(--blue-ink); border: 1px solid var(--blue); }
+hr.sep { border: none; border-top: 1px solid var(--line); margin: var(--sp-sm) 0; }
+.apicfg { font-size: var(--fs-sm); }
+/* 代碼字串(驗證碼等):等寬字體,和中文名稱/備註明顯區隔 */
+.code { font-family: "Cascadia Code", Consolas, monospace; letter-spacing: .04em; color: var(--txt); }
+/* API 驗證碼設定區:把「使用驗證碼 / 新增」收進一個有框小區塊,和檢索清單框一致 */
+.apibox { padding: 12px 16px; background: #faf8ff; border: 1px solid var(--line); border-radius: 10px; }
+.apibox-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* 開關尺寸對齊同頁的小按鈕(btn-sm),不比它大 */
+.switch { width: 46px; height: 26px; border-radius: 13px; background: #cdc4e3; position: relative; cursor: pointer; transition: background .2s; display: inline-block; flex: 0 0 auto; }
+.switch.on { background: var(--btn); }
+.switch .knob { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .2s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.switch.on .knob { left: 23px; }
+.switchrow { display: flex; align-items: center; gap: 12px; margin-top: 16px; font-size: var(--fs-body); }
+/* 流量監控的開關群:兩欄排列,省掉一長串直排;窄畫面自動退回單欄 */
+.toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; margin-top: var(--sp-md); align-items: start;
+           padding: 14px 18px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; }
+.toggles .switchrow { margin-top: 0; font-size: var(--fs-body); }
+@media (max-width: 620px) { .toggles { grid-template-columns: 1fr; } }
+
+/* 用量明細:可收合面板(計費明細 + 流量暴增合併在同一張時間軸表) */
+.detailbox { margin-top: var(--sp-md); border: 1px solid var(--line); border-radius: 12px; background: var(--bg); overflow: hidden; }
+.detailhd { display: flex; align-items: center; justify-content: flex-start; gap: 12px;
+            padding: 8px 12px; user-select: none; }
+.caret { display: inline-block; transition: transform .15s; color: var(--dim); font-size: 24px; line-height: 1;
+         cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.caret:hover { background: #f3eefc; color: var(--txt); }
+.detailbox.open .caret { transform: rotate(90deg); }
+.detailbody { display: none; padding: 0 14px 12px; }
+.detailbox.open .detailbody { display: block; }
+/* 整合面板的子頁籤(網卡 / 用量明細 / 暴增紀錄) */
+.subtabs { display: flex; gap: 6px; align-items: center; }
+.subtab { padding: 5px 14px; border: 1px solid var(--line); background: var(--card); color: var(--dim);
+          border-radius: 8px; cursor: pointer; font-size: var(--fs-sm); font-weight: 600; }
+.subtab:hover { border-color: var(--btn); }
+.subtab.on { color: #fff; background: var(--btn); border-color: var(--btn); }
+tr.surge-row td { background: #fff4e0; }
+.surge-tag { color: #7a5200; font-weight: 700; }
+.empty-row { color: var(--dim); text-align: center; padding: 16px; }
+/* 暴增紀錄:摘要先依「應用程式 + 時間」收合;展開時才載入每筆 IP/PID 明細。 */
+.surge-expand-col { width: 38px; padding-right: 0; text-align: center; }
+.surge-expand {
+  width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--dim); cursor: pointer; font-size: 18px; line-height: 1; transition: transform .15s, background .15s;
+}
+.surge-expand:hover { background: #f3eefc; color: var(--txt); }
+.surge-group-row.open .surge-expand { transform: rotate(90deg); }
+.surge-group-row td { background: var(--card); }
+.surge-group-row.open td { background: #fff4e0; }
+.surge-detail-row td { padding: 0 12px 10px 46px; background: #fffaf0; }
+.surge-detail-wrap { overflow-x: auto; max-width: 100%; border: 1px solid #f1d59d; border-radius: 8px; }
+.surge-detail-table { min-width: 440px; margin: 0; font-size: var(--fs-hint); }
+.surge-detail-table th, .surge-detail-table td { padding: 5px 8px; }
+.surge-detail-table th { background: #fff4e0; color: #7a5200; }
+.surge-detail-table tr:last-child td { border-bottom: 0; }
+
+.hint { color: var(--dim); font-size: var(--fs-hint); }
+
+/* 資訊 icon + 滑入提示:取代冗長說明小字。用法 <i class="info" data-tip="說明…"></i>
+   (data-tip 內含動態數字時,用 JS 設 el.dataset.tip 即可) */
+.info {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--accent-soft); color: var(--btn); cursor: help;
+  font: 700 11px/1 "Segoe UI", system-ui, sans-serif; font-style: normal;
+  position: relative; vertical-align: middle;
+}
+.info::before { content: "i"; }
+.info::after {
+  content: attr(data-tip);
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
+  background: var(--txt); color: #fff; padding: 8px 12px; border-radius: 8px;
+  font: 400 var(--fs-sm)/1.5 "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
+  width: max-content; max-width: 260px; white-space: normal; text-align: left;
+  opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 30;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+}
+.info:hover::after, .info:focus::after { opacity: 1; }
+/* 向下展開變體:icon 上方空間不足或被裁切(如可收合面板內)時改用這個 */
+.info.down::after { top: calc(100% + 8px); bottom: auto; }
+/* 靠左變體:icon 偏容器左側時,提示框改成從 icon 左緣向右展開,
+   避免置中的提示框左半溢出而被容器(如 .detailbox overflow:hidden)裁掉 */
+.info.left::after { left: 0; right: auto; transform: none; }
+/* 用量明細／暴增頁籤旁的說明 icon:只在面板展開且對應頁籤(.on)時才顯示;面板收合即隱藏 */
+.calclog-tip, .surge-tip { display: none; }
+#detailbox.open #tab-calclog.on ~ .calclog-tip,
+#detailbox.open #tab-surges.on ~ .surge-tip { display: inline-flex; }
+
+/* 提示橫幅:取代各處重複的 inline 樣式。預設藏起,由 JS 切 display 顯示。
+   配色變體 warn / danger / info;可點關閉的加 .banner-x */
+.banner { border-radius: 10px; padding: 11px 14px; font-size: var(--fs-body); font-weight: 600; margin-bottom: var(--sp-md); }
+.banner-warn   { background: #fff4e0; border: 1px solid var(--warn);   color: #7a5200; }
+.banner-danger { background: #fdecec; border: 1px solid var(--danger); color: #a11526; }
+.banner-info   { background: #e7f0ff; border: 1px solid #2b6cb0;       color: #1a3e6e; }
+.banner-x { cursor: pointer; }
+.actions { display: flex; gap: 10px; margin-top: 4px; justify-content: center; }
+.btn { padding: 11px 20px; border-radius: 10px; border: none; cursor: pointer; font-size: var(--fs-body); font-weight: 600; }
+/* 次要小鈕(新增/儲存/取消/編輯清單/測速等):全站統一一種尺寸 */
+.btn-sm { font-size: var(--fs-sm); padding: 6px 14px; }
+.btn-go { background: var(--btn); color: #ffffff; }
+.btn-go:disabled { opacity: .4; cursor: not-allowed; }
+.btn-stop { background: var(--danger); color: #fff; }
+.btn-stop:disabled { opacity: .4; cursor: not-allowed; }
+.jobstat { font-size: var(--fs-body); color: var(--dim); display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 10px 12px; background: #faf8ff; border: 1px solid var(--line); border-radius: 10px; }
+.jobstat b { color: var(--txt); }
+.js-item { white-space: nowrap; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--dim); margin-right: 6px; vertical-align: middle; transition: background .3s; }
+.dot.run { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.dot.done { background: #2f9e44; }
+.dot.stop { background: var(--warn); }
+.dot.idle { background: var(--dim); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.an-loading { display: none; flex-direction: column; align-items: center; gap: 12px; padding: 36px 0 28px; color: var(--dim); font-size: var(--fs-body); }
+.an-loading.on { display: flex; }
+.spinner { width: 34px; height: 34px; border: 3px solid var(--blue-soft); border-top-color: var(--blue); border-radius: 50%; animation: spin .8s linear infinite; }
+.spinner-sm { width: 15px; height: 15px; border-width: 2px; display: inline-block; vertical-align: middle; margin-left: 7px; }
+.st-run  { color: var(--accent); }
+.st-done { color: #2f9e44; }
+.st-stop { color: var(--warn); }
+.st-idle { color: var(--dim); }
+pre.log {
+  background: #f7f4fd; border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px; height: 240px; overflow: auto; margin: 8px 0 0;
+  font-family: "Cascadia Code", Consolas, monospace; font-size: var(--fs-hint);
+  color: #4a4458; white-space: pre-wrap; word-break: break-word; max-width: 100%;
+}
+.toast { color: var(--warn); font-size: var(--fs-sm); min-height: 18px; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.tab { padding: 9px 18px; border: 1px solid var(--line); background: var(--card); color: var(--dim); border-radius: 10px; cursor: pointer; font-size: var(--fs-body); font-weight: 600; box-shadow: 0 1px 4px rgba(124,58,237,.05); }
+.tab.on { color: #fff; background: var(--blue); border-color: var(--blue); }
+.panel.hidden { display: none; }
+.ctl2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-top: 0; }
+.ctl2 .col { display: grid; gap: 16px; align-content: start; }
+.btnrow { display: flex; gap: 10px; align-items: center; justify-content: center; }
+.collabel { font-size: var(--fs-body); color: var(--dim); }
+.patbox { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+          padding: 9px 14px; background: #faf8ff; border: 1px solid var(--line); border-radius: 10px; }
+.patbox .cnt { font-size: var(--fs-body); }
+.patbox .cnt b { font-size: var(--fs-num); color: var(--btn); }
+/* 控制台沿用全站字級(不再單獨縮小);僅保留版面相關的寬度/間距微調 */
+#panel-control .field label { min-width: 80px; }
+#panel-control input, #panel-control select { padding: 8px 12px; }
+#panel-control .actions .btn { padding: 9px 16px; }
+/* 開始停止 + 提示 + 狀態 為一組,彼此距離縮小 */
+.runblock { display: grid; gap: 7px; }
+.runblock .actions { margin-top: 0; }
+.runblock .toast { min-height: 0; }
+.modal-mask { position: fixed; inset: 0; background: rgba(50,44,68,.45); z-index: 50;
+              display: none; align-items: center; justify-content: center; padding: 20px; }
+.modal-mask.show { display: flex; }
+.modal { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+         padding: 22px 24px; width: min(680px, 100%); max-height: 88vh;
+         display: flex; flex-direction: column; gap: 14px; box-shadow: 0 16px 48px rgba(0,0,0,.28); }
+.modal h3 { margin: 0; font-size: var(--fs-h2); font-weight: 600; color: var(--txt); }
+.modal .btnrow { justify-content: flex-end; }
+/* modal 主要按鈕對齊控制台的開始/停止尺寸 */
+.modal .btn { padding: 9px 16px; }
+@media (max-width: 700px) { .ctl2 { grid-template-columns: 1fr; } }
+
+/* ===== 今日達標慶祝(每日檢索達 per_workday 觸發,一天一次) ===== */
+#goalfx { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: hidden; display: none; }
+#goalfx.on { display: block; }
+#goalfx .confetti { position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px;
+                    opacity: .92; animation: goalfall linear forwards; }
+@keyframes goalfall {
+  0%   { transform: translateY(-20px) rotate(0deg); }
+  100% { transform: translateY(102vh) rotate(720deg); }
+}
+#goaltoast { position: fixed; left: 50%; top: 84px; transform: translateX(-50%) translateY(-16px);
+             z-index: 81; background: linear-gradient(135deg, #f59f00, #f08c00); color: #fff;
+             font-size: var(--fs-body); font-weight: 600; letter-spacing: .03em;
+             padding: 12px 22px; border-radius: 999px; box-shadow: 0 8px 28px rgba(240,140,0,.4);
+             opacity: 0; pointer-events: none; transition: opacity .35s, transform .35s; }
+#goaltoast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===== 達標情況分析 ===== */
+.goal-chart-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-sm); flex-wrap: wrap; }
+.goal-chart-head h2 { margin: 0; }
+.goal-month-label { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: var(--fs-sm); }
+.goal-month-label select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: #faf8ff; color: var(--txt); font: inherit; }
+.goal-mode-tabs { display: flex; gap: 6px; margin-top: var(--sp-md); }
+.goal-mode { padding: 6px 15px; border: 1px solid var(--line); border-radius: 8px; background: #faf8ff; color: var(--dim); cursor: pointer; font-size: var(--fs-sm); font-weight: 600; }
+.goal-mode:hover { border-color: var(--btn); color: var(--txt); }
+.goal-mode.on { background: var(--btn); border-color: var(--btn); color: #fff; }
+.goal-display-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: var(--sp-sm); color: var(--dim); font-size: var(--fs-sm); }
+.goal-display-toggle label { display: inline-flex; align-items: center; gap: 5px; color: var(--txt); cursor: pointer; }
+.goal-display-toggle input { width: 15px; height: 15px; accent-color: var(--btn); }
+.goal-chart-wrap { position: relative; margin-top: var(--sp-sm); padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: #faf8ff; overflow: hidden; }
+.goal-chart { display: block; width: 100%; height: auto; min-height: 220px; }
+.goal-chart .grid { stroke: var(--line); stroke-width: 1; }
+.goal-chart .axis-label { fill: var(--dim); font: 12px "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif; }
+.goal-chart .actual-line { fill: none; stroke: var(--btn); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.goal-chart .simple-line { fill: none; stroke: var(--blue); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.goal-chart .api-line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.goal-chart .target-line { fill: none; stroke: var(--gold); stroke-width: 2.5; stroke-dasharray: 7 5; stroke-linejoin: round; stroke-linecap: round; }
+.goal-chart .point { stroke: #fff; stroke-width: 2; cursor: pointer; }
+.goal-chart .point.total { fill: var(--btn); }
+.goal-chart .point.simple { fill: var(--blue); }
+.goal-chart .point.api { fill: var(--accent); }
+.goal-tooltip { position: absolute; z-index: 2; max-width: 220px; padding: 7px 10px; border-radius: 8px; background: var(--txt); color: #fff; font-size: var(--fs-hint); line-height: 1.5; box-shadow: 0 3px 10px rgba(0,0,0,.2); pointer-events: none; }
+.goal-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: var(--sp-sm); color: var(--dim); font-size: var(--fs-hint); min-height: 18px; }
+.goal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.goal-legend i { width: 20px; height: 3px; border-radius: 2px; background: var(--btn); }
+.goal-legend i.simple { background: var(--blue); }
+.goal-legend i.api { background: var(--accent); }
+.goal-legend i.target { background: repeating-linear-gradient(90deg, var(--gold) 0 7px, transparent 7px 12px); }
+@media (max-width: 620px) { .goal-chart { min-height: 190px; } .goal-chart-head { align-items: flex-start; } }

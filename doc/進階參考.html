@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flow Check — 進階參考</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Crect%20x='4'%20y='4'%20width='56'%20height='56'%20rx='14'%20fill='%239e80db'/%3E%3Cg%20fill='%23fff'%20fill-opacity='.92'%3E%3Crect%20x='15'%20y='36'%20width='9'%20height='14'/%3E%3Crect%20x='28'%20y='27'%20width='9'%20height='23'/%3E%3Crect%20x='41'%20y='18'%20width='9'%20height='32'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root {
+    --fg: #24292f;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --bg-code: #f6f8fa;
+    --accent: #0969da;
+  }
+  * { box-sizing: border-box; }
+  html {
+    min-height: 100%;
+    background: linear-gradient(160deg, #eef2f8 0%, #e6ecf4 45%, #eceef3 100%) no-repeat fixed;
+  }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--fg);
+    max-width: 920px;
+    margin: 2.5rem auto;
+    padding: 2.4rem 2.2rem 4rem;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(27, 43, 75, 0.04), 0 14px 40px rgba(54, 73, 110, 0.10);
+  }
+  @media (max-width: 640px) {
+    body { margin: 0 auto; border-radius: 0; border-left: 0; border-right: 0; padding: 1.6rem 1.1rem 3rem; }
+  }
+  h1, h2, h3 { line-height: 1.3; margin-top: 1.8em; margin-bottom: 0.6em; }
+  h1 { font-size: 1.9rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4em; }
+  h2 { font-size: 1.45rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+  h3 { font-size: 1.15rem; }
+  h1 code.ver {
+    font-size: 1rem;
+    background: var(--accent);
+    color: #fff;
+    padding: 0.1em 0.5em;
+    border-radius: 6px;
+    vertical-align: middle;
+  }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2.2rem 0; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--bg-code);
+    padding: 0.15em 0.4em;
+    border-radius: 6px;
+    font-size: 0.88em;
+  }
+  pre {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    line-height: 1.45;
+  }
+  pre code { background: none; padding: 0; font-size: 0.85em; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.5em 0.8em;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--bg-code); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  blockquote {
+    margin: 1rem 0;
+    padding: 0.4em 1em;
+    color: var(--muted);
+    border-left: 4px solid var(--border);
+    background: var(--bg-code);
+    border-radius: 0 6px 6px 0;
+  }
+  blockquote p { margin: 0.3em 0; }
+  ul { padding-left: 1.5em; }
+  li { margin: 0.3em 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .star { color: #bf8700; }
+  .lead { font-size: 1.05rem; }
+  .steps li { margin: 0.5em 0; }
+  .backlink { font-size: 0.95rem; margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+
+<p class="backlink"><a href="../README.html">← 回說明首頁</a></p>
+
+<h1>進階參考</h1>
+
+<h2>設定速查</h2>
+
+<p><strong><code>config.json</code>(主程式設定)</strong></p>
+<table>
+  <thead><tr><th>鍵</th><th>意義</th></tr></thead>
+  <tbody>
+    <tr><td><code>quota_gb</code></td><td>每日流量額度(預設 2)</td></tr>
+    <tr><td><code>port</code></td><td>網頁埠(預設 8765)</td></tr>
+    <tr><td><code>sample_interval_sec</code></td><td>NIC 計費取樣間隔秒數(預設 60)</td></tr>
+    <tr><td><code>lan_probe_interval_sec</code></td><td>內網 ESTATS 高頻探測間隔秒數(預設 1;越短越接得住短命內網連線)</td></tr>
+    <tr><td><code>reserve_mb</code></td><td>流量保留底線</td></tr>
+    <tr><td><code>exclude_nics</code></td><td>計流量時要略過的網卡關鍵字(預設 <code>["Loopback","isatap","Teredo"]</code>,排除回環/隧道介面)</td></tr>
+    <tr><td><code>exclude_lan</code></td><td>是否排除內網流量、不計入對外額度(預設 <code>true</code>;前端開關以 <code>prefs_&lt;機器&gt;.json</code> 為準)</td></tr>
+    <tr><td><code>lan_ranges</code></td><td>★ 視為內網、要排除的網段(預設含 <code>10.0.0.0/8</code> / <code>172.16.0.0/12</code> / <code>192.168.0.0/16</code> / <code>169.254.0.0/16</code>)</td></tr>
+    <tr><td><code>count_ranges</code></td><td>★ 強制計入白名單,優先於 <code>lan_ranges</code>(預設 <code>["10.65.0.0/16"]</code>,釘死 GPSS 對外流量永不被排除)</td></tr>
+    <tr><td><code>max_count_per_run</code></td><td>單次檢索筆數上限</td></tr>
+    <tr><td><code>max_queries_per_campaign</code></td><td>單日累計上限</td></tr>
+    <tr><td><code>gpss_dir</code></td><td>檢索程式所在目錄(預設 <code>program/gpss</code>)</td></tr>
+    <tr><td><code>gpss_script</code> / <code>gpss_script_web</code></td><td>API / 傳統檢索程式檔名(預設 <code>gpss_api_query.py</code> / <code>gpss_web_query.py</code>)</td></tr>
+    <tr><td><code>gpss_python</code></td><td>跑檢索程式的直譯器(預設 <code>py -3.13</code>,不可用則退回 <code>python</code>)</td></tr>
+    <tr><td><code>dl_cap_busy</code> / <code>dl_cap_offpeak</code></td><td>儀表板顯示:上班 / 下班「時段輸出總筆數」上限(官方值 10000 / 30000)</td></tr>
+    <tr><td><code>case_cap_busy</code> / <code>case_cap_offpeak</code></td><td>儀表板顯示:上班 / 下班「單筆案號每小時輸出」上限(官方值 300 / 1000)</td></tr>
+    <tr><td><code>speed_floor_mbps</code></td><td>限速偵測:低於此(Mbps)判定「疑似被限速」(預設 5,可在頁面臨時覆蓋)</td></tr>
+    <tr><td><code>peak_window_min</code></td><td>被動「最高下載速率」的觀測視窗分鐘數(預設 10)</td></tr>
+    <tr><td><code>speedtest_url</code></td><td>主動測速來源(預設 Cloudflare;被擋可換)</td></tr>
+    <tr><td><code>speedtest_bytes</code> / <code>speedtest_timeout</code></td><td>主動測速最多抓的位元組(預設 8MB)/ 最長秒數(預設 6)</td></tr>
+  </tbody>
+</table>
+
+<blockquote>
+  <p><strong>流量暴增預警 / 用量通知的設定不放這裡</strong>:<code>surge_enabled</code> / <code>surge_min_mb</code> / <code>surge_factor</code> / <code>surge_window_min</code> / <code>surge_cooldown_sec</code> 與 <code>notify_enabled</code> / <code>notify_threshold</code> 雖在版本紀錄寫過「config.json 新增」,實際開關與門檻以本機偏好 <code>data/prefs_&lt;機器&gt;.json</code> 為權威來源(各台獨立、頁面即時切換),<code>config.json</code> 未設時走程式內建預設(暴增 50MB、4×、冷卻 300 秒;通知門檻 80%)。</p>
+</blockquote>
+
+<p><strong><code>program/gpss/api_keys.json</code>(驗證碼池;集中放多組 <code>userCode</code>)</strong></p>
+<table>
+  <thead><tr><th>鍵</th><th>意義</th></tr></thead>
+  <tbody>
+    <tr><td><code>keys</code></td><td>★ 驗證碼陣列,每組 <code>{id, label, userCode}</code>。新增驗證碼改這裡(或用網頁「新增驗證碼」/ CLI);各機 <code>api_config_&lt;機器&gt;.json</code> 的 <code>active_key</code> 指向其中一組的 <code>id</code></td></tr>
+  </tbody>
+</table>
+
+<p><strong><code>program/gpss/api_config.json</code>(檢索的共用設定;<code>userCode</code> 已改放上面的驗證碼池)</strong></p>
+<table>
+  <thead><tr><th>鍵</th><th>意義</th></tr></thead>
+  <tbody>
+    <tr><td><code>aps</code></td><td>可用的 AP 伺服器清單(目前預設 <code>[1,2]</code>;gpss3/4 長期回 <code>no ini</code> 錯誤頁故先跳過,TIPO 修好可加回 <code>[1,2,3,4]</code>)</td></tr>
+    <tr><td><code>probe_fastest_ap</code></td><td>開跑前測各 AP 回應速度、選最快的起跑(預設 <code>true</code>)</td></tr>
+    <tr><td><code>patDB</code></td><td>檢索的資料庫代碼</td></tr>
+    <tr><td><code>queryField</code></td><td>第一段檢索欄位(預設 <code>PN</code> 公開公告號;沒命中的會自動再用 <code>AN</code> 申請號補查)</td></tr>
+    <tr><td><code>expFld</code></td><td>匯出欄位(預設 <code>PN,AN,ID,AD,TI</code>)</td></tr>
+    <tr><td><code>expFmt</code></td><td>回應格式(預設 <code>json</code>)</td></tr>
+    <tr><td><code>timeout_seconds</code></td><td>單一請求逾時秒數(預設 40;逾時會自動換台)</td></tr>
+    <tr><td><code>batch_size</code></td><td>★ 一個請求一次查幾筆(預設 30;設 <code>1</code> = 等同舊版一筆一請求)</td></tr>
+    <tr><td><code>stop_on_quota</code></td><td>★ 撞 <code>Over download quantity</code> 時立即停止本輪、不暫停重試(預設 <code>true</code>)</td></tr>
+    <tr><td><code>quota_per_hour_busy</code> / <code>quota_per_hour_offpeak</code></td><td>上班 / 非上班時段的每小時額度(預設 300 / 1000),依此自動控速</td></tr>
+    <tr><td><code>retries</code></td><td>每個請求(及探測每台)的重試次數(預設 2)</td></tr>
+    <tr><td><code>give_up_after_failed_batches</code></td><td>連續幾批整批失敗就停止本輪(預設 3;避免空燒清單)</td></tr>
+  </tbody>
+</table>
+
+<blockquote>
+  <p>改完 <code>config.json</code> 或主程式後需<strong>重新啟動</strong>才生效;改 <code>program/gpss/</code> 下的檢索設定則每次開跑會自動重讀,不必重啟。</p>
+</blockquote>
+
+<h2>檔案結構</h2>
+
+<pre><code>flow_check/                根目錄只放使用者平常會碰的東西
+├─ README.md / README.html  本說明文件(首頁)
+├─ doc/                   衍生說明文件(從 README 連結過去;新文件也放這)
+│  ├─ 進階參考.html        設定速查、檔案結構
+│  └─ 版本紀錄.html        各版更新紀錄
+├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉
+├─ 月進度.bat             雙擊即印本月進度純文字報告
+├─ config.json            主設定:額度、port、安全護欄等
+├─ web/                   網頁介面(免打包純 HTML/JS;四個頁籤)
+│  ├─ index.html          外殼:用 &lt;!--#include--&gt; 組裝各分頁、載入 js/
+│  ├─ style.css           樣式(原內嵌,已抽成外部檔)
+│  ├─ partials/           各分頁 HTML(monitor / control / analytics / progress)
+│  └─ js/                 依功能切分的程式(util / monitor / control / analytics / progress / main)
+├─ data/                  設定與資料
+│  ├─ config/             共用設定: targets.json / holidays.json / machines.json / api_quota_baseline.json
+│  ├─ machines/           各機執行期資料: state / prefs / run_log / 月進度快照(檔名含機器代號)
+│  └─ exports/             ★ 手動從後台下載的簡易版*.xls / API*.xls(可直接覆蓋舊檔)
+└─ program/               所有程式碼與輔助檔(使用者平常不需進來)
+   ├─ core/               核心程式(由 .bat 啟動)
+   │  ├─ traffic_monitor.py    主程式:流量取樣 + 網頁伺服器 + 呼叫檢索程式(版號唯一來源)
+   │  ├─ monthly_progress.py   本月進度計算(網頁與 月進度.bat 共用)
+   │  ├─ estats.py             Windows ESTATS 逐 TCP 連線收/發位元組(內網排除底層;7.0.0 拆出)
+   │  ├─ paths.py              路徑常數與機器身分
+   │  ├─ storage.py            資料層:設定 / 偏好 / 機器標籤 / 統計掃描 / 執行時間
+   │  └─ quota.py              API 額度 / 驗證碼歸戶
+   ├─ gpss/                   檢索引擎
+   │  ├─ api_config.json       共用設定(patDB / 速率 / AP 等;不再放 userCode)
+   │  ├─ api_keys.json         ★ 驗證碼池(集中放多組 userCode)
+   │  ├─ api_config_&lt;機器&gt;.json  ★ 各機設定:active_key = 目前選用哪一組(首次執行自動產生)
+   │  ├─ patents.txt           檢索清單(也可在網頁編輯)
+   │  └─ output/               檢索結果:每台每月一個 summary_&lt;機器&gt;_&lt;YYYY-MM&gt;.xlsx(一天一張工作表);
+   │                           另有除錯傾印 _fail_response.json / _sample_response.json
+   └─ docs/README.md           本說明文件(Markdown 版)</code></pre>
+
+<p class="backlink"><a href="../README.html">← 回說明首頁</a></p>
+
+</body>
+</html>
