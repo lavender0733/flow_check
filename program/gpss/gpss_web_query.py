@@ -42,7 +42,11 @@ from playwright.async_api import async_playwright
 # 這是全專案唯一動 sys.path 的地方（每個進入點各一行），取代原本散在模組內的路徑魔法。
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from common.ident import machine_id   # noqa: E402  (sys.path 設定後才能匯入)
+# 機器代號與執行紀錄路徑與伺服器端共用同一份定義,不再各自重推。
+# 執行紀錄:每跑完一輪追加一行 JSON,供網頁累計「執行時間」用。各機寫各機一份
+# (run_log_<機器>.jsonl),網頁讀取時掃全部相加;同步時不會互相覆蓋。
+# (筆數與流量另由 output/ 的 summary CSV 直接統計,故 CSV 才是筆數/流量的權威來源)。
+from core.paths import MACHINE_ID, RUN_LOG_PATH   # noqa: E402  (sys.path 設定後才能匯入)
 
 try:
     from gpss import output_store   # 把零散的 summary CSV 併成各機一個 Excel(一天一張工作表)
@@ -58,16 +62,10 @@ def _skip_consolidate() -> bool:
     return os.environ.get("GPSS_SKIP_CONSOLIDATE") == "1"
 
 
-MACHINE_ID = machine_id()
-
-BASE = Path(__file__).resolve().parent
-PATENTS_PATH = BASE / "patents.txt"
-OUTPUT_DIR = BASE / "output"
-# 執行紀錄:每跑完一輪追加一行 JSON,供網頁累計「執行時間」用。各機寫各機一份
-# (run_log_<機器>.jsonl),網頁讀取時掃全部相加;同步時不會互相覆蓋。
-# (筆數與流量另由 output/ 的 summary CSV 直接統計,故 CSV 才是筆數/流量的權威來源)。
-# data/machines/ 在專案根目錄 flow_check/;本檔在 program/gpss/ 下,往上兩層。
-RUN_LOG_PATH = BASE.parents[1] / "data" / "machines" / f"run_log_{MACHINE_ID}.jsonl"
+# 這個檔所在的 gpss 目錄(注意:core.paths.BASE 是專案根目錄,兩者不同)。
+GPSS_DIR = Path(__file__).resolve().parent
+PATENTS_PATH = GPSS_DIR / "patents.txt"
+OUTPUT_DIR = GPSS_DIR / "output"
 
 
 # ============================================================

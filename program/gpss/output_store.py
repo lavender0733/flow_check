@@ -42,8 +42,9 @@ except Exception:                       # 沒裝 openpyxl 就降級:不彙整、
     Workbook = None
     load_workbook = None
 
-BASE = Path(__file__).resolve().parent
-OUTPUT_DIR = BASE / "output"
+# 這個檔所在的 gpss 目錄(注意:core.paths.BASE 是專案根目錄,兩者不同)。
+GPSS_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = GPSS_DIR / "output"
 CSV_RE = re.compile(r"summary_(\d{8})_(\d{6})(?:_(.+))?\.csv$")   # 日期, 時間, 機器(可選)
 # 新版檔名:summary_<機器>_<YYYY-MM>.xlsx。`.+` 貪婪、月份錨在結尾,故機器代號帶連字號
 # (如 DESKTOP-V33GG01)也切得對。Google Drive 衝突複本(summary_<機器>_2026-06 (1).xlsx)

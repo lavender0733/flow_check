@@ -65,8 +65,10 @@ sys.dont_write_bytecode = True
 # 這是全專案唯一動 sys.path 的地方（每個進入點各一行），取代原本散在模組內的路徑魔法。
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from common.ident import machine_id, mask_code as _mask_code   # noqa: E402  (sys.path 設定後才能匯入)
+from common.ident import mask_code as _mask_code   # noqa: E402  (sys.path 設定後才能匯入)
 from common.jsonio import read_json   # noqa: E402
+# 機器代號與執行紀錄路徑與伺服器端共用同一份定義,不再各自重推。
+from core.paths import MACHINE_ID, RUN_LOG_PATH   # noqa: E402
 
 try:
     from gpss import output_store   # 把零散的 summary CSV 併成各機一個 Excel(一天一張工作表)
@@ -82,16 +84,13 @@ def _skip_consolidate() -> bool:
     return os.environ.get("GPSS_SKIP_CONSOLIDATE") == "1"
 
 
-MACHINE_ID = machine_id()
-
-BASE = Path(__file__).resolve().parent
-CONFIG_PATH = BASE / "api_config.json"                       # 共用設定
-MACHINE_CONFIG_PATH = BASE / f"api_config_{MACHINE_ID}.json"  # 本機設定(active_key + 目前選用的 userCode)
-KEYS_PATH = BASE / "api_keys.json"                           # 驗證碼池(多組 API 驗證碼;新增驗證碼就改這裡)
-PATENTS_PATH = BASE / "patents.txt"
-OUTPUT_DIR = BASE / "output"
-# data/machines/ 在專案根目錄;本檔在 program/gpss/ 下,往上兩層。
-RUN_LOG_PATH = BASE.parents[1] / "data" / "machines" / f"run_log_{MACHINE_ID}.jsonl"
+# 這個檔所在的 gpss 目錄(注意:core.paths.BASE 是專案根目錄,兩者不同)。
+GPSS_DIR = Path(__file__).resolve().parent
+CONFIG_PATH = GPSS_DIR / "api_config.json"                       # 共用設定
+MACHINE_CONFIG_PATH = GPSS_DIR / f"api_config_{MACHINE_ID}.json"  # 本機設定(active_key + 目前選用的 userCode)
+KEYS_PATH = GPSS_DIR / "api_keys.json"                           # 驗證碼池(多組 API 驗證碼;新增驗證碼就改這裡)
+PATENTS_PATH = GPSS_DIR / "patents.txt"
+OUTPUT_DIR = GPSS_DIR / "output"
 
 DEFAULT_CONFIG = {
     "userCode": "",
@@ -193,7 +192,7 @@ def _build_keys_from_legacy() -> list:
     shared = read_json(CONFIG_PATH, default={})
     if isinstance(shared, dict):
         add(shared.get("userCode", ""), "共用")
-    for p in sorted(BASE.glob("api_config_*.json")):
+    for p in sorted(GPSS_DIR.glob("api_config_*.json")):
         m = re.match(r"api_config_(.+)\.json$", p.name)
         if not m:
             continue
