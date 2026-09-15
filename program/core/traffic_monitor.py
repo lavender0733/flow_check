@@ -61,6 +61,8 @@ from common.jsonio import read_json, write_json_atomic
 # Windows ESTATS(每條 TCP 連線的精準收/發位元組)已抽到獨立模組 estats.py。
 # 對外只用到這兩個函式:process_is_elevated() 判是否有提權、estats_probe() 取逐連線位元組。
 from core.estats import process_is_elevated, estats_probe
+# 錯誤收集與「需重啟」偵測抽到 health.py(只相依標準函式庫,最底層)。
+from core.health import record_error, health_snapshot, needs_restart
 # 路徑/機器身分常數抽到 paths.py;資料層(設定/偏好/機器標籤/output 統計掃描)抽到 storage.py。
 # 兩者皆為單向相依的下層模組(本檔 → paths/storage),不會回頭匯入本檔,避免循環匯入。
 from core.paths import (BASE, DATA_DIR, MACHINE_DATA_DIR, MACHINES_PATH, WEB_DIR, MACHINE_ID,
@@ -103,76 +105,6 @@ def _render_index():
     html = html.replace(b"<!--#version-->", VERSION.encode("utf-8"))
     return html
 
-# 監看「在這個程序內執行」的原始碼檔:啟動時記下狀態,之後若磁碟上的檔內容變了,
-# 代表妳改了程式、但這個正在跑的實例還是舊版 → 前端顯示「需重啟」。
-# (index.html、gpss_*.py 不列入:前者每次請求即時讀檔、後者每次檢索開新行程,
-#  改完重新整理或下次執行就生效,不必重啟監控。)
-_RESTART_WATCH = [
-    Path(__file__).resolve(),
-    Path(__file__).resolve().with_name("monthly_progress.py"),
-    # 從本檔拆出、且在這個程序內載入的下層模組:改它們同樣要重啟才生效。
-    Path(__file__).resolve().with_name("estats.py"),
-    Path(__file__).resolve().with_name("paths.py"),
-    Path(__file__).resolve().with_name("storage.py"),
-    # output_store.py 也在這個程序內載入(統計/額度都靠它),改它一樣要重啟才生效。
-    Path(__file__).resolve().parents[2] / "program" / "gpss" / "output_store.py",
-]
-
-
-def _source_mtime() -> float:
-    newest = 0.0
-    for p in _RESTART_WATCH:
-        try:
-            newest = max(newest, p.stat().st_mtime)
-        except OSError:
-            pass
-    return newest
-
-
-def _source_hash() -> str:
-    """監看檔內容的彙總雜湊。比 mtime 可靠:Google Drive 同步常會更動檔案的修改時間
-    但內容沒變(虛擬磁碟重新落地、跨機同步回寫),只看 mtime 會誤判「需重啟」。
-    比對內容雜湊就只在『內容真的變了』時才提示。檔案讀不到時以路徑+缺檔標記納入,
-    讓「檔案被刪/暫時讀不到」也算一種變動。"""
-    h = hashlib.md5()
-    for p in _RESTART_WATCH:
-        try:
-            h.update(p.read_bytes())
-        except OSError:
-            h.update(b"\x00<missing:" + str(p).encode("utf-8") + b">\x00")
-        h.update(b"\n--\n")
-    return h.hexdigest()
-
-
-_STARTUP_MTIME = _source_mtime()
-_STARTUP_HASH = _source_hash()
-
-
-def _needs_restart() -> bool:
-    """是否該提示重啟。快路徑:沒有任何監看檔比啟動時新(+0.5s 緩衝避開 mtime 浮點抖動)
-    就一定沒改 —— 不必讀檔。只有當有檔 mtime 變新時(可能真改了,也可能只是 Drive 動了
-    時間戳)才讀內容算雜湊確認:雜湊不同才算真的需要重啟。"""
-    if _source_mtime() <= _STARTUP_MTIME + 0.5:
-        return False
-    return _source_hash() != _STARTUP_HASH
-
-# ── 伺服器健康狀態 ───────────────────────────────────────────────
-# 把原本只 print 到 cmd 的錯誤收進來,讓頁面直接看得到。妳說「跑不出來就去看 cmd
-# 一堆錯誤、重開就好」—— 就是要讓妳不必再翻 cmd:錯誤累積/資料停更時頁面會提醒重啟。
-# (瀏覽器中途斷線那種無害的 10053/10054 不算進來,以免假警報。)
-_HEALTH = {
-    "errors": collections.deque(maxlen=20),   # 最近的錯誤訊息(含時間)
-    "count": 0,                               # 啟動以來累計筆數
-}
-_HEALTH_LOCK = threading.Lock()
-
-
-def record_error(where: str, exc) -> None:
-    msg = f"{datetime.now().strftime('%H:%M:%S')} [{where}] {exc}"
-    with _HEALTH_LOCK:
-        _HEALTH["errors"].append(msg)
-        _HEALTH["count"] += 1
-    print(f"[warn] {msg}")
 
 # output_store(統計/額度資料來源)與 sys.path 設定已隨 storage.py 一起搬走;
 # 本檔用到的 output_store 由上方 `from storage import output_store` 取得。
@@ -1164,10 +1096,10 @@ class Handler(BaseHTTPRequestHandler):
             snap = self.monitor.snapshot()
             # mtime 當快篩(沒檔變新就免讀檔),變新才比對內容雜湊確認:
             # Google Drive 同步常動 mtime 但內容沒變,只看 mtime 會誤報「需重啟」。
-            snap["needs_restart"] = _needs_restart()
-            with _HEALTH_LOCK:
-                snap["server_errors"] = _HEALTH["count"]
-                snap["recent_errors"] = list(_HEALTH["errors"])[-5:]
+            snap["needs_restart"] = needs_restart()
+            h = health_snapshot()
+            snap["server_errors"] = h["count"]
+            snap["recent_errors"] = h["errors"]
             # 檢索資料的變動簽章:前端只在它變了才刷新爬取統計(避免每 5 秒盲刷)。
             snap["data_sig"] = _data_sig(self.config)
             self._send_json(snap)
