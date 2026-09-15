@@ -309,8 +309,11 @@ def _data_sig(cfg: dict) -> str:
 class Monitor:
     """Accumulates per-day network usage (all NICs summed)."""
 
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, counters_fn=None):
         self.cfg = cfg
+        # 網卡累積計數器的來源。預設讀 psutil;測試時可注入假資料,
+        # 才驗證得了跨日歸零與「重開機計數器回捲」這兩段核心邏輯。
+        self._counters_fn = counters_fn or (lambda: psutil.net_io_counters(pernic=True))
         self.quota_bytes = float(cfg["quota_gb"]) * (1024 ** 3)
         self.debug_lan = bool(cfg.get("debug_lan", False))
         self.exclude = [x.lower() for x in cfg.get("exclude_nics", [])]
@@ -408,7 +411,7 @@ class Monitor:
         }
 
     def _load_state(self):
-        cur = psutil.net_io_counters(pernic=True)
+        cur = self._counters_fn()
         today = self._today()
         saved = None
         # 讀新的 state_<機器>.json;若還沒有(剛從舊版升級),沿用舊的單一
@@ -477,7 +480,7 @@ class Monitor:
         tmp.replace(STATE_PATH)
 
     def sample(self):
-        cur = psutil.net_io_counters(pernic=True)
+        cur = self._counters_fn()
         now = time.monotonic()
         today = self._today()
 
