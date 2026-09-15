@@ -81,7 +81,6 @@ DEFAULT_CONFIG = {
     # 內網排除/暴增歸因靠高頻 ESTATS 探測(與 60s NIC 計費解耦);內網很快、FTP 資料連線
     # 一檔一關,探測間隔愈短愈接得住短命連線,故設 1 秒,把漏算窗口從 60 秒縮到幾秒。
     "lan_probe_interval_sec": 1,
-    "reserve_mb": 100,
     "exclude_nics": ["Loopback", "isatap", "Teredo"],
 
     # ── 排除內網(私有 IP)流量 ──
@@ -99,7 +98,6 @@ DEFAULT_CONFIG = {
     "count_ranges": ["10.65.0.0/16"],
 
     "max_count_per_run": 2000,
-    "max_queries_per_campaign": 9370,
     "gpss_dir": "program/gpss",
     "gpss_script": "gpss_api_query.py",          # API 檢索(預設)
     "gpss_script_web": "gpss_web_query.py",      # 傳統(前端)檢索

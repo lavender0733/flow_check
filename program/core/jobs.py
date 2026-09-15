@@ -1,9 +1,12 @@
 """檢索任務調度。
 
-從 traffic_monitor.py 抽出。把 GPSS 檢索程式以 subprocess 啟動並套上安全護欄
-（流量保留下限、單輪筆數上限），提供即時進度與停止鈕。兩種方式：
-"api"（gpss_api_query.py，官方 API）與 "web"（gpss_web_query.py，Playwright
-操作前端）。檢索邏輯本身不在這裡，這層只是包裝。
+從 traffic_monitor.py 抽出。把 GPSS 檢索程式以 subprocess 啟動並套上單輪筆數
+上限，提供即時進度與停止鈕。兩種方式："api"（gpss_api_query.py，官方 API）與
+"web"（gpss_web_query.py，Playwright 操作前端）。檢索邏輯本身不在這裡，
+這層只是包裝。
+
+流量保留底線（剩餘低於 X MB 就不開跑／跑到一半自動停）已於 7.3.0 移除：
+檢索是否該停由使用者自己決定，不再由流量多寡代為中斷。
 
 consolidate_async 一併搬來：它唯一的呼叫者就是 JobRunner（檢索結束後把零散
 CSV 併成各機一個 Excel）。
@@ -76,8 +79,7 @@ class JobRunner:
         self.status_text = "idle"
         self.mode = None
         self.method = "api"      # 檢索方式: "api"(官方 API) / "web"(傳統前端)
-        self.reserve_bytes = 0
-        self.target = 0          # requested count (count mode) / campaign cap
+        self.target = 0          # 這次要跑的筆數
         self.est_done = 0        # estimated queries launched so far
         self.started_at = None
         self.lines = collections.deque(maxlen=300)
@@ -109,7 +111,7 @@ class JobRunner:
         with self.lock:
             self.lines.append(msg.rstrip("\n"))
 
-    def start(self, mode: str, count, reserve_mb, limit_detect=True, method="api"):
+    def start(self, mode: str, count, limit_detect=True, method="api"):
         with self.lock:
             if self.running:
                 return False, "已有任務在執行中,請先停止"
@@ -117,40 +119,23 @@ class JobRunner:
         if method not in self.scripts:
             return False, f"未知檢索方式: {method}"
 
-        try:
-            reserve_mb = max(0, int(reserve_mb))
-        except (TypeError, ValueError):
-            reserve_mb = int(self.cfg["reserve_mb"])
-        reserve_bytes = reserve_mb * 1024 * 1024
-
-        # 剩餘流量低於保留底線就不開跑 —— 但只有「可用上限偵測」開啟時才擋;
-        # 關掉偵測代表使用者要求照跑(即使可能超過網路額度)。
-        snap = self.mon.snapshot()
-        if limit_detect and snap["remaining_bytes"] <= reserve_bytes:
-            return False, (f"目前剩餘流量 {snap['remaining_bytes'] / 1048576:.0f}MB "
-                           f"已低於保留底線 {reserve_mb}MB,不開跑")
-
         max_count = int(self.cfg["max_count_per_run"])
-        if mode == "count":
-            try:
-                count = int(count)
-            except (TypeError, ValueError):
-                return False, "筆數必須是數字"
-            if count <= 0:
-                return False, "筆數要大於 0"
-            if count > max_count:
-                return False, f"筆數 {count} 超過單次上限 {max_count} 筆"
-            self.target = count
-        elif mode == "budget":
-            self.target = int(self.cfg.get("max_queries_per_campaign", 0))
-        else:
+        if mode != "count":
             return False, f"未知模式: {mode}"
+        try:
+            count = int(count)
+        except (TypeError, ValueError):
+            return False, "筆數必須是數字"
+        if count <= 0:
+            return False, "筆數要大於 0"
+        if count > max_count:
+            return False, f"筆數 {count} 超過單次上限 {max_count} 筆"
+        self.target = count
 
         self.stop_flag.clear()
         self.mode = mode
         self.method = method
         self.gpss_script = self.scripts[method]
-        self.reserve_bytes = reserve_bytes
         self.limit_detect = bool(limit_detect)
         self.warning = None
         self.est_done = 0
@@ -166,29 +151,9 @@ class JobRunner:
         return True, "已開始"
 
     def _campaign(self):
-        max_count = int(self.cfg["max_count_per_run"])
-        cap_total = int(self.cfg.get("max_queries_per_campaign", 0))  # 0 = no cap
         try:
-            if self.mode == "count":
-                self._run_chunk(self.target, offset=0)
-                self.est_done = self.target
-            else:  # budget: keep running chunks until floor / cap / stop
-                offset = 0
-                while not self.stop_flag.is_set():
-                    snap = self.mon.snapshot()
-                    # 同 start():只有開啟「可用上限偵測」時才因保留底線自動停。
-                    if self.limit_detect and snap["remaining_bytes"] <= self.reserve_bytes:
-                        self._log("--- 剩餘流量已達保留底線,停止 ---")
-                        break
-                    if cap_total and self.est_done >= cap_total:
-                        self._log(f"--- 已達單日上限 {cap_total} 筆,停止 ---")
-                        break
-                    chunk = max_count
-                    if cap_total:
-                        chunk = min(chunk, cap_total - self.est_done)
-                    self._run_chunk(chunk, offset=offset)
-                    self.est_done += chunk
-                    offset += chunk
+            self._run_chunk(self.target, offset=0)
+            self.est_done = self.target
         except Exception as e:
             self._log(f"[error] campaign 例外: {e}")
         finally:
@@ -243,15 +208,9 @@ class JobRunner:
             self._chunk_killed = False
 
         def supervise():
+            # 只等使用者按「立即停止」—— 流量多寡不再中斷檢索。
             while proc.poll() is None:
                 if self.stop_flag.is_set():
-                    self._terminate(proc)
-                    return
-                # 同 start():關閉「可用上限偵測」時不因保留底線中止執行中的批次。
-                snap = self.mon.snapshot()
-                if self.limit_detect and snap["remaining_bytes"] <= self.reserve_bytes:
-                    self._log("--- 觸及流量保留底線,中止本批 ---")
-                    self.stop_flag.set()
                     self._terminate(proc)
                     return
                 time.sleep(2)

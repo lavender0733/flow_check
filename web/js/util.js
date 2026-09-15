@@ -34,5 +34,4 @@ const STATUS_MAP = {
   done:    ["完成", "done"],
   stopped: ["已停止", "stop"],
 };
-const MODE_MAP = { count: "指定筆數", budget: "流量自動停" };
 const METHOD_MAP = { api: "API 檢索", web: "傳統檢索" };
