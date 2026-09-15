@@ -8,9 +8,9 @@ A small always-local web app with two halves:
      via psutil, accumulates the day's usage against a daily quota
      (default 2GB up+down), and serves it as a live web page.
 
-  2. 控制面板 — launches the GPSS query script with parameters and safety
-     guardrails (reserve floor + per-run cap), with live progress and a stop
-     button. Two methods are offered: "api" (gpss_api_query.py, official API)
+  2. 控制面板 — launches the GPSS query script with parameters and a per-run
+     count cap, with live progress and a stop button. Two methods are offered:
+     "api" (gpss_api_query.py, official API)
      and "web" (gpss_web_query.py, traditional front-end via Playwright). The
      query logic itself is NOT touched here; this only wraps it.
 

@@ -219,9 +219,7 @@ def config_payload(app) -> dict:
     prefs = load_prefs()
     return {
         "quota_gb": cfg["quota_gb"],
-        "reserve_mb": cfg["reserve_mb"],
         "max_count_per_run": cfg["max_count_per_run"],
-        "max_queries_per_campaign": cfg.get("max_queries_per_campaign", 0),
         "userCode_set": api_set,
         "patDB": patdb,
         "machine": machine_label(MACHINE_ID),
@@ -325,7 +323,6 @@ def job_start(app, body: dict) -> dict:
     ok, msg = app.runner.start(
         body.get("mode", "count"),
         body.get("count"),
-        body.get("reserve_mb", app.cfg["reserve_mb"]),
         body.get("limit_detect", True),
         body.get("method", "api"),
     )

@@ -13,7 +13,7 @@ from core import routes
 
 
 def _app(cfg=None):
-    return routes.App(cfg=cfg or {"reserve_mb": 100},
+    return routes.App(cfg=cfg or {"max_count_per_run": 2000},
                       monitor=MagicMock(), runner=MagicMock())
 
 
@@ -88,20 +88,32 @@ class TestJobEndpoints(TempDataCase):
         self.assertEqual(ctx.exception.payload["message"], "已經在跑了")
 
     def test_job_start_passes_body_through_in_order(self):
-        """start() 是位置參數，順序錯了會把 count 當成 reserve_mb 之類。"""
-        app = _app(cfg={"reserve_mb": 100})
+        """start() 是位置參數，順序錯了會把 count 當成 limit_detect 之類。"""
+        app = _app()
         app.runner.start.return_value = (True, "已開始")
         table = routes.build_routes(app)
-        table[("POST", "/api/run")](Req(body={"mode": "reserve", "count": 7,
+        table[("POST", "/api/run")](Req(body={"mode": "count", "count": 7,
                                               "limit_detect": False, "method": "web"}))
-        app.runner.start.assert_called_once_with("reserve", 7, 100, False, "web")
+        app.runner.start.assert_called_once_with("count", 7, False, "web")
 
     def test_job_start_defaults_match_old_handler(self):
-        app = _app(cfg={"reserve_mb": 250})
+        app = _app()
         app.runner.start.return_value = (True, "已開始")
         table = routes.build_routes(app)
         table[("POST", "/api/run")](Req(body={}))
-        app.runner.start.assert_called_once_with("count", None, 250, True, "api")
+        app.runner.start.assert_called_once_with("count", None, True, "api")
+
+    def test_job_start_no_longer_takes_reserve_mb(self):
+        """流量保留底線已於 7.3.0 移除：前端不再送 reserve_mb，
+        就算有人硬送一個上來也不該被轉給 runner。"""
+        app = _app()
+        app.runner.start.return_value = (True, "已開始")
+        table = routes.build_routes(app)
+        table[("POST", "/api/run")](Req(body={"mode": "count", "count": 5,
+                                              "reserve_mb": 999}))
+        args, _ = app.runner.start.call_args
+        self.assertNotIn(999, args)
+        self.assertEqual(args, ("count", 5, True, "api"))
 
     def test_job_stop_returns_runner_result(self):
         app = _app()

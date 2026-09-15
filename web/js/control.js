@@ -5,28 +5,20 @@
 // 註:loadConfig 也順手帶入 monitor.js 用到的 quota_gb 與 speed_floor_mbps 顯示預設值。
 
 // ----- 狀態 -----
-let mode = "count";
+const mode = "count";         // 只有「指定筆數」一種模式(流量自動停已於 7.3.0 移除)
 let method = "api";           // 檢索方式: api(官方 API) / web(傳統前端)
 let apiNoteText = "API 驗證碼:讀取中…";   // 標題後小字(API 模式):目前用哪組驗證碼
 let apiNoteColor = "var(--dim)";
 let keys = [];                // 驗證碼池(只含遮罩碼)
 let activeKey = null;         // 本機目前選用的驗證碼 id
-let cfg = { reserve_mb: 100, max_count_per_run: 2000 };
+let cfg = { max_count_per_run: 2000 };
 let prevStatus = null;
 let dismissedWarning = null;  // 使用者按掉的警告文字;同一則不再跳,警告解除或換新內容才重顯示
 let jobElapsedBase = 0;       // 伺服器回報的執行秒數
 let jobElapsedAt = 0;         // 收到上述秒數的當下(Date.now())
 let jobRunning = false;       // 任務是否執行中(決定執行時間要不要每秒往上加)
 
-// ===== 執行設定:模式 / 檢索方式 =====
-function setMode(m) {
-  mode = m;
-  document.getElementById("m-count").classList.toggle("on", m === "count");
-  document.getElementById("m-budget").classList.toggle("on", m === "budget");
-  document.getElementById("f-count").classList.toggle("show", m === "count");
-  document.getElementById("f-budget").classList.toggle("show", m === "budget");
-}
-
+// ===== 執行設定:檢索方式 =====
 function setMethod(m) {
   method = m;
   document.getElementById("meth-api").classList.toggle("on", m === "api");
@@ -56,9 +48,6 @@ async function loadConfig() {
     cfg = await (await fetch("/api/config")).json();
     document.getElementById("quota").textContent = cfg.quota_gb;
     document.getElementById("maxcount").textContent = cfg.max_count_per_run;
-    const gt = document.getElementById("guard-tip");
-    if (gt) gt.dataset.tip = `護欄:當日剩餘低於 ${cfg.reserve_mb} MB 時不開跑、跑到一半也自動停。`;
-    document.getElementById("reserve").value = cfg.reserve_mb;
     document.getElementById("count").max = cfg.max_count_per_run;
     // 速率下限預設值(使用者沒自訂過才採用 config 的值;speedFloor 在 monitor.js)
     if (!speedFloorUserSet && cfg.speed_floor_mbps != null) {
@@ -350,10 +339,9 @@ async function runJob() {
   toast.textContent = "";
   const payload = {
     mode, method,
+    count: parseInt(document.getElementById("count").value, 10),
     limit_detect: document.getElementById("limitdetect").classList.contains("on"),
   };
-  if (mode === "count") payload.count = parseInt(document.getElementById("count").value, 10);
-  else payload.reserve_mb = parseInt(document.getElementById("reserve").value, 10);
   try {
     const r = await fetch("/api/run", {
       method: "POST", headers: { "Content-Type": "application/json" },

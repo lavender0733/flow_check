@@ -43,22 +43,11 @@
     <!-- 設定(左) / 執行(右) -->
     <div class="ctl2">
       <div class="col">
-        <div class="collabel">設定 <i class="info" id="guard-tip" tabindex="0" data-tip="護欄:當日剩餘低於保留流量時不開跑、跑到一半也自動停。"></i></div>
-        <div class="modes">
-          <button id="m-count" class="on" onclick="setMode('count')">指定筆數</button>
-          <button id="m-budget" onclick="setMode('budget')">跑到流量剩 X 自動停</button>
-        </div>
+        <div class="collabel">設定</div>
 
         <div class="field show" id="f-count">
           <label>筆數(上限 <span id="maxcount">—</span>)</label>
           <input type="number" id="count" min="1" value="500">
-        </div>
-
-        <div class="field" id="f-budget">
-          <label>保留流量</label>
-          <input type="number" id="reserve" min="0" value="100">
-          <span class="hint">MB</span>
-          <i class="info" tabindex="0" data-tip="剩這麼多流量就自動停。"></i>
         </div>
       </div>
 
