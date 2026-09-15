@@ -79,7 +79,7 @@
       "tag": "加頁籤＝丟兩個新檔",
       "pos": [
         40,
-        230
+        205
       ],
       "size": [
         240,
@@ -93,7 +93,7 @@
       "sublabel": "HTTP 底座：分派 · 靜態檔 · 穿越防護",
       "pos": [
         360,
-        230
+        205
       ],
       "size": [
         240,
@@ -107,7 +107,7 @@
       "sublabel": "路由表 · 一端點一函式",
       "pos": [
         680,
-        230
+        205
       ],
       "size": [
         240,
@@ -121,7 +121,7 @@
       "sublabel": "JobRunner · 檢索任務排程",
       "pos": [
         1000,
-        230
+        205
       ],
       "size": [
         240,
@@ -135,7 +135,7 @@
       "sublabel": "gpss_api_query · gpss_web_query",
       "pos": [
         1000,
-        410
+        360
       ],
       "size": [
         240,
@@ -150,7 +150,7 @@
       "tag": "年度統計.bat",
       "pos": [
         40,
-        410
+        360
       ],
       "size": [
         240,
@@ -164,7 +164,7 @@
       "sublabel": "record_error · 需重啟偵測",
       "pos": [
         360,
-        410
+        360
       ],
       "size": [
         240,
@@ -178,7 +178,7 @@
       "sublabel": "原子寫 · 容錯讀 · SigCache",
       "pos": [
         680,
-        410
+        360
       ],
       "size": [
         240,
@@ -193,7 +193,7 @@
       "tag": "格式不變",
       "pos": [
         1000,
-        590
+        515
       ],
       "size": [
         240,
@@ -207,7 +207,7 @@
       "sublabel": "machine_id · mask_code",
       "pos": [
         680,
-        590
+        515
       ],
       "size": [
         240,
@@ -329,19 +329,10 @@
     },
     {
       "dot": "emerald",
-      "title": "core 拆解（純搬移，零邏輯改動）",
+      "title": "core 拆解＋路由表",
       "items": [
-        "traffic_monitor.py 從 1,536 行瘦到約 80 行",
-        "sampler / jobs / health / routes 各自獨立",
-        "_RESTART_WATCH 改掃 core/*.py，新模組自動納入"
-      ]
-    },
-    {
-      "dot": "violet",
-      "title": "路由表取代 startswith 長鏈",
-      "items": [
-        "/api/monthly/trend 與 /api/monthly 互不吞噬",
-        "query 由底座解析，取代手刻的 month= regex",
+        "traffic_monitor.py 從 1,536 行瘦到約 80 行（純搬移）",
+        "(method, path) 精確比對，順序陷阱從根上消失",
         "新增端點＝寫一個函式＋加一行註冊"
       ]
     },
