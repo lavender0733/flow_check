@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from _util import TempDataCase
 
-import storage
+from core import storage
 
 
 class TestLoadConfig(TempDataCase):

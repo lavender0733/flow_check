@@ -6,7 +6,7 @@
 
 from _util import TempDataCase
 
-import output_store as os_
+from gpss import output_store as os_
 
 
 class TestDateHelpers(TempDataCase):

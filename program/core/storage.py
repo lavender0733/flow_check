@@ -13,13 +13,11 @@ import re
 import threading
 from pathlib import Path
 
-from paths import BASE, MACHINE_DATA_DIR, CONFIG_PATH, MACHINES_PATH, PREFS_PATH
+from core.paths import BASE, MACHINE_DATA_DIR, CONFIG_PATH, MACHINES_PATH, PREFS_PATH
 
 # output 彙整模組(在 program/gpss/ 下):把零散 CSV 併成各機一個 Excel,統計也讀它。
-# 必須在匯入它之前把該目錄加進 sys.path。
-sys.path.insert(0, str(BASE / "program" / "gpss"))
 try:
-    import output_store
+    from gpss import output_store
 except Exception:
     output_store = None
 
@@ -179,11 +177,11 @@ def gpss_path(cfg: dict, name: str) -> Path:
 
 
 def _gpss_module():
-    """延遲載入 gpss_api_query(同一個 program/gpss 目錄,sys.path 上面已加入),
+    """延遲載入 gpss_api_query(program/gpss 套件),
     重用它的驗證碼池函式(load_keys / resolve_current_key / write_active_key /
     _mask_code);載入失敗回 None。"""
     try:
-        import gpss_api_query
+        from gpss import gpss_api_query
         return gpss_api_query
     except Exception:
         return None

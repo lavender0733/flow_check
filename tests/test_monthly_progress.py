@@ -8,7 +8,7 @@ import datetime
 
 from _util import TempDataCase
 
-import monthly_progress as mp
+from core import monthly_progress as mp
 
 
 class TestToInt(TempDataCase):

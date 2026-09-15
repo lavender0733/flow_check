@@ -57,8 +57,8 @@ class TestMaskCode(TempDataCase):
 
     def test_matches_the_two_display_facing_implementations(self):
         """額度卡與月進度卡的遮罩必須一致，統一版要與它們相同。"""
-        import monthly_progress as mp
-        import quota
+        from core import monthly_progress as mp
+        from core import quota
         for code in ("21dcBD8B96d02A77", "abcd", "ab", "", "  abcdef  "):
             self.assertEqual(ident.mask_code(code), mp.mask_code(code))
             self.assertEqual(ident.mask_code(code), quota._mask_code(code))

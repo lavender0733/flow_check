@@ -62,8 +62,12 @@ from datetime import datetime
 # 各自產生的 __pycache__/*.pyc 會互相同步、產生衝突複本,白白佔用同步頻寬、拖慢真資料同步。
 sys.dont_write_bytecode = True
 
+# 把 program/ 放上 sys.path，讓 core / gpss / common / yearly_stats 都能以套件匯入。
+# 這是全專案唯一動 sys.path 的地方（每個進入點各一行），取代原本散在模組內的路徑魔法。
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 try:
-    import output_store   # 把零散的 summary CSV 併成各機一個 Excel(一天一張工作表)
+    from gpss import output_store   # 把零散的 summary CSV 併成各機一個 Excel(一天一張工作表)
 except Exception:
     output_store = None
 

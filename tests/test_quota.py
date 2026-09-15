@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from _util import TempDataCase
 
-import quota
+from core import quota
 
 
 def _at(y, m, d, hh, mm=0):
@@ -154,7 +154,7 @@ class TestCodeOfMachine(TempDataCase):
 class TestMaskCodeConsistency(TempDataCase):
     def test_matches_monthly_progress_format(self):
         """兩張卡要對齊，遮罩格式必須一致。"""
-        import monthly_progress as mp
+        from core import monthly_progress as mp
         for code in ("21dcBD8B96d02A77", "abcd", "ab", "", "  abcdef  "):
             self.assertEqual(quota._mask_code(code), mp.mask_code(code),
                              f"遮罩格式不一致：{code!r}")

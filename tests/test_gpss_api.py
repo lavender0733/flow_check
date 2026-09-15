@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from _util import TempDataCase
 
-import gpss_api_query as g
+from gpss import gpss_api_query as g
 
 
 class TestNormPn(TempDataCase):

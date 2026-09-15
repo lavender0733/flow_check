@@ -14,15 +14,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def add_source_paths() -> None:
-    """把原始碼目錄加進 sys.path，讓測試能直接 import 各模組。
+    """把 program/ 加進 sys.path，讓測試以套件路徑 import（與正式程式一致）。
 
     冪等：重複呼叫不會重複插入。
-    階段 B（Task 11）把程式改成套件後，這裡只保留 program/。
     """
-    for rel in ("program/core", "program/gpss", "program"):
-        p = str(ROOT / rel)
-        if p not in sys.path:
-            sys.path.insert(0, p)
+    p = str(ROOT / "program")
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 
 # 不要在 Google Drive 同步夾裡寫 .pyc（與正式程式一致）

@@ -15,5 +15,5 @@ class TestHarness(TempDataCase):
         self.assertNotIn(str(ROOT), str(p))
 
     def test_core_modules_importable(self):
-        import paths
+        from core import paths
         self.assertTrue(paths.BASE.exists())

@@ -39,8 +39,12 @@ from datetime import datetime
 from urllib.parse import urlparse
 from playwright.async_api import async_playwright
 
+# 把 program/ 放上 sys.path，讓 core / gpss / common / yearly_stats 都能以套件匯入。
+# 這是全專案唯一動 sys.path 的地方（每個進入點各一行），取代原本散在模組內的路徑魔法。
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 try:
-    import output_store   # 把零散的 summary CSV 併成各機一個 Excel(一天一張工作表)
+    from gpss import output_store   # 把零散的 summary CSV 併成各機一個 Excel(一天一張工作表)
 except Exception:
     output_store = None
 

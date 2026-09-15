@@ -21,15 +21,21 @@ monthly_progress.py — 月檢索進度計算（手動下載版）
 
 import os
 import re
+import sys
 import glob
 import json
 import datetime
 import calendar
 import threading
 import time
+from pathlib import Path
 
-from paths import (BASE, EXPORTS_DIR, HISTORY_PATH, HOLIDAYS_PATH, MACHINE_DATA_DIR,
-                   TARGETS_PATH, MACHINE_ID)
+# 把 program/ 放上 sys.path，讓 core / gpss / common / yearly_stats 都能以套件匯入。
+# 這是全專案唯一動 sys.path 的地方（每個進入點各一行），取代原本散在模組內的路徑魔法。
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from core.paths import (BASE, EXPORTS_DIR, HISTORY_PATH, HOLIDAYS_PATH, MACHINE_DATA_DIR,
+                        TARGETS_PATH, MACHINE_ID)
 
 # 本檔位於 program/core/ 下;資料(data/、config.json)仍在專案根目錄 flow_check/。
 BASE = str(BASE)

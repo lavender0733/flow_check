@@ -47,24 +47,28 @@ import psutil
 # 須在匯入 monthly_progress / output_store 之前設定,才能擋掉它們的 .pyc。
 sys.dont_write_bytecode = True
 
+# 把 program/ 放上 sys.path，讓 core / gpss / common / yearly_stats 都能以套件匯入。
+# 這是全專案唯一動 sys.path 的地方（每個進入點各一行），取代原本散在模組內的路徑魔法。
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 try:
-    import monthly_progress   # 月進度計算(讀 data/ 下手動下載的後台匯出檔)
+    from core import monthly_progress   # 月進度計算(讀 data/ 下手動下載的後台匯出檔)
 except Exception:
     monthly_progress = None
 
 
 # Windows ESTATS(每條 TCP 連線的精準收/發位元組)已抽到獨立模組 estats.py。
 # 對外只用到這兩個函式:process_is_elevated() 判是否有提權、estats_probe() 取逐連線位元組。
-from estats import process_is_elevated, estats_probe
+from core.estats import process_is_elevated, estats_probe
 # 路徑/機器身分常數抽到 paths.py;資料層(設定/偏好/機器標籤/output 統計掃描)抽到 storage.py。
 # 兩者皆為單向相依的下層模組(本檔 → paths/storage),不會回頭匯入本檔,避免循環匯入。
-from paths import (BASE, DATA_DIR, MACHINE_DATA_DIR, MACHINES_PATH, WEB_DIR, MACHINE_ID,
-                   RUN_LOG_PATH, STATE_PATH)
-from storage import (output_store, load_prefs, save_prefs, machine_label,
-                     load_config, gpss_path, _gpss_module,
-                     scan_output_daily, load_run_elapsed)
+from core.paths import (BASE, DATA_DIR, MACHINE_DATA_DIR, MACHINES_PATH, WEB_DIR, MACHINE_ID,
+                        RUN_LOG_PATH, STATE_PATH)
+from core.storage import (output_store, load_prefs, save_prefs, machine_label,
+                          load_config, gpss_path, _gpss_module,
+                          scan_output_daily, load_run_elapsed)
 # API 額度 / 驗證碼歸戶抽到 quota.py(相依 paths + storage,不回頭匯入本檔)。
-from quota import api_quota_status, api_case_hourly
+from core.quota import api_quota_status, api_case_hourly
 
 
 # 系統版本(語意化版本控制)。這是唯一來源:網頁底部的「系統版本」會由
