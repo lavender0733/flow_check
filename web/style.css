@@ -63,7 +63,9 @@ h2 { margin: 0 0 2px; font-size: var(--fs-h2); font-weight: 600; color: var(--di
 .mtable tr:last-child td { border-bottom: none; }
 .donutwrap { position: relative; display: inline-block; flex: 0 0 auto; }
 .donut { width: 208px; height: 208px; border-radius: 50%;
-         background: conic-gradient(var(--btn) 0deg, #ece7f7 0deg);
+         /* 色標之間留 0.6 度過渡:寫成同角度(硬切)時瀏覽器不做抗鋸齒,交界會有階梯狀鋸齒。
+            實際角度由 monitor.js 每次更新時重寫,這裡只是尚未載入資料時的初始值。 */
+         background: conic-gradient(var(--btn) 0deg, #ece7f7 0.6deg);
          display: grid; place-items: center; transition: background .5s; cursor: help; }
 .donut .hole { width: 148px; height: 148px; background: var(--card); border-radius: 50%;
                display: grid; place-items: center; text-align: center; }

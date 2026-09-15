@@ -740,8 +740,11 @@ async function tickStatus() {
 
     const color = s.percent >= 90 ? "var(--danger)"
                 : s.percent >= 70 ? "var(--warn)" : "var(--btn)";
+    // 兩個色標之間留 0.6 度的漸層帶:角度寫成一樣(硬切)時瀏覽器不做抗鋸齒,
+    // 進度與底色的交界會看到階梯狀的鋸齒。留一點過渡空間就平滑了,寬度小到看不出漸層。
+    const deg = Math.min(100, s.percent) * 3.6;
     document.getElementById("u-donut").style.background =
-      `conic-gradient(${color} ${Math.min(100, s.percent) * 3.6}deg, #ece7f7 0deg)`;
+      `conic-gradient(${color} ${deg}deg, #ece7f7 ${deg + 0.6}deg)`;
     document.getElementById("u-rem").textContent = "今日已用";
     document.getElementById("u-ratio").textContent =
       (s.used_bytes / 1073741824).toFixed(2) + " / " + s.quota_gb + " GB";
