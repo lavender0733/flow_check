@@ -30,3 +30,4 @@ STATE_PATH = MACHINE_DATA_DIR / f"state_{MACHINE_ID}.json"   # 流量存檔各�
 PREFS_PATH = MACHINE_DATA_DIR / f"prefs_{MACHINE_ID}.json"
 RUN_LOG_PATH = MACHINE_DATA_DIR / f"run_log_{MACHINE_ID}.jsonl"
 HISTORY_PATH = MACHINE_DATA_DIR / f"monthly_progress_history_{MACHINE_ID}.json"
+

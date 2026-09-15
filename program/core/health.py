@@ -100,3 +100,4 @@ def health_snapshot() -> dict:
     """
     with _HEALTH_LOCK:
         return {"count": _HEALTH["count"], "errors": list(_HEALTH["errors"])[-5:]}
+    
