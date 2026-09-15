@@ -819,3 +819,23 @@ function dismissHealth() {
   connLostDismissed = true;            // 也按掉「無法連線」橫幅;重新連上後會自動再啟用提醒
   document.getElementById("healthbanner").style.display = "none";
 }
+
+// ===== 頁籤註冊 =====
+// onInit 收下的七行原本在 main.js 開頭 —— 它們全是流量監控頁的事(偵測開關、
+// 通知門檻、暴增預警、內網排除、測速下限、面板收合、面板內頁籤),放在這裡
+// 才跟實作在同一個檔。updateFavicon 也是本檔的,一併搬過來。
+registerTab({
+  id: "monitor",
+  label: "流量監控",
+  order: 10,
+  onInit() {
+    restoreDetect();          // 可用上限偵測開關
+    restoreNotify();          // 用量通知
+    restoreSurge();           // 流量暴增預警
+    restoreExcludeLan();      // 排除內網流量(稍後由 loadConfig 以伺服器為準覆寫)
+    restoreSpeedFloor();      // 測速下限
+    restoreCalcLogCollapse(); // 整合面板(網卡+用量明細)的收合/展開狀態(預設展開)
+    restoreMonitorTab();      // 整合面板停在哪個頁籤(預設網卡)
+    updateFavicon(false);     // 先畫上正常分頁圖示(關掉提醒後會回到這個)
+  },
+});

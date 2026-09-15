@@ -47,9 +47,20 @@ class App:
 # ============================================================
 # 首頁組版
 # ============================================================
-# index.html 用 <!--#include partials/xxx.html--> 標記各分頁;送頁時即時換成檔案內容。
-# (每次請求重讀,改 partial 重整即生效;不必重啟。)
-_INCLUDE_RE = re.compile(rb"<!--#include\s+([\w./-]+)\s*-->")
+# index.html 是外殼:頁籤按鈕列由前端依註冊表生成,面板與 js 由這裡掃目錄注入。
+# 送頁時即時掃、即時讀 —— 丟了新檔重整就看得到,不必重啟。
+#
+# 掃的是 web/partials/*.html,不是 web/js/*.js:每個頁籤模組都由「一個面板 + 一支 js」
+# 成對組成,以面板為準才擋得住不該載入的 js。這個資料夾在 Google Drive 同步夾裡,
+# 衝突時會自己長出 monitor (1).js 這種副本 —— 掃 js 會把它載進來,而它跟正版
+# 定義同名函式、又排在正版後面(字母序),會靜默蓋掉正版的實作。
+# 沒有對應面板的 js 一律不載入,備份檔放在 web/js/ 裡是安全的。
+_PARTIAL_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+# util 要先定義 registerTab 給各模組用,main 是啟動者(它要看到完整的註冊表),
+# 所以這兩支固定在頭尾,中間的頁籤模組依面板檔名字母序。
+_JS_FIRST = "util.js"
+_JS_LAST = "main.js"
 
 # 月份參數只接受 YYYY-MM。舊版是用 regex 從 query string 裡撈,撈不到就是 None(當月);
 # 改用底座解析 query 之後,格式檢查要自己做 —— 否則 ?month=xyz 會被原樣送進
@@ -57,27 +68,46 @@ _INCLUDE_RE = re.compile(rb"<!--#include\s+([\w./-]+)\s*-->")
 _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 
 
+def _tab_modules() -> list:
+    """web/partials/ 裡合格的頁籤模組名,字母序。
+
+    合格 = 檔名符合 _PARTIAL_NAME_RE(小寫英數與底線)且 web/js/ 有同名的 .js。
+    兩個條件都是為了擋 Google Drive 的同步衝突副本(monitor (1).html 含空白與括號、
+    且不會有配對的 js)。缺一半的不算模組:只有面板沒有 js 的面板不注入(它沒有
+    registerTab、按鈕不會出現,注入了只是一塊點不到的 DOM);只有 js 沒有面板的不載入。
+    """
+    names = []
+    for f in sorted((WEB_DIR / "partials").glob("*.html")):
+        if not _PARTIAL_NAME_RE.match(f.stem):
+            continue
+        if not (WEB_DIR / "js" / f"{f.stem}.js").exists():
+            continue
+        names.append(f.stem)
+    return names
+
+
 def render_index(version: str) -> bytes:
-    """讀 web/index.html,把 <!--#include partials/xxx.html--> 換成該檔內容後回傳 bytes。
-    只允許 web/ 內、副檔名 .html 的檔(擋路徑穿越);找不到就留一句註解,不中斷整頁。
+    """讀 web/index.html,把三個標記換成實際內容後回傳 bytes。
+
+      <!--#include-partials-->   掃 web/partials/ 注入各頁面板
+      <!--#include-scripts-->    產生 <script> 標籤(util 最先、main 最後)
+      <!--#version-->            換成版號
+
+    新增一個頁籤 = 丟 web/partials/xxx.html + web/js/xxx.js 兩個新檔,
+    現有檔案零改動(頁籤按鈕由前端的 registerTab 註冊表生成)。
 
     版號由呼叫端傳入而非在此匯入:VERSION 的唯一來源是 traffic_monitor.py,
     若在這裡匯入它就會形成 traffic_monitor → routes → traffic_monitor 的循環。"""
     html = (WEB_DIR / "index.html").read_bytes()
-    web_root = WEB_DIR.resolve()
+    mods = _tab_modules()
 
-    def repl(m):
-        rel = m.group(1).decode("utf-8")
-        target = (WEB_DIR / rel).resolve()
-        try:
-            target.relative_to(web_root)
-        except ValueError:
-            return b"<!-- include blocked: " + m.group(1) + b" -->"
-        if target.suffix != ".html" or not target.exists():
-            return b"<!-- include not found: " + m.group(1) + b" -->"
-        return target.read_bytes()
+    panels = b"\n".join((WEB_DIR / "partials" / f"{n}.html").read_bytes() for n in mods)
+    html = html.replace(b"<!--#include-partials-->", panels)
 
-    html = _INCLUDE_RE.sub(repl, html)
+    js = [_JS_FIRST] + [f"{n}.js" for n in mods] + [_JS_LAST]
+    tags = "\n".join(f'<script src="js/{n}"></script>' for n in js)
+    html = html.replace(b"<!--#include-scripts-->", tags.encode("utf-8"))
+
     # 把版本佔位符換成單一來源的 VERSION(改版只改 traffic_monitor 的 VERSION 常數)。
     html = html.replace(b"<!--#version-->", version.encode("utf-8"))
     return html

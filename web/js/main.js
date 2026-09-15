@@ -1,27 +1,52 @@
 // ===== 主程式:分頁切換 + 啟動 =====
-// 最後載入。此時 util / monitor / control / analytics / progress 都已就緒,
-// 可安全呼叫各模組的函式。
+// 最後載入。此時 util 的註冊表與所有頁籤模組都已就緒。
+//
+// 這個檔不認得任何一個頁籤 —— 按鈕列、切換、per-tab 的時機全部由 util.js 的
+// TABS 註冊表驅動。加一個頁籤只要丟 web/partials/xxx.html + web/js/xxx.js,
+// 這裡一行都不用改。
+
+const tabs = TABS.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+const shownTabs = new Set();   // 已開過的頁籤 id,供 onFirstShow 判斷
 
 function showTab(name) {
-  for (const t of ["monitor", "control", "analysis", "calc"]) {
-    document.getElementById("panel-" + t).classList.toggle("hidden", t !== name);
-    document.getElementById("tab-" + t).classList.toggle("on", t === name);
+  for (const t of tabs) {
+    const panel = document.getElementById("panel-" + t.id);
+    const btn = document.getElementById("tab-" + t.id);
+    if (panel) panel.classList.toggle("hidden", t.id !== name);
+    if (btn) btn.classList.toggle("on", t.id === name);
   }
-  if (name === "analysis") tickAnalytics();
-  // 檢索進度頁:首次開啟抓一次目前已存的資料,之後切分頁不再自動重算
-  //(資料來自手動下載的匯出檔,沒換檔數字也不會變);要更新按「更新計算」。
-  if (name === "calc" && !calcLoaded) { calcLoaded = true; refreshMonthly(); }
+  const tab = tabs.find(t => t.id === name);
+  if (!tab) return;
+  if (!shownTabs.has(name)) {
+    shownTabs.add(name);
+    if (tab.onFirstShow) tab.onFirstShow();
+  }
+  if (tab.onShow) tab.onShow();
+}
+
+// ----- 頁籤按鈕列 -----
+function buildTabs() {
+  const bar = document.getElementById("tabs");
+  if (!bar) return;
+  bar.innerHTML = "";
+  for (const t of tabs) {
+    const btn = document.createElement("button");
+    btn.className = "tab";
+    btn.id = "tab-" + t.id;
+    btn.textContent = t.label;
+    btn.onclick = () => showTab(t.id);
+    bar.appendChild(btn);
+  }
 }
 
 // ----- 啟動 -----
-restoreDetect();        // 流量監控:可用上限偵測開關
-restoreNotify();        // 流量監控:用量通知
-restoreSurge();         // 流量監控:流量暴增預警
-restoreExcludeLan();    // 流量監控:排除內網流量(稍後由 loadConfig 以伺服器為準覆寫)
-restoreSpeedFloor();    // 流量監控:測速下限
-restoreCalcLogCollapse(); // 流量監控:整合面板(網卡+用量明細)的收合/展開狀態(預設展開)
-restoreMonitorTab();      // 流量監控:整合面板停在哪個頁籤(預設網卡)
-updateFavicon(false);   // 先畫上正常分頁圖示(關掉提醒後會回到這個)
+buildTabs();
+for (const t of tabs) if (t.onInit) t.onInit();   // 各頁自己的初始化(不論是否顯示)
+// 開第一頁。走 showTab 而不是直接設 class,第一頁才跟其他頁一樣拿得到
+// onFirstShow / onShow —— 日後若有人用小一點的 order 插隊到最前面,
+// 那一頁的初次載入不會因為「剛好排在第一個」就被跳過。
+if (tabs.length) showTab(tabs[0].id);
+
 loadConfig().then(loadKeys);   // 先讀設定,再讀驗證碼池(讓「目前驗證碼」那行勝出顯示)
 loadPatents();
 tickStatus(); tickJob();

@@ -1,4 +1,4 @@
-# Flow Check — 局網流量監控 + GPSS 批次檢索  `v7.3.0`
+# Flow Check — 局網流量監控 + GPSS 批次檢索  `v7.3.1`
 
 一個本機小工具:**量測當日網路用量**(對每日 2GB 額度),並在同一個網頁裡**批次檢索 TIPO GPSS 專利**(可選**官方 API** 或**傳統前端**兩種方式)。背景常駐、開瀏覽器即看。
 
@@ -14,6 +14,13 @@
 ---
 
 ## 版本紀錄
+
+### 7.3.1 — 2026-09-15
+- **新增網頁頁籤改成「丟兩個新檔」**(畫面與功能完全不變):原本加一個頁籤要改 5 個地方 —— `index.html` 的頁籤鈕、`<!--#include-->` 標記、`<script>` 標籤,加上 `main.js` 的頁籤陣列與切換 hook;漏掉 `main.js` 那個陣列最麻煩,按鈕會出現、面板卻不切換,而且不報錯。現在只要丟 `web/partials/xxx.html` 與 `web/js/xxx.js`,**現有檔案一行都不用改**,重整瀏覽器即生效(不必重啟)。
+  - **頁籤自我註冊**:每個模組在自己的檔尾呼叫 `registerTab({id, label, order, onInit?, onFirstShow?, onShow?})`(定義在 `web/js/util.js`)。`main.js` 不再認得任何一個頁籤,只依 `order` 生按鈕列、處理切換、在對的時機呼叫三個 hook。現有四頁的 `order` 為 10 / 20 / 30 / 40,中間留空檔供日後插入。
+  - **面板與 script 由伺服器掃目錄注入**:`index.html` 只留 `<div class="tabs" id="tabs">` 與 `<!--#include-partials-->`、`<!--#include-scripts-->` 兩個標記(`core/routes.py` 的 `render_index`)。**掃的是 `web/partials/*.html` 而不是 `web/js/*.js`** —— 每個頁籤由「一個面板 + 一支同名 js」成對組成,沒有配對面板的 js 一律不載入。這擋掉兩種真實情況:放在 `web/js/` 的備份檔(如 `monitor_舊版.js`),以及 Google Drive 同步衝突自己長出來的 `monitor (1).js`;它們與正版定義同名函式、又排在正版後面,會**靜默蓋掉**正版的實作。
+  - **順帶清理**:全域旗標 `calcLoaded` 移除(「只在第一次開啟時抓」改由 `onFirstShow` 的語意表達);`main.js` 開頭 7 行 `restoreXxx()` 搬進 `monitor.js` 自己的 `onInit`(本就全是流量監控頁的事);`analytics.js` 與 `control.js` 兩處硬編的 `panel-analysis` 判斷改用 `isTabOpen("analysis")`。
+  - **驗證方式**:以 Playwright 實際載入頁面,點過每一頁確認「同時只有一個面板可見、只有一顆按鈕 on」,且無 JS 例外與 4xx/5xx;再丟一個臨時 dummy 頁籤,確認**不重啟伺服器、不改任何現有檔**就會出現、三個 hook 時機正確(`onInit` 啟動即跑、`onFirstShow` 只跑一次、`onShow` 每次切入都跑),驗完刪除。
 
 ### 7.3.0 — 2026-09-15
 - **架構重構:讓後續加新功能更省事**(功能與畫面不變,使用方式也不變)。最明顯的成果:**新增一個 HTTP 端點** = 在 `program/core/routes.py` 寫一個函式、在 `build_routes()` 加一行註冊;**新增一個獨立小工具** = 寫一張路由表交給 `program/common/webapp.py` 的 `serve()`,不必重抄一整套伺服器管線(年度統計就是這樣接上去的)。
@@ -254,13 +261,16 @@
 > `program/` 並依功能分類**。程式仍以根目錄為基準找 `config.json` / `data/` / `web/`,
 > 搬動後照常運作。
 
-> **要加新功能時(7.3.0 起):**
+> **要加新功能時(7.3.1 起):**
 > - **新增一個 HTTP 端點** → 在 `program/core/routes.py` 寫一個函式,在 `build_routes()`
 >   加一行註冊。路徑是**精確比對**,註冊順序無關緊要。
 > - **新增一個獨立小工具** → 寫一張路由表交給 `program/common/webapp.py` 的 `serve()`,
 >   不必重抄伺服器管線(`yearly_stats/` 就是這樣接的)。
-> - **新增一個網頁頁籤** → 目前仍要改 5 個地方(`index.html` 的頁籤鈕、include 標記、
->   script 標籤,加上 `main.js` 的頁籤陣列與切換 hook)。
+> - **新增一個網頁頁籤** → 丟兩個新檔:`web/partials/xxx.html`(面板,外層
+>   `<div class="panel hidden" id="panel-xxx">`)與 `web/js/xxx.js`(結尾呼叫
+>   `registerTab({id, label, order, onInit?, onFirstShow?, onShow?})`)。
+>   **現有檔案零改動** —— 按鈕列由註冊表生成,面板與 script 由伺服器掃目錄注入。
+>   重整瀏覽器即生效,不必重啟。
 
 ```
 flow_check/
@@ -278,7 +288,7 @@ flow_check/
 ├─ requirements.txt       第三方相依套件(psutil / openpyxl / xlrd)
 ├─ config.json            主設定:額度、port、取樣間隔、網段護欄、要呼叫的檢索程式
 ├─ web/                   網頁介面(免打包純 HTML/JS;頁籤:流量監控 / 檢索控制台 / 爬取統計 / 檢索進度)
-│  ├─ index.html          外殼:用 <!--#include partials/xxx.html--> 組裝各分頁、依序載入 js/
+│  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
 │  ├─ style.css           樣式(原內嵌於 index.html,已抽成外部檔)
 │  ├─ partials/           各分頁 HTML(monitor / control / analytics / progress;送頁時由後端即時併入)
 │  └─ js/                 依功能切分的傳統 script(util / monitor / control / analytics / progress / main;載入順序即相依順序、共用全域作用域)

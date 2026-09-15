@@ -186,7 +186,7 @@ async function ensureMonthlyForToday() {
 }
 
 function analysisOpen() {
-  return !document.getElementById("panel-analysis").classList.contains("hidden");
+  return isTabOpen("analysis");
 }
 
 // 偵測到檢索資料有變時呼叫(由 monitor.js 的 tickStatus 觸發):只處理「正開著」的本頁;
@@ -203,3 +203,12 @@ function onDataChanged() {
     if (analysisOpen()) tickAnalytics();  // 補刷前再確認本頁仍開著
   }, wait);
 }
+
+// ===== 頁籤註冊 =====
+// 每次切過來都刷一次(tickAnalytics 自己有 12 秒節流,切來切去不會連打)。
+registerTab({
+  id: "analysis",
+  label: "爬取統計",
+  order: 30,
+  onShow() { tickAnalytics(); },
+});

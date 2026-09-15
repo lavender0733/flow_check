@@ -188,7 +188,7 @@
 ├─ requirements.txt       第三方套件(psutil / openpyxl / xlrd)
 ├─ config.json            主設定:額度、port、取樣間隔、網段護欄等
 ├─ web/                   網頁介面(免打包純 HTML/JS;四個頁籤)
-│  ├─ index.html          外殼:用 &lt;!--#include--&gt; 組裝各分頁、載入 js/
+│  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
 │  ├─ style.css           樣式(原內嵌,已抽成外部檔)
 │  ├─ partials/           各分頁 HTML(monitor / control / analytics / progress)
 │  └─ js/                 依功能切分的程式(util / monitor / control / analytics / progress / main)

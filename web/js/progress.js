@@ -6,7 +6,6 @@
 
 // ----- 狀態 -----
 let monthlyData = null;       // 最近一次本月進度資料(供今日達標慶祝判斷用 per_workday)
-let calcLoaded = false;       // 檢索進度頁是否已自動抓過一次(首次開啟抓現有資料,之後只手動更新)
 
 function renderMonthly(m) {
   monthlyData = m;
@@ -337,3 +336,14 @@ async function refreshMonthly(recordSnapshot = false) {
   catch (e) { document.getElementById("m-status").textContent = "讀取失敗:" + e; }
   finally { spin.style.display = "none"; }
 }
+
+// ===== 頁籤註冊 =====
+// 只在第一次開啟時抓現有資料,之後切分頁不再自動重算(資料來自手動下載的匯出檔,
+// 沒換檔數字也不會變);要更新按「更新計算」。舊版是用一個全域的 calcLoaded 旗標
+// 自己記,現在由 onFirstShow 的語意直接表達,那個旗標已移除。
+registerTab({
+  id: "calc",
+  label: "檢索進度",
+  order: 40,
+  onFirstShow() { refreshMonthly(); },
+});

@@ -7,8 +7,9 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- 各分頁(panel)拆成 partials/*.html。下方每個 include 標記由伺服器送頁時換成該檔內容。
-     要單獨抽出某頁,直接拿對應的 partials 檔 + js 模組即可。 -->
+<!-- 這個檔是外殼。各分頁(panel)拆成 partials/*.html,由伺服器送頁時掃目錄注入,
+     對應的 js 也一併產生 script 標籤(見 core/routes.py 的 render_index)。
+     加一個頁籤 = 丟 partials/xxx.html + js/xxx.js 兩個新檔,這個檔不用改。 -->
 <div id="goalfx"></div>
 <div id="goaltoast">🎉 今日檢索達標!</div>
 <div class="wrap">
@@ -23,33 +24,18 @@
   <div id="healthbanner" class="banner banner-danger banner-x" onclick="dismissHealth()"
        title="點此關閉(再有新錯誤會重新跳出)" style="display:none;"></div>
 
-  <div class="tabs">
-    <button class="tab on" id="tab-monitor" onclick="showTab('monitor')">流量監控</button>
-    <button class="tab" id="tab-control" onclick="showTab('control')">檢索控制台</button>
-    <button class="tab" id="tab-analysis" onclick="showTab('analysis')">爬取統計</button>
-    <button class="tab" id="tab-calc" onclick="showTab('calc')">檢索進度</button>
-  </div>
+  <!-- 頁籤按鈕列由 main.js 依 util.js 的 TABS 註冊表生成。 -->
+  <div class="tabs" id="tabs"></div>
 
-  <!--#include partials/monitor.html-->
-
-  <!--#include partials/control.html-->
-
-  <!--#include partials/analytics.html-->
-
-  <!--#include partials/progress.html-->
+  <!--#include-partials-->
 
   <div class="hint" style="text-align:center; padding:4px 0 2px;">系統版本 v<!--#version--></div>
 
 </div>
 
 <!-- JS 依功能切分,採傳統 <script>(共用全域作用域,onclick 照常運作,免打包工具)。
-     載入順序即相依順序:util 最先、main 最後(啟動)。流量監控集中在 monitor.js,
-     需單獨抽出時搬 monitor.js + partials/monitor.html 即可。 -->
-<script src="js/util.js"></script>
-<script src="js/monitor.js"></script>
-<script src="js/control.js"></script>
-<script src="js/analytics.js"></script>
-<script src="js/progress.js"></script>
-<script src="js/main.js"></script>
+     下面這個標記由伺服器換成實際的 script 標籤:util 最先(它定義 registerTab)、
+     main 最後(啟動),中間是各頁籤模組,依 partials 檔名字母序。 -->
+<!--#include-scripts-->
 </body>
 </html>

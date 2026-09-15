@@ -288,8 +288,7 @@ async function tickJob() {
     }
     // 檢索剛結束:若爬取統計頁正開著就立刻刷新一次(否則下一輪偵測到資料變動時也會自動更新)。
     if (prevStatus === "running" && (j.status === "done" || j.status === "stopped")) {
-      if (typeof tickAnalytics === "function"
-          && !document.getElementById("panel-analysis").classList.contains("hidden")) tickAnalytics();
+      if (typeof tickAnalytics === "function" && isTabOpen("analysis")) tickAnalytics();
     }
     prevStatus = j.status;
     const log = document.getElementById("log");
@@ -361,3 +360,10 @@ async function stopJob() {
     tickJob();
   } catch (e) { toast.textContent = "停止失敗: " + e; }
 }
+
+// ===== 頁籤註冊 =====
+registerTab({
+  id: "control",
+  label: "檢索控制台",
+  order: 20,
+});
