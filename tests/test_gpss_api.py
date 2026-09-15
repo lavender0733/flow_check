@@ -150,7 +150,8 @@ class TestMaskCode(TempDataCase):
     def test_does_not_strip_whitespace_yet(self):
         """現行行為：gpss 版沒有 .strip()，與另外兩份不一致。
 
-        Task 10 統一成「有 strip」的版本後，這個測試會被改成
+        Task 12 把呼叫點換成 common.ident.mask_code（有 strip）後，
+        這個測試會被改成
         assertEqual(..., "abcd**")。這是刻意留下的路標，不是 bug。
         """
         self.assertEqual(g._mask_code("  abcdef  "), "  ab" + "*" * 6)
