@@ -1,4 +1,6 @@
 @echo off
+chcp 65001 >nul
+set PYTHONIOENCODING=utf-8
 cd /d "%~dp0"
 REM 別在這個 Google Drive 同步夾裡寫 .pyc（避免 __pycache__ 跨機同步衝突）。
 set PYTHONDONTWRITEBYTECODE=1
