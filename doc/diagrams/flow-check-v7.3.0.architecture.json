@@ -1,0 +1,358 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "flow_check v7.3.0 優化後架構",
+    "output": "flow-check-v7.3.0.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "request-path",
+        "label": "一次 HTTP 請求",
+        "focus": [
+          "web",
+          "webapp",
+          "routes",
+          "sampler",
+          "jobs"
+        ],
+        "note": "底座先切掉 query 再以 (method, path) 精確比對查表，分派到 core 各模組。"
+      },
+      {
+        "id": "common-layer",
+        "label": "新增的 common 底層",
+        "focus": [
+          "webapp",
+          "jsonio",
+          "ident",
+          "data"
+        ],
+        "note": "零專案內相依的三個模組，收掉散落各處的重複實作。"
+      },
+      {
+        "id": "entry-points",
+        "label": "不動的進入點",
+        "focus": [
+          "monitor",
+          "yearly",
+          "gpss"
+        ],
+        "note": "進入點檔名與四個 .bat 的用法保持不變，是「沒改壞」的驗證基準。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "monitor",
+      "type": "backend",
+      "label": "core/traffic_monitor.py",
+      "sublabel": "組裝：載設定 → 建物件 → 掛路由",
+      "tag": "start_monitor.bat",
+      "pos": [
+        360,
+        50
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "sampler",
+      "type": "backend",
+      "label": "core/sampler.py",
+      "sublabel": "Monitor · 取樣與探測迴圈",
+      "pos": [
+        1000,
+        50
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "web/ 前端",
+      "sublabel": "頁籤自我註冊 registerTab",
+      "tag": "加頁籤＝丟兩個新檔",
+      "pos": [
+        40,
+        230
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "webapp",
+      "type": "backend",
+      "label": "common/webapp.py",
+      "sublabel": "HTTP 底座：分派 · 靜態檔 · 穿越防護",
+      "pos": [
+        360,
+        230
+      ],
+      "size": [
+        240,
+        86
+      ]
+    },
+    {
+      "id": "routes",
+      "type": "backend",
+      "label": "core/routes.py",
+      "sublabel": "路由表 · 一端點一函式",
+      "pos": [
+        680,
+        230
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "jobs",
+      "type": "backend",
+      "label": "core/jobs.py",
+      "sublabel": "JobRunner · 檢索任務排程",
+      "pos": [
+        1000,
+        230
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "gpss",
+      "type": "external",
+      "label": "gpss/",
+      "sublabel": "gpss_api_query · gpss_web_query",
+      "pos": [
+        1000,
+        410
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "yearly",
+      "type": "backend",
+      "label": "yearly_server.py",
+      "sublabel": "年度檢索統計 :8766",
+      "tag": "年度統計.bat",
+      "pos": [
+        40,
+        410
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "health",
+      "type": "backend",
+      "label": "core/health.py",
+      "sublabel": "record_error · 需重啟偵測",
+      "pos": [
+        360,
+        410
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "jsonio",
+      "type": "backend",
+      "label": "common/jsonio.py",
+      "sublabel": "原子寫 · 容錯讀 · SigCache",
+      "pos": [
+        680,
+        410
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "data",
+      "type": "database",
+      "label": "data/",
+      "sublabel": "run_log · monthly_progress",
+      "tag": "格式不變",
+      "pos": [
+        1000,
+        590
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "ident",
+      "type": "backend",
+      "label": "common/ident.py",
+      "sublabel": "machine_id · mask_code",
+      "pos": [
+        680,
+        590
+      ],
+      "size": [
+        240,
+        76
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "monitor-serve",
+      "from": "monitor",
+      "to": "webapp",
+      "label": "serve(port, routes)",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 30
+    },
+    {
+      "id": "browser-http",
+      "from": "web",
+      "to": "webapp",
+      "label": "HTTP :8765",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelDy": -43
+    },
+    {
+      "id": "yearly-serve",
+      "from": "yearly",
+      "to": "webapp",
+      "label": "serve(8766, ROUTES)",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "error-funnel",
+      "from": "webapp",
+      "to": "health",
+      "label": "例外收斂 → record_error",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 30
+    },
+    {
+      "id": "dispatch",
+      "from": "webapp",
+      "to": "routes",
+      "label": "精確比對",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelDy": -8
+    },
+    {
+      "id": "status-read",
+      "from": "routes",
+      "to": "sampler",
+      "label": "/api/status",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "job-control",
+      "from": "routes",
+      "to": "jobs",
+      "label": "/api/run · /api/stop",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelDy": -32
+    },
+    {
+      "id": "routes-io",
+      "from": "routes",
+      "to": "jsonio",
+      "label": "read_json · write_json_atomic",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 30
+    },
+    {
+      "id": "spawn-gpss",
+      "from": "jobs",
+      "to": "gpss",
+      "label": "subprocess 啟動",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 30
+    },
+    {
+      "id": "persist",
+      "from": "jsonio",
+      "to": "data",
+      "label": "原子寫入",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "machine-split",
+      "from": "ident",
+      "to": "data",
+      "label": "_<機器代號> 分檔",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelDy": -32
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "新增 program/common（零專案內相依）",
+      "items": [
+        "jsonio：取代散落的 6 處原子寫入與 18 處容錯讀取",
+        "ident：machine_id ×4、mask_code ×3 收成一份",
+        "webapp：兩支伺服器重複的管線只留一套"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "core 拆解（純搬移，零邏輯改動）",
+      "items": [
+        "traffic_monitor.py 從 1,536 行瘦到約 80 行",
+        "sampler / jobs / health / routes 各自獨立",
+        "_RESTART_WATCH 改掃 core/*.py，新模組自動納入"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "路由表取代 startswith 長鏈",
+      "items": [
+        "/api/monthly/trend 與 /api/monthly 互不吞噬",
+        "query 由底座解析，取代手刻的 month= regex",
+        "新增端點＝寫一個函式＋加一行註冊"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "不動的邊界",
+      "items": [
+        "進入點檔名不變（stop_monitor.bat 靠檔名砍程序）",
+        "HTTP 端點路徑與回應形狀不變",
+        "data/ 所有檔名與格式不變"
+      ]
+    }
+  ]
+}
