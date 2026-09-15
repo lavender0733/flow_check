@@ -158,6 +158,47 @@ class TestErrorHandling(TempDataCase):
         self.assertEqual(code, 200)
         self.assertEqual(json.loads(body), {"ok": True})
 
+    def test_http_error_sets_status_and_payload(self):
+        def conflict(req):
+            raise webapp.HttpError(409, {"ok": False, "message": "已經在跑了"})
+
+        cls = webapp.build_handler({("POST", "/api/run"): conflict})
+        code, _, body = call(cls, "POST", "/api/run")
+        self.assertEqual(code, 409)
+        self.assertEqual(json.loads(body), {"ok": False, "message": "已經在跑了"})
+
+    def test_http_error_from_string_wraps_payload(self):
+        def missing(req):
+            raise webapp.HttpError(404, "找不到驗證碼 Z")
+
+        cls = webapp.build_handler({("POST", "/api/keys"): missing})
+        code, _, body = call(cls, "POST", "/api/keys")
+        self.assertEqual(code, 404)
+        self.assertEqual(json.loads(body), {"ok": False, "message": "找不到驗證碼 Z"})
+
+    def test_http_error_keeps_extra_payload_fields(self):
+        """/api/monthly/refresh 失敗時要帶 files_found 欄位。"""
+        def fail(req):
+            raise webapp.HttpError(500, {"ok": False, "files_found": False,
+                                         "message": "計算失敗"})
+
+        cls = webapp.build_handler({("POST", "/x"): fail})
+        code, _, body = call(cls, "POST", "/x")
+        self.assertEqual(code, 500)
+        self.assertFalse(json.loads(body)["files_found"])
+
+    def test_http_error_does_not_call_on_error(self):
+        """HttpError 是預期中的流程控制，不是伺服器故障，不該被記進健康狀態。"""
+        seen = []
+
+        def conflict(req):
+            raise webapp.HttpError(409, "衝突")
+
+        cls = webapp.build_handler({("POST", "/x"): conflict},
+                                   on_error=lambda w, e: seen.append(w))
+        call(cls, "POST", "/x")
+        self.assertEqual(seen, [])
+
 
 class TestStaticFiles(TempDataCase):
     def setUp(self):
@@ -215,6 +256,16 @@ class TestStaticFiles(TempDataCase):
     def test_static_files_not_cached(self):
         _, headers, _ = call(self.cls, "GET", "/style.css")
         self.assertIn("no-store", headers.get("cache-control", ""))
+
+    def test_unregistered_api_path_is_404_even_with_static_dir(self):
+        """掛了靜態目錄之後，沒對到路由的請求會落到靜態處理。
+
+        /api/statusXYZ 沒有副檔名，不能因此回 403 —— 舊版回的是 404，
+        而 403 等於告訴外面「那裡有東西、只是不給」。
+        """
+        for path in ("/api/statusXYZ", "/api/nope", "/notes.txt"):
+            code, _, _ = call(self.cls, "GET", path)
+            self.assertEqual(code, 404, f"{path} 應為 404")
 
     def test_api_route_wins_over_static(self):
         cls = webapp.build_handler({("GET", "/style.css"): lambda req: {"routed": True}},

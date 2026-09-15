@@ -50,6 +50,20 @@ class Raw:
         self.code = code
 
 
+class HttpError(Exception):
+    """端點要回非 200 狀態碼時拋這個。
+
+    payload 是要送出的 dict；傳字串時自動包成 {"ok": False, "message": ...}
+    （現行絕大多數錯誤回應就是這個形狀）。
+    """
+
+    def __init__(self, code: int, payload):
+        super().__init__(payload if isinstance(payload, str) else str(payload))
+        self.code = code
+        self.payload = ({"ok": False, "message": payload}
+                        if isinstance(payload, str) else payload)
+
+
 def build_handler(routes, static_dir=None, index_renderer=None,
                   on_error=None, quiet=True):
     """造一個 BaseHTTPRequestHandler 子類別。
@@ -114,6 +128,11 @@ def build_handler(routes, static_dir=None, index_renderer=None,
             if handler is not None:
                 try:
                     result = handler(req)
+                except HttpError as err:
+                    # 預期中的流程控制（409 衝突、404 找不到…），不是伺服器故障，
+                    # 所以不呼叫 on_error、不記進健康狀態。
+                    self._send_json(err.payload, code=err.code)
+                    return
                 except Exception as exc:
                     if on_error:
                         on_error(req.path, exc)
@@ -164,7 +183,11 @@ def build_handler(routes, static_dir=None, index_renderer=None,
                 return
             ctype = STATIC_TYPES.get(target.suffix)
             if ctype is None:
-                self._send_status(403)
+                # 回 404 而非 403：一來未註冊的 /api/statusXYZ 這種亂打路徑要跟舊版
+                # 一樣回 404（靜態目錄一掛上，所有沒對到路由的請求都會落到這裡）；
+                # 二來對真有其檔的 web/secret.json 來說，404 比 403 更緊 ——
+                # 403 等於確認「那裡有東西、只是不給」，404 則連存在與否都不透露。
+                self._send_status(404)
                 return
             try:
                 body = target.read_bytes()
