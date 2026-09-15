@@ -1,6 +1,6 @@
 // ===== 檢索控制台 =====
 // 內容:檢索方式切換(API/傳統)、API 驗證碼池(切換/新增)、檢索清單編輯、
-//       執行設定(指定筆數/流量自動停)、開始/停止、執行狀態與 log(tickJob)。
+//       筆數、開始/停止、執行狀態與 log(tickJob)。
 // 相依 API:/api/config、/api/keys、/api/patents、/api/run、/api/stop、/api/job。
 // 註:loadConfig 也順手帶入 monitor.js 用到的 quota_gb 與 speed_floor_mbps 顯示預設值。
 
@@ -266,7 +266,6 @@ async function tickJob() {
     stateEl.className = "st-" + cls;
     document.getElementById("jobdot").className = "dot " + cls;
     document.getElementById("jobmethod").textContent = METHOD_MAP[j.method] || j.method || "—";
-    document.getElementById("jobmode").textContent = MODE_MAP[j.mode] || j.mode || "—";
     document.getElementById("jobstart").textContent = j.started_at || "—";
     // 執行時間:記下伺服器回報值與收到時刻,讓 updateJobElapsed 在輪詢之間每秒往上加。
     jobElapsedBase = j.elapsed_sec || 0;

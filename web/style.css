@@ -251,8 +251,6 @@ pre.log {
 .tab { padding: 9px 18px; border: 1px solid var(--line); background: var(--card); color: var(--dim); border-radius: 10px; cursor: pointer; font-size: var(--fs-body); font-weight: 600; box-shadow: 0 1px 4px rgba(124,58,237,.05); }
 .tab.on { color: #fff; background: var(--blue); border-color: var(--blue); }
 .panel.hidden { display: none; }
-.ctl2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-top: 0; }
-.ctl2 .col { display: grid; gap: 16px; align-content: start; }
 .btnrow { display: flex; gap: 10px; align-items: center; justify-content: center; }
 .collabel { font-size: var(--fs-body); color: var(--dim); }
 .patbox { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
@@ -263,10 +261,15 @@ pre.log {
 #panel-control .field label { min-width: 80px; }
 #panel-control input, #panel-control select { padding: 8px 12px; }
 #panel-control .actions .btn { padding: 9px 16px; }
-/* 開始停止 + 提示 + 狀態 為一組,彼此距離縮小 */
-.runblock { display: grid; gap: 7px; }
-.runblock .actions { margin-top: 0; }
+/* 筆數 + 開始停止 + 提示 為一排,狀態列在下,彼此距離縮小 */
+.runblock { display: grid; gap: 10px; }
+.runblock .actions { margin-top: 0; justify-content: flex-start; }
 .runblock .toast { min-height: 0; }
+/* 一排:筆數欄位、按鈕、提示文字。窄螢幕自動換行。 */
+.runbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.runbar .field { display: flex; }          /* 這裡的筆數恆顯示,不受 .field 預設隱藏影響 */
+.runbar .field label { min-width: auto; }
+.runbar #count { width: 110px; }
 .modal-mask { position: fixed; inset: 0; background: rgba(50,44,68,.45); z-index: 50;
               display: none; align-items: center; justify-content: center; padding: 20px; }
 .modal-mask.show { display: flex; }
@@ -277,8 +280,6 @@ pre.log {
 .modal .btnrow { justify-content: flex-end; }
 /* modal 主要按鈕對齊控制台的開始/停止尺寸 */
 .modal .btn { padding: 9px 16px; }
-@media (max-width: 700px) { .ctl2 { grid-template-columns: 1fr; } }
-
 /* ===== 今日達標慶祝(每日檢索達 per_workday 觸發,一天一次) ===== */
 #goalfx { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: hidden; display: none; }
 #goalfx.on { display: block; }
