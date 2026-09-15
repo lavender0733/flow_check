@@ -1,18 +1,30 @@
-# Flow Check — 局網流量監控 + GPSS 批次檢索  `v7.2.1`
+# Flow Check — 局網流量監控 + GPSS 批次檢索  `v7.3.0`
 
 一個本機小工具:**量測當日網路用量**(對每日 2GB 額度),並在同一個網頁裡**批次檢索 TIPO GPSS 專利**(可選**官方 API** 或**傳統前端**兩種方式)。背景常駐、開瀏覽器即看。
 
 ## 使用的技術
 
-- Python 3.13
-- psutil 7.2.2
-- openpyxl 3.1.5
-- Playwright 1.58.0
+- Python 3.13(`py -3.13`;找不到時退回 PATH 上的 `python`)
+- psutil 7.2.2(讀網卡累積位元組)
+- openpyxl 3.1.5(把檢索結果併成各機一個 Excel、讀 620/680 的 .xlsx)
+- xlrd 2.0.2(讀 630 每月營運狀況表的舊式 .xls)
+- Playwright 1.60.0(傳統檢索用;只有要跑傳統檢索才需要)
 - HTML / CSS / JavaScript(免打包、無框架)
 
 ---
 
 ## 版本紀錄
+
+### 7.3.0 — 2026-09-15
+- **架構重構:讓後續加新功能更省事**(功能與畫面不變,使用方式也不變)。最明顯的成果:**新增一個 HTTP 端點** = 在 `program/core/routes.py` 寫一個函式、在 `build_routes()` 加一行註冊;**新增一個獨立小工具** = 寫一張路由表交給 `program/common/webapp.py` 的 `serve()`,不必重抄一整套伺服器管線(年度統計就是這樣接上去的)。
+- **拆檔**:`traffic_monitor.py` 從 1,536 行降到 167 行,只剩「載設定 → 造 Monitor/JobRunner → 起兩個背景迴圈 → 開伺服器」的組裝。拆出 `core/health.py`(錯誤收集與需重啟偵測)、`core/sampler.py`(流量取樣與 ESTATS 探測)、`core/jobs.py`(檢索任務調度)、`core/routes.py`(16 個 HTTP 端點)。新增 `program/common/`:`jsonio.py`(原子寫 / 容錯讀 / 檔案簽章)、`ident.py`(機器代號 / 驗證碼遮罩)、`webapp.py`(兩支伺服器共用的 HTTP 底座)。
+- **移除「跑到流量剩 X 自動停」**(**唯一的行為改變**):連同背後的**流量保留底線護欄**一起拿掉 —— 那道護欄「指定筆數」模式也在用(前端沒送 `reserve_mb` 時,後端拿 `config.json` 的預設值擋),只刪模式鈕會變成「按開始被擋下,畫面上卻沒有任何地方解釋為什麼」。`config.json` 的 `reserve_mb` 與 `max_queries_per_campaign` 一併移除,`/api/config` 不再回這兩個欄位。**檢索現在只在「跑完指定筆數」或「按立即停止」時結束**,流量多寡不再代為中斷。控制台版面跟著改成單欄:筆數與開始 / 停止同一排,狀態列移除只剩一個可能值的「模式」欄。
+- **建立 git 版本控制**:`.gitignore` 排除 `data/`(只放行手動維護的 `targets.json` / `holidays.json` / `machines.json`)、`__pycache__/`,以及三個含 `userCode` 的機密檔(`api_keys.json`、`api_config_<機器>.json`、`api_quota_baseline.json`)。
+- **修掉路由的順序陷阱**:舊版用 `startswith` 逐一比對,`/api/monthly/trend` 必須排在 `/api/monthly` 之前,否則被靜默吃掉、回錯資料;改成 `(方法, 路徑)` 精確比對後,註冊順序再也不影響。順帶修正 `/api/statusXYZ` 這類亂打的路徑**原本會被 `/api/status` 誤收並回 200**,現在正確回 404。
+- **「需重啟」偵測改為掃描目錄**:原本是硬編的檔案清單,拆檔後極易漏加;改成掃 `core/*.py` + `common/*.py` + `gpss/output_store.py`,新模組自動納入。
+- **消除重複**:`machine_id()` 4 份、`mask_code()` 3 份、檔案簽章 3 份、原子寫入 6 處、容錯讀 JSON 18 處,各收斂成一份。`mask_code` 統一後,`gpss_api_query` 那份開始去除前後空白(與額度卡、月進度卡一致)。
+- **消除 `sys.path` 魔法**:`core` / `gpss` / `common` / `yearly_stats` 都改成套件,路徑設定收斂成每個進入點一行;`storage.py` 裡那行隱式跨套件耦合已移除。
+- **年度統計改用共用底座**:`yearly_server.py` 428 → 389 行,刪掉自有的 `Handler` 與 `main()`,換成一張三行的路由表,**順帶獲得路徑穿越防護**(舊版沒有)。磁碟快取格式逐字相容,既有 12 筆全部命中、沒有重新解析任何 Excel。
 
 ### 7.2.1 — 2026-09-14
 - **修正「達標情況分析的月份下拉只剩當月、先前月份整個消失」**:8 月在另一台電腦上留下的快照,換到這台看時月份選單只列得出 9 月,直接指定 `?month=2026-08` 也回 0 個資料點。**根因**:快照依機器分檔存成 `monthly_progress_history_<機器代號>.json`(`paths.py` 的 `HISTORY_PATH`),但 `trend()` 只讀本機那一份。分檔原本只是**寫入端**的防撞機制(原子寫入擋不住 Google Drive 同步層兩台寫同一個檔),讀取端卻從未合併回來,於是月份清單實際上等於「本機按過更新的月份」——同資料夾的 `run_log_<機器>.jsonl` 一向是讀取時掃全部相加,這份快照是唯一漏掉合併的。快照內容取自 `data/exports/` 的**共用**後台匯出檔、是全站總量,與哪台電腦執行過檢索無關,本就不該分機器呈現。**修法**(`program/core/monthly_progress.py`):抽出 `_read_history_file(path)` 讀單檔;`_load_history()` 維持只讀本機那份、**專供寫入端**(`record_snapshot()` 附加新快照時不會把別台紀錄抄進自己的檔);新增 `_load_all_history()` 以 `monthly_progress_history_*.json` 合併所有機器,`trend()` 改用它。單一檔案壞掉或讀不到就略過,不讓一台的問題把整張圖清空。既有的 `by_data_date` 去重順帶擋掉兩台在同一資料日期各按過更新的重複點(取 `captured_at` 較晚者)。前端不必改,`months` 一向由後端算好給 `web/js/progress.js` 填。**Python 模組在啟動時載入,需重跑 `stop_monitor.bat` → `start_monitor.bat` 才生效**(`.js`/`.css` 才是每次請求即時讀檔)。
@@ -66,7 +78,7 @@
 
 ### 5.5.0 — 2026-06-18
 - **新增「排除內網流量」開關**(流量監控頁,預設開):走內網(NAS、區網 FTP 等)的傳輸不該算進對外 2GB 額度。偵測到某程序當下連的對方位址**全落在內網網段**時,用它的 `io_counters` 收/發增量估其網路量,從當日額度扣除(各方向再 clamp 到實際 NIC 增量,沖掉磁碟 I/O 汙染);頁面流量錶新增「已排除(內網)」欄位顯示今日累計。解決「FileZilla 走內網下載大檔被算進額度、與真實對外用量不符」。
-  - **★ 本環境拓樸(關鍵)**:對外走 `10.65.x.x`(**含 GPSS 檢索主機 `10.65.1.120~123`,必須計入**),真內網是 `10.75.x.x`。故 `lan_ranges` 只排除 `10.75.0.0/16`,**絕不可用 `10.0.0.0/8`**(會把 GPSS 檢索流量也吃掉、導致額度少算、budget 模式永不自動停而超額)。另加 `count_ranges`(預設 `10.65.0.0/16`)為**強制計入白名單**,優先於 `lan_ranges`,把檢索流量釘死成永不被排除 —— 即使 `lan_ranges` 設錯也保得住。**檢索(API/傳統)流量完全不受影響**。
+  - **★ 本環境拓樸(關鍵)**:對外走 `10.65.x.x`(**含 GPSS 檢索主機 `10.65.1.120~123`,必須計入**),真內網是 `10.75.x.x`。故當時 `lan_ranges` 只排除 `10.75.0.0/16`(用 `10.0.0.0/8` 會把 GPSS 檢索流量也吃掉、導致額度少算)。**此做法已於 7.0.2 改變** —— 改用 `10.0.0.0/8` 涵蓋所有 `10.x` 內網,改由 `count_ranges` 保住 `10.65`,詳見該版。另加 `count_ranges`(預設 `10.65.0.0/16`)為**強制計入白名單**,優先於 `lan_ranges`,把檢索流量釘死成永不被排除 —— 即使 `lan_ranges` 設錯也保得住。**檢索(API/傳統)流量完全不受影響**。
   - **限制**:同支程序若**同時**連到外網則無法拆,會整支照算(寧可算到、不漏算真外網);純內網傳大檔(FileZilla)才落在被排除那邊。
   - **設定**:`config.json` 新增 `exclude_lan` / `lan_ranges` / `count_ranges`;開關以**本機偏好** `prefs_<機器>.json` 為準(同暴增預警模式,重開留得住、各台獨立、頁面即時切換不必重啟)。`GET /api/config` 帶出 `exclude_lan`、`POST /api/prefs` 收 `exclude_lan`;今日已排除量由 `GET /api/status` 的 `lan_excluded_bytes` 帶出。(`program/core/traffic_monitor.py` `Monitor`;`web/partials/monitor.html`、`web/js/monitor.js`、`web/js/control.js`、`web/js/main.js`)
 
@@ -178,7 +190,7 @@
 - 後端新增 `GET /api/monthly`;移除舊的 `/api/target` 與年度 `target_payload`。
 
 ### 2.1.0 — 2026-06-08 (原 v1.2)
-- **檢索控制台支援兩種檢索方式**:頁籤上方可切換 **API 檢索**(原本的官方 API)與 **傳統檢索(前端)**。傳統檢索用 Playwright 操作 GPSS 前端網頁,**不需 API 驗證碼**,適合沒有 API 額度時當備援;但流量較大、速度較慢。兩種方式**共用同一份檢索清單(`patents.txt`)、護欄、流量自動停與爬取統計**。
+- **檢索控制台支援兩種檢索方式**:頁籤上方可切換 **API 檢索**(原本的官方 API)與 **傳統檢索(前端)**。傳統檢索用 Playwright 操作 GPSS 前端網頁,**不需 API 驗證碼**,適合沒有 API 額度時當備援;但流量較大、速度較慢。兩種方式**共用同一份檢索清單(`patents.txt`)、護欄與爬取統計**(當時還共用「流量自動停」,該功能已於 7.3.0 移除)。
 - 新增 `gpss/gpss_web_query.py`(傳統檢索引擎)。它對齊 API 版的輸入/輸出慣例:讀 `patents.txt`、輸出 5 欄 `summary_<時間>_<機器>.csv`、寫 `run_log`、用 `##WARN##/##CLEAR##` 觸發警告橫幅,所以爬取統計能正確合計兩種方式。
 - **`start_monitor.bat` 自動安裝**:傳統檢索需要 `playwright` + `chromium`,啟動時若偵測到尚未安裝會自動裝到 GPSS 腳本所用的直譯器(`config.json` 的 `gpss_python`,預設 `py -3.13`,不可用則退回 `python`)。**安裝失敗只警告、不擋啟動**,API 檢索照常可用。
 - `config.json` 新增 `gpss_script_web`(傳統檢索程式名;`gpss_script` 仍為 API 程式名)。
@@ -229,8 +241,9 @@
 > 啟用該收集是特權操作 —— 非管理員拿不到數字。所以兩個 .bat 都會自我提權。**按取消也能跑**,
 > 只是內網排除/暴增歸因停用、總流量照常計(視窗頂端會提示)。關機即結束;開機後需再雙擊啟動。
 >
-> 改完 `program/core/traffic_monitor.py` 或 `config.json` 後需重新啟動才生效;
-> 改 `program/gpss/` 下的檢索程式則每次開跑都會重讀,不必重啟。
+> 改完 `program/core/` 或 `program/common/` 下的任何 `.py` 或 `config.json` 後需重新啟動才生效
+> (網頁上方會自動跳「需重啟」橫幅提醒);改 `web/` 下的 `.html`/`.js`/`.css` 重整即可,
+> 改 `program/gpss/` 下的檢索程式則每次開跑都會重讀,兩者都不必重啟。
 
 ---
 
@@ -241,17 +254,29 @@
 > `program/` 並依功能分類**。程式仍以根目錄為基準找 `config.json` / `data/` / `web/`,
 > 搬動後照常運作。
 
+> **要加新功能時(7.3.0 起):**
+> - **新增一個 HTTP 端點** → 在 `program/core/routes.py` 寫一個函式,在 `build_routes()`
+>   加一行註冊。路徑是**精確比對**,註冊順序無關緊要。
+> - **新增一個獨立小工具** → 寫一張路由表交給 `program/common/webapp.py` 的 `serve()`,
+>   不必重抄伺服器管線(`yearly_stats/` 就是這樣接的)。
+> - **新增一個網頁頁籤** → 目前仍要改 5 個地方(`index.html` 的頁籤鈕、include 標記、
+>   script 標籤,加上 `main.js` 的頁籤陣列與切換 hook)。
+
 ```
 flow_check/
-├─ README.md / README.html  本說明文件(雙擊 .html 可在瀏覽器看)
+├─ README.html            本說明文件(雙擊即可在瀏覽器看)
 ├─ doc/                   衍生說明文件(從 README.html 連結過去;新文件也放這)
-│  ├─ 進階參考.html        設定速查、檔案結構
-│  └─ 版本紀錄.html        各版更新紀錄
+│  ├─ README.md            本說明文件的 Markdown 版(內容最完整)
+│  ├─ 進階參考.html         設定速查、檔案結構
+│  ├─ 版本紀錄.html         各版更新紀錄
+│  ├─ specs/               設計文件
+│  ├─ plans/               實作計畫與續作進度筆記
+│  └─ diagrams/            架構圖
 ├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉(啟動時自動檢查並安裝 psutil;傳統檢索另自動裝 playwright/chromium)
 ├─ 月進度.bat             雙擊即印本月進度純文字報告(不開網頁時用)
 ├─ 年度統計.bat           啟動獨立的年度檢索統計頁(127.0.0.1:8766)
-├─ requirements.txt       第三方相依套件(psutil + openpyxl)
-├─ config.json            主設定:額度、port、取樣間隔、安全護欄、要呼叫的檢索程式
+├─ requirements.txt       第三方相依套件(psutil / openpyxl / xlrd)
+├─ config.json            主設定:額度、port、取樣間隔、網段護欄、要呼叫的檢索程式
 ├─ web/                   網頁介面(免打包純 HTML/JS;頁籤:流量監控 / 檢索控制台 / 爬取統計 / 檢索進度)
 │  ├─ index.html          外殼:用 <!--#include partials/xxx.html--> 組裝各分頁、依序載入 js/
 │  ├─ style.css           樣式(原內嵌於 index.html,已抽成外部檔)
@@ -260,37 +285,51 @@ flow_check/
 ├─ data/
 │  ├─ config/              共用設定
 │  │  ├─ machines.json     機器代號 → 友善名稱對照(如「桌機/筆電」;空值則顯示代號)
-│  │  ├─ targets.json      檢索目標(monthly_target = 月目標,預設 450000)
+│  │  ├─ targets.json      檢索目標(monthly_target 月目標預設 450000、annual_target 年目標)
 │  │  ├─ holidays.json     台灣國定假日清單(供「檢索進度」算工作日扣除;可自行增修)
-│  │  └─ api_quota_baseline.json 下載額度校正基準(各 userCode 的 used/since)
+│  │  └─ api_quota_baseline.json ★ 下載額度校正基準(各 userCode 的 used/since;含明碼,不進版控)
 │  ├─ machines/            各電腦執行期資料(檔名含機器代號,同步不互相覆蓋)
 │  │  ├─ state_<機器>.json 執行期資料:當日用量(跨重啟保留、跨日歸零)
 │  │  ├─ prefs_<機器>.json 本機偏好:通知 / 暴增預警 / 排除內網開關與門檻
 │  │  ├─ run_log_<機器>.jsonl 各機檢索執行紀錄(讀取時掃全部相加)
 │  │  └─ monthly_progress_history_<機器>.json 月進度分析快照(讀取時合併全部機器)
-│  └─ exports/             ★ 手動下載的『簡易版』與『API』匯出檔(可直接覆蓋舊檔)
+│  ├─ exports/             ★ 手動下載的『簡易版』與『API』匯出檔(可直接覆蓋舊檔)
+│  ├─ 620/ 630/ 680/       ★ 年度統計的來源檔(各系統的月統計 Excel)
+│  └─ 年度統計快取.json     年度統計的解析快取(檔案沒變就不重讀 Excel)
 └─ program/               所有程式碼與輔助檔(使用者平常不需進來)
-   ├─ core/                核心程式(由 .bat 啟動)
-   │  ├─ traffic_monitor.py   主程式:流量取樣 + 網頁伺服器 + 呼叫檢索程式(VERSION 版號唯一來源)
-   │  ├─ monthly_progress.py  本月進度計算:讀 data/ 的後台匯出檔加總「檢索次數」(網頁與 月進度.bat 共用)
+   ├─ core/                主工具的核心(由 start_monitor.bat 啟動)
+   │  ├─ traffic_monitor.py   進入點:組裝與啟動(載設定 → 造物件 → 起背景迴圈 → 開伺服器;VERSION 版號唯一來源)
+   │  ├─ routes.py            16 個 HTTP 端點,各一個函式,最下方 build_routes() 一張註冊表
+   │  ├─ sampler.py           流量取樣與計費(Monitor)、ESTATS 高頻探測迴圈、主動測速
+   │  ├─ jobs.py              檢索任務調度(JobRunner):起子程序、進度、停止、結束後背景併檔
+   │  ├─ health.py            錯誤收集與「程式碼已更新、需重啟」偵測(掃 core/ + common/)
+   │  ├─ monthly_progress.py  本月進度計算:讀 data/exports/ 的後台匯出檔加總「檢索次數」(網頁與 月進度.bat 共用)
    │  ├─ estats.py            Windows ESTATS 逐 TCP 連線收/發位元組(內網排除底層;7.0.0 拆出)
-   │  ├─ paths.py             路徑常數與機器身分(BASE/DATA_DIR/machine_id/STATE_PATH/PREFS_PATH 等)
+   │  ├─ paths.py             路徑常數與機器身分(BASE/DATA_DIR/MACHINE_ID/STATE_PATH/PREFS_PATH 等)
    │  ├─ storage.py           資料層:設定 / 偏好 / 機器標籤 / output 統計掃描 / run_log 執行時間
    │  └─ quota.py             API 額度 / 驗證碼歸戶(api_quota_status / api_case_hourly 等)
+   ├─ common/              兩支伺服器共用的底層(7.3.0 新增)
+   │  ├─ webapp.py            HTTP 底座:路由分派、靜態檔、路徑穿越防護、錯誤收斂、serve()
+   │  ├─ jsonio.py            JSON 原子寫入 / 容錯讀取 / 檔案簽章與快取
+   │  └─ ident.py             機器代號 machine_id()、驗證碼遮罩 mask_code()
    ├─ gpss/                檢索引擎(兩種方式共用 patents.txt 與 output)
-   │  ├─ gpss_api_query.py      API 檢索:用官方 GPSS API 逐筆查詢(GET → JSON,流量小)
-   │  ├─ gpss_web_query.py      傳統檢索:Playwright 操作前端網頁(不需 API、流量較大)
+   │  ├─ gpss_api_query.py      API 檢索:用官方 GPSS API 批次查詢(GET → JSON,流量小)
+   │  ├─ gpss_web_query.py      傳統檢索:Playwright 操作前端網頁(不需驗證碼、流量較大)
    │  ├─ output_store.py        把零散 CSV 併成各機一個 Excel(統計也讀它)
    │  ├─ api_config.json        共用設定:patDB / 速率 / AP 等(不再放 userCode)
-   │  ├─ api_keys.json          ★ 驗證碼池(集中放多組 userCode;新增驗證碼改這裡或用面板/CLI)
-   │  ├─ api_config_<機器>.json  ★ 本機設定:active_key = 目前選用哪一組(另同步該組 userCode 供額度統計)
+   │  ├─ api_keys.json          ★ 驗證碼池(集中放多組 userCode;含明碼,不進版控)
+   │  ├─ api_config_<機器>.json  ★ 本機設定:active_key = 目前選用哪一組(含明碼,不進版控)
    │  ├─ patents.txt            檢索清單(一行一個專利號;也可在網頁編輯)
    │  ├─ 流量優化說明.md          傳統檢索流量問題與優化(JS 快取 + CDP 計量)的紀錄
    │  └─ output/                檢索結果:每台每月一個 summary_<機器>_<YYYY-MM>.xlsx(一天一張工作表)
    │                            另有除錯傾印 _fail_response.json(收到 status=fail 時)/ _sample_response.json(樣本回應)
-   └─ docs/
-      └─ README.md            本說明文件(Markdown 版;HTML 版在根目錄)
+   └─ yearly_stats/        年度檢索統計(獨立小工具,由 年度統計.bat 啟動)
+      ├─ yearly_server.py     :8766 伺服器 + 620/630/680 三系統統計與快取(HTTP 管線用 common/webapp)
+      └─ web/                 它自己的頁面(index.html / app.js / style.css)
 ```
+
+> **三個含 `userCode` 的機密檔不進版控**(已寫進 `.gitignore`):`program/gpss/api_keys.json`、
+> `program/gpss/api_config_<機器>.json`、`data/config/api_quota_baseline.json`。
 
 ---
 
@@ -318,8 +357,9 @@ flow_check/
   - **API 檢索**(預設):走官方 GPSS API(GET → JSON),流量小、快、穩,**需 API 驗證碼**。**批次查詢**:一個請求一次查多筆(`PN=A OR B OR C…`,預設 30 筆/請求),請求數降約 30 倍 → 大幅降低踩到壞節點的機會(`batch_size` 可調,設 1 = 舊版一筆一請求)。驗證碼採**驗證碼池**(見下),可在控制台下拉直接切換。
   - **傳統檢索(前端)**:用 Playwright 操作前端網頁,**不需驗證碼**,當沒有 API 額度時的備援;速度較慢,且該電腦須先有 `playwright` + `chromium`(`start_monitor.bat` 會自動裝)。流量已大幅優化(JS 行程內快取 + CDP 精準計量,500 筆約 11.5 MB、省約 98%),與 API 版同量級(見 4.0.0)。
 - **檢索清單**平常只顯示筆數;按「**編輯清單**」開彈窗編輯,視窗內為「儲存 / 取消」(兩種方式共用同一份清單)。
-- 兩種模式:**指定筆數** / **跑到流量剩 X 自動停**。
-- 安全護欄:流量保留底線 + 單次筆數上限(設定見 `config.json`)。
+- **只有「指定筆數」一種跑法**:填筆數按「開始」,跑完或按「立即停止」才結束 ——
+  **流量多寡不會代為中斷檢索**(「跑到流量剩 X 自動停」與背後的流量保留底線護欄已於 7.3.0 移除)。
+- 安全護欄:單次筆數上限 `max_count_per_run`(設定見 `config.json`,預設 2000)。
 - **API 檢索**:開跑前先**探測各 AP 回應速度、選最快(通常=最不忙)的起跑**(`probe_fastest_ap`,預設開;部分節點間歇回錯誤頁故每台會重試,全失敗才退回隨機)。執行中遇到**逾時 / 連線錯誤 / HTTP 5xx / 429 / 非 JSON / 節點錯誤頁**時會**自動換到正常節點**;**判定異常的節點在本輪執行內持久跳過**(TIPO 的 gpss1~4 常整台壞掉一段時間),四台同時異常時改「等一下重試整批」。**依時段自動控速**落在官方每小時額度內(上班 300/時、非上班 1000/時),不再超額;收到 `status=fail` 會把 TIPO 訊息一起記錄並另存 `output/_fail_response.json`,連續整批失敗則停止本輪以免空燒清單。
 - **傳統檢索**:每批換全新 session(避開前端 session 限制),連續大量失敗(疑似被管制)時自動停止。**省流量**(三層):①封鎖圖片/字型/CSS/多媒體;②**主機白名單只放行 `tiponet.tipo.gov.tw`**(擋掉 GTM/Analytics 等第三方追蹤腳本,實測佔約 88%);③**JS 行程內快取**:每筆查詢本要整套重抓的 28 個 JS 包(佔約 95%),改第一次下載後存記憶體、跨批跨 context 從記憶體餵回。流量改用 **CDP `encodedDataLength`** 精準計量(舊版漏算 chunked 回應)。實測 500 筆約 900 MB → **11.5 MB(省約 98%)**,與 API 版同量級。詳見 `gpss/流量優化說明.md`。
 - 結果即時寫入 `output/`,隨時可安全停止(中止的批次也會補記執行時間)。執行狀態列即時顯示**執行時間**。
@@ -356,10 +396,9 @@ flow_check/
 
 ### 年度檢索統計（獨立工具）
 - 雙擊根目錄的 **`年度統計.bat`**，會啟動獨立頁面 `http://127.0.0.1:8766`；不依賴主工具的 8765 服務，可單獨開啟或關閉。
-- 顯示年度目標完成率圓餅圖、年度累積／年度目標／尚差，以及 **620、630、680** 三個檢索系統的累積檢索次數與資料更新月份。
-- 年度目標讀取 `data/config/targets.json` 的 `annual_target`。按「更新統計」才重新檢查來源檔；使用檔案大小與修改時間快取，未變更的 Excel 不會重複解析。
+- 顯示年度目標完成率圓餅圖、年度累積／年度目標／尚差，以及 **620、630、680** 三個檢索系統的累積檢索次數與資料更新月份；年度目標讀取 `data/config/targets.json` 的 `annual_target`，**按「更新統計」才重查資料**。
 - 統計來源：620 讀 `data/620/` 最新 `.xlsx` 中「月份追蹤」工作表的「▼歷史表」（自 2026-01 起）；630 加總 `data/630/` 各月 `.xls`「全部」工作表的「合計」列；680 讀 `data/680/` 最新 `.xlsx`「統計表」底部累計區塊的「總計」列。
-- 快取存放於 `data/年度統計快取.json`，以暫存檔原子替換，降低 Google Drive 同步時留下半截檔的風險。
+- 7.3.0 起它的 HTTP 管線與主工具共用 `program/common/webapp.py`，只自備一張三行的路由表。
 
 ---
 
@@ -372,13 +411,11 @@ flow_check/
 | `port` | 網頁埠(預設 8765) |
 | `sample_interval_sec` | NIC 計費取樣間隔秒數(預設 60) |
 | `lan_probe_interval_sec` | 內網 ESTATS 高頻探測間隔秒數(預設 1;越短越接得住短命內網連線) |
-| `reserve_mb` | 流量保留底線 |
 | `exclude_nics` | 計流量時要略過的網卡關鍵字(預設 `["Loopback","isatap","Teredo"]`,排除回環/隧道介面) |
 | `exclude_lan` | 是否排除內網流量、不計入對外額度(預設 `true`;前端開關以 `prefs_<機器>.json` 為準) |
-| `lan_ranges` | ★ 視為內網、要排除的網段(預設含 `10.0.0.0/8`/`172.16.0.0/12`/`192.168.0.0/16`/`169.254.0.0/16`) |
+| `lan_ranges` | ★ 視為內網、要排除的網段(預設 `10.0.0.0/8`/`172.16.0.0/12`/`192.168.0.0/16`/`169.254.0.0/16`。`10.0.0.0/8` 涵蓋所有 `10.x` 內網,GPSS 的 `10.65.x.x` 靠下面的 `count_ranges` 保住計入 —— 兩者要一起看,見 7.0.2) |
 | `count_ranges` | ★ 強制計入白名單,優先於 `lan_ranges`(預設 `["10.65.0.0/16"]`,釘死 GPSS 對外流量永不被排除) |
-| `max_count_per_run` | 單次檢索筆數上限 |
-| `max_queries_per_campaign` | 單日累計上限 |
+| `max_count_per_run` | 單次檢索筆數上限(預設 2000;7.3.0 起這是唯一的檢索護欄) |
 | `gpss_dir` | 檢索程式所在目錄(預設 `program/gpss`) |
 | `gpss_script` | API 檢索程式(預設 `gpss_api_query.py`) |
 | `gpss_script_web` | 傳統檢索程式(預設 `gpss_web_query.py`) |
@@ -428,6 +465,9 @@ flow_check/
 
 常駐伺服器(預設 `http://127.0.0.1:8765`)的全部端點。前端 `web/js/` 都走這些:
 
+> 端點定義在 `program/core/routes.py` 的 `build_routes()`,一個端點一個函式。
+> 路徑為**精確比對**,註冊順序無關緊要;對不到的路徑一律回 404。
+
 | 方法 | 路徑 | 用途 |
 |---|---|---|
 | GET | `/api/status` | 當日流量 / 即時速率 / 各網卡明細 / 健康狀態 / 暴增事件 / `estats_ok` / `lan_excluded_bytes` 等(前端 5 秒輪詢) |
@@ -439,7 +479,7 @@ flow_check/
 | POST | `/api/monthly/refresh` | 重新計算本月進度，並將當下總數 / 簡易版 / API 累積筆數寫入一筆分析快照 |
 | GET / POST | `/api/keys` | 驗證碼池:GET 列出(遮罩)/ POST 切換 `active_key` 或新增驗證碼 |
 | GET / POST | `/api/patents` | 檢索清單 `patents.txt`:GET 讀取 / POST 儲存 |
-| POST | `/api/run` | 開始檢索(指定方式 API/傳統、指定筆數或跑到流量剩 X 自動停) |
+| POST | `/api/run` | 開始檢索(指定方式 API/傳統 與筆數) |
 | POST | `/api/stop` | 立即停止本輪檢索(會補記執行時間) |
 | POST | `/api/prefs` | 寫回本機偏好(用量通知 / 暴增預警 / 排除內網 的開關與門檻) |
 | POST | `/api/clearwarn` | 真正清掉伺服器端的額度已滿警告(關了重整/重開都不再出現) |
