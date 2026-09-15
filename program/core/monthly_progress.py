@@ -36,6 +36,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.paths import (BASE, EXPORTS_DIR, HISTORY_PATH, HOLIDAYS_PATH, MACHINE_DATA_DIR,
                         TARGETS_PATH, MACHINE_ID)
+from common.ident import mask_code
+from common.jsonio import file_sig as _file_sig, read_json, write_json_atomic
 
 # 本檔位於 program/core/ 下;資料(data/、config.json)仍在專案根目錄 flow_check/。
 BASE = str(BASE)
@@ -52,15 +54,6 @@ API_GLOB = "*API*.xls"            # API 匯出檔名樣式
 # 所以讀取端(trend)必須合併所有機器的分檔,否則換一台電腦看就少掉別台留下的月份。
 _HISTORY_LOCK = threading.Lock()
 # ───────────────────────────────────────────────────────
-
-
-def _file_sig(path) -> str:
-    """檔案的輕量變動簽章(mtime+size);讀不到回空字串。供各快取依此判斷檔有沒有變。"""
-    try:
-        st = os.stat(path)
-        return f"{int(st.st_mtime)}:{st.st_size}"
-    except OSError:
-        return ""
 
 
 # 匯出檔(假 .xls、真 HTML)解析的行內記憶體快取(依檔案 mtime+size 命中):匯出檔只在
@@ -141,24 +134,20 @@ def sum_count(path, ym):
 
 
 def load_holidays():
-    try:
-        with HOLIDAYS_PATH.open("r", encoding="utf-8") as f:
-            d = json.load(f)
-        return set(d.get("holidays", [])), set(d.get("makeup_workdays", []))
-    except Exception:
+    d = read_json(HOLIDAYS_PATH, default={})
+    if not isinstance(d, dict):
         return set(), set()
+    return set(d.get("holidays", [])), set(d.get("makeup_workdays", []))
 
 
 def load_monthly_target():
     """targets.json 有 monthly_target 就用它，否則用預設常數。"""
+    t = read_json(TARGETS_PATH, default={})
     try:
-        with TARGETS_PATH.open("r", encoding="utf-8") as f:
-            v = int(json.load(f).get("monthly_target", 0) or 0)
-        if v > 0:
-            return v
-    except Exception:
-        pass
-    return DEFAULT_MONTHLY_TARGET
+        v = int(t.get("monthly_target", 0) or 0) if isinstance(t, dict) else 0
+    except (TypeError, ValueError):
+        v = 0
+    return v if v > 0 else DEFAULT_MONTHLY_TARGET
 
 
 def is_workday(day, holidays, makeups):
@@ -189,30 +178,17 @@ def latest(pattern):
     return max(files, key=os.path.getmtime) if files else None
 
 
-def mask_code(code):
-    """只顯示前 4 碼，其餘以 * 取代（保留長度）。"""
-    code = (code or "").strip()
-    return code if len(code) <= 4 else code[:4] + "*" * (len(code) - 4)
-
-
 def load_used_codes():
     """讀 gpss/api_config*.json 內的 userCode = 這套工具實際在用的 API。
     回傳 {小寫驗證碼: 原始驗證碼}(去重;同碼出現在共用與各機設定只算一個)。"""
     used = {}
-    gpss_dir = "program/gpss"
-    try:
-        with open(os.path.join(BASE, "config.json"), "r", encoding="utf-8") as f:
-            gpss_dir = json.load(f).get("gpss_dir", gpss_dir) or gpss_dir
-    except Exception:
-        pass
+    cfg = read_json(os.path.join(BASE, "config.json"), default={})
+    gpss_dir = (cfg.get("gpss_dir") if isinstance(cfg, dict) else None) or "program/gpss"
     for path in glob.glob(os.path.join(BASE, gpss_dir, "api_config*.json")):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                uc = str(json.load(f).get("userCode", "")).strip()
-            if uc:
-                used[uc.lower()] = uc
-        except Exception:
-            pass
+        one = read_json(path, default={})
+        uc = str(one.get("userCode", "")).strip() if isinstance(one, dict) else ""
+        if uc:
+            used[uc.lower()] = uc
     return used
 
 
@@ -221,20 +197,13 @@ def load_pool_codes():
     回傳 {小寫驗證碼: 原始驗證碼}。月用量要列的就是池裡這些碼(含目前沒被選用、但仍屬本
     工具的碼),不是後台所有人的碼。"""
     pool = {}
-    gpss_dir = "program/gpss"
-    try:
-        with open(os.path.join(BASE, "config.json"), "r", encoding="utf-8") as f:
-            gpss_dir = json.load(f).get("gpss_dir", gpss_dir) or gpss_dir
-    except Exception:
-        pass
-    try:
-        with open(os.path.join(BASE, gpss_dir, "api_keys.json"), "r", encoding="utf-8") as f:
-            for k in json.load(f).get("keys", []):
-                uc = str(k.get("userCode", "")).strip()
-                if uc:
-                    pool[uc.lower()] = uc
-    except Exception:
-        pass
+    cfg = read_json(os.path.join(BASE, "config.json"), default={})
+    gpss_dir = (cfg.get("gpss_dir") if isinstance(cfg, dict) else None) or "program/gpss"
+    keys = read_json(os.path.join(BASE, gpss_dir, "api_keys.json"), default={})
+    for k in (keys.get("keys", []) if isinstance(keys, dict) else []):
+        uc = str(k.get("userCode", "")).strip() if isinstance(k, dict) else ""
+        if uc:
+            pool[uc.lower()] = uc
     return pool
 
 
@@ -246,28 +215,17 @@ def machine_usercodes():
     """回傳 {機器代號: userCode 小寫} —— 各機 API 檢索實際在用的驗證碼。
     以各機的 api_config_<機器>.json 為準;其 userCode 空白則退回共用
     api_config.json(與 gpss_api_query.load_config 的取碼規則一致)。"""
-    gpss_dir = "program/gpss"
-    try:
-        with open(os.path.join(BASE, "config.json"), "r", encoding="utf-8") as f:
-            gpss_dir = json.load(f).get("gpss_dir", gpss_dir) or gpss_dir
-    except Exception:
-        pass
-    shared_uc = ""
-    try:
-        with open(os.path.join(BASE, gpss_dir, "api_config.json"), "r", encoding="utf-8") as f:
-            shared_uc = str(json.load(f).get("userCode", "")).strip()
-    except Exception:
-        pass
+    cfg = read_json(os.path.join(BASE, "config.json"), default={})
+    gpss_dir = (cfg.get("gpss_dir") if isinstance(cfg, dict) else None) or "program/gpss"
+    shared = read_json(os.path.join(BASE, gpss_dir, "api_config.json"), default={})
+    shared_uc = str(shared.get("userCode", "")).strip() if isinstance(shared, dict) else ""
     out = {}
     for path in glob.glob(os.path.join(BASE, gpss_dir, "api_config_*.json")):
         m = CONFIG_FILE_RE.search(os.path.basename(path))
         if not m:
             continue
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                uc = str(json.load(f).get("userCode", "")).strip()
-        except Exception:
-            uc = ""
+        one = read_json(path, default={})
+        uc = str(one.get("userCode", "")).strip() if isinstance(one, dict) else ""
         uc = uc or shared_uc
         if uc:
             out[m.group(1)] = uc.lower()
@@ -508,11 +466,8 @@ def compute(today=None):
 
 def _read_history_file(path) -> list:
     """讀單一份快照檔;Google Drive 同步暫時讀不到或壞檔時安全退回空紀錄。"""
-    try:
-        items = json.loads(path.read_text(encoding="utf-8"))
-        return items if isinstance(items, list) else []
-    except (OSError, json.JSONDecodeError):
-        return []
+    items = read_json(path, default=[])
+    return items if isinstance(items, list) else []
 
 
 def _load_history() -> list:
@@ -533,24 +488,8 @@ def _load_all_history() -> list:
 
 
 def _save_history(items: list) -> None:
-    """原子寫入快照歷史;同步磁碟短暫忙碌時有限重試。"""
-    HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    data = json.dumps(items, ensure_ascii=False, indent=2)
-    tmp = HISTORY_PATH.with_suffix(".tmp")
-    last_exc = None
-    for attempt in range(4):
-        try:
-            tmp.write_text(data, encoding="utf-8")
-            tmp.replace(HISTORY_PATH)
-            return
-        except OSError as e:
-            last_exc = e
-            time.sleep(0.1 * (attempt + 1))
-    try:
-        tmp.unlink()
-    except OSError:
-        pass
-    raise last_exc
+    """原子寫入快照歷史;同步磁碟短暫忙碌時有限重試(write_json_atomic 預設重試 4 次)。"""
+    write_json_atomic(HISTORY_PATH, items)
 
 
 def record_snapshot(progress=None, now=None):

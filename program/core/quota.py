@@ -9,28 +9,20 @@ storage(output_store 統計來源 / machine_label / MID_RE),維持單向相依�
 """
 
 import re
-import json
 from datetime import datetime, timedelta
 
+from common.ident import mask_code as _mask_code
+from common.jsonio import read_json
 from core.paths import BASE, API_QUOTA_BASELINE_PATH
 from core.storage import output_store, machine_label, MID_RE
-
-
-def _mask_code(code: str) -> str:
-    """只顯示前 4 碼,其餘以 * 取代(與 monthly_progress.mask_code 一致,兩卡才能對齊)。"""
-    code = (code or "").strip()
-    return code if len(code) <= 4 else code[:4] + "*" * (len(code) - 4)
 
 
 def _load_quota_baseline() -> dict:
     """讀 data/config/api_quota_baseline.json:使用者趁沒跑 API 時,從 TIPO 後台查到的
     各 userCode『當下已用下載筆數』基準。回傳 {小寫userCode: {"used": int, "since": ts}}。
     程式會在此基準上,累加 since 之後 run_log 的用量 → 達到「定時校正」。"""
-    p = API_QUOTA_BASELINE_PATH
-    try:
-        codes = json.loads(p.read_text(encoding="utf-8")).get("codes", {})
-    except Exception:
-        return {}
+    data = read_json(API_QUOTA_BASELINE_PATH, default={})
+    codes = data.get("codes", {}) if isinstance(data, dict) else {}
     out = {}
     for k, v in codes.items():
         if isinstance(v, dict):
@@ -67,10 +59,8 @@ def _code_of_machine(cfg: dict) -> dict:
         mm = re.match(r"api_config_(.+)\.json$", p.name)
         if not mm or not MID_RE.match(mm.group(1)):
             continue
-        try:
-            out[mm.group(1)] = json.loads(p.read_text(encoding="utf-8")).get("userCode", "")
-        except Exception:
-            out[mm.group(1)] = ""
+        one = read_json(p, default={})
+        out[mm.group(1)] = one.get("userCode", "") if isinstance(one, dict) else ""
     return out
 
 

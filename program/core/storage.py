@@ -8,11 +8,11 @@
 import sys
 import csv
 import json
-import time
 import re
 import threading
 from pathlib import Path
 
+from common.jsonio import file_sig as _file_sig, read_json, write_json_atomic
 from core.paths import BASE, MACHINE_DATA_DIR, CONFIG_PATH, MACHINES_PATH, PREFS_PATH
 
 # output 彙整模組(在 program/gpss/ 下):把零散 CSV 併成各機一個 Excel,統計也讀它。
@@ -59,35 +59,15 @@ def save_prefs(patch: dict) -> dict:
     with _PREFS_LOCK:
         prefs = load_prefs()
         prefs.update(patch)
-        MACHINE_DATA_DIR.mkdir(parents=True, exist_ok=True)
-        data = json.dumps(prefs, ensure_ascii=False, indent=2)
-        tmp = PREFS_PATH.with_suffix(".tmp")
-        last_exc = None
-        for attempt in range(4):
-            try:
-                tmp.write_text(data, encoding="utf-8")
-                tmp.replace(PREFS_PATH)
-                return prefs
-            except OSError as e:
-                last_exc = e
-                time.sleep(0.1 * (attempt + 1))
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
-        raise last_exc
+        write_json_atomic(PREFS_PATH, prefs)
+        return prefs
 
 
 def machine_label(mid: str) -> str:
     """把機器代號換成 machines.json 裡的友善名稱(如「桌機」);沒對照就原樣顯示。"""
-    try:
-        m = json.loads(MACHINES_PATH.read_text(encoding="utf-8"))
-        v = m.get(mid)
-        if v:
-            return str(v)
-    except Exception:
-        pass
-    return mid
+    m = read_json(MACHINES_PATH, default={})
+    v = m.get(mid) if isinstance(m, dict) else None
+    return str(v) if v else mid
 
 
 # ── 設定檔 ────────────────────────────────────────────────────────
@@ -266,14 +246,6 @@ MID_RE = re.compile(r"^[A-Za-z0-9-]+$")
 # 「每日每機原始秒數」:簽章沒變就直接重用,簽章變了才重解析整份(讀取仍每次重算機器標籤,
 # 因為 machines.json 的友善名稱對應可能在程序執行中被改)。程序常駐,跨請求重用。
 _RUNLOG_CACHE = {}
-
-
-def _file_sig(p) -> str:
-    try:
-        st = p.stat()
-        return f"{int(st.st_mtime)}:{st.st_size}"
-    except OSError:
-        return ""
 
 
 def _run_elapsed_for_file(p, file_mid) -> dict:

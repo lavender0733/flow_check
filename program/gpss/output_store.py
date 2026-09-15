@@ -30,10 +30,11 @@ Excel 並刪掉該 CSV —— Excel 是彙整結果,CSV 只是過渡。需要 op
 
 import re
 import csv
-import json
-import socket
 import tempfile
 from pathlib import Path
+
+from common.ident import machine_id
+from common.jsonio import file_sig as _sig, read_json, write_json_atomic
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -82,13 +83,6 @@ def _atomic_save(wb, path):
 def _is_conflict_mid(mid: str) -> bool:
     """mid 不是合法機器代號 → 視為 Google Drive 衝突複本/異常檔名,統計與彙整都跳過。"""
     return not MID_RE.match(mid or "")
-
-
-def machine_id() -> str:
-    """本機代號:取主機名稱(過濾成檔名安全字元),與其他程式一致。"""
-    raw = socket.gethostname() or "PC"
-    mid = re.sub(r"[^A-Za-z0-9]+", "-", raw).strip("-")
-    return mid or "PC"
 
 
 def _sheet_for(d8: str) -> str:         # 20260609 -> 2026-06-09(合法的工作表名)
@@ -387,14 +381,6 @@ def consolidate(only_machine: str = None, output_dir=None) -> int:
 # ---------------------------------------------------------------------------
 # 統計讀取的快取:每個月份檔依 mtime+size 簽章,簽章沒變就用上次算好的每日彙總
 # ---------------------------------------------------------------------------
-def _sig(p) -> str:
-    try:
-        st = p.stat()
-        return f"{int(st.st_mtime)}:{st.st_size}"
-    except OSError:
-        return ""
-
-
 def _cache_file() -> Path:
     """快取改放『本機暫存』,不再放進雲端同步的 output/ 資料夾。
     它依本機檔案 mtime/size 簽章,本來就不該跨機共用;舊版放在 output/ 會被 daily_counts
@@ -422,18 +408,13 @@ def _purge_legacy_cache(out):
 
 
 def _load_cache(out=None) -> dict:
-    try:
-        return json.loads(_cache_file().read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    cache = read_json(_cache_file(), default={})
+    return cache if isinstance(cache, dict) else {}
 
 
 def _save_cache(out=None, cache: dict = None):
     try:
-        p = _cache_file()
-        tmp = p.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(cache or {}, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(p)
+        write_json_atomic(_cache_file(), cache or {})
     except Exception:
         pass                             # 純加速用,寫不成不影響正確性
 

@@ -147,11 +147,13 @@ class TestMaskCode(TempDataCase):
     def test_short_unchanged(self):
         self.assertEqual(g._mask_code("abcd"), "abcd")
 
-    def test_does_not_strip_whitespace_yet(self):
-        """現行行為：gpss 版沒有 .strip()，與另外兩份不一致。
+    def test_strips_whitespace_after_unification(self):
+        """三份 mask_code 已統一為 common.ident.mask_code（有 strip）。
 
-        Task 12 把呼叫點換成 common.ident.mask_code（有 strip）後，
-        這個測試會被改成
-        assertEqual(..., "abcd**")。這是刻意留下的路標，不是 bug。
+        統一前 gpss 版沒有 strip，會回 "  ab******"。
         """
-        self.assertEqual(g._mask_code("  abcdef  "), "  ab" + "*" * 6)
+        self.assertEqual(g._mask_code("  abcdef  "), "abcd**")
+
+    def test_is_the_shared_implementation(self):
+        from common import ident
+        self.assertIs(g._mask_code, ident.mask_code)

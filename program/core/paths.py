@@ -1,15 +1,15 @@
 """
 路徑與機器身分常數
 ==================
-從 traffic_monitor.py 抽出的葉模組(零專案內相依)。所有使用者資料放在專案根目錄
+從 traffic_monitor.py 抽出的葉模組(只相依 common.ident)。所有使用者資料放在專案根目錄
 flow_check/data/，並依用途分成 config(共用設定)、machines(各機執行期資料)與
 exports(手動下載匯出檔)。各機存檔/偏好檔名帶上機器代號,Google Drive 同步時才不會
 互相覆蓋。
 """
 
-import re
-import socket
 from pathlib import Path
+
+from common.ident import machine_id
 
 BASE = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE / "data"
@@ -22,15 +22,6 @@ HOLIDAYS_PATH = DATA_CONFIG_DIR / "holidays.json"
 TARGETS_PATH = DATA_CONFIG_DIR / "targets.json"
 API_QUOTA_BASELINE_PATH = DATA_CONFIG_DIR / "api_quota_baseline.json"
 WEB_DIR = BASE / "web"
-
-
-def machine_id() -> str:
-    """本機代號:取主機名稱(過濾成檔名安全字元)。Google Drive 同步時各機檔名
-    帶上它就不會互相覆蓋;身分只能取自主機名稱 —— 同步資料夾裡的檔兩台都一樣。"""
-    raw = socket.gethostname() or "PC"
-    mid = re.sub(r"[^A-Za-z0-9]+", "-", raw).strip("-")
-    return mid or "PC"
-
 
 MACHINE_ID = machine_id()
 STATE_PATH = MACHINE_DATA_DIR / f"state_{MACHINE_ID}.json"   # 流量存檔各機獨立

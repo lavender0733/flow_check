@@ -51,7 +51,6 @@ import csv
 import json
 import time
 import random
-import socket
 import urllib.parse
 import urllib.request
 import urllib.error
@@ -66,6 +65,9 @@ sys.dont_write_bytecode = True
 # 這是全專案唯一動 sys.path 的地方（每個進入點各一行），取代原本散在模組內的路徑魔法。
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from common.ident import machine_id, mask_code as _mask_code   # noqa: E402  (sys.path 設定後才能匯入)
+from common.jsonio import read_json   # noqa: E402
+
 try:
     from gpss import output_store   # 把零散的 summary CSV 併成各機一個 Excel(一天一張工作表)
 except Exception:
@@ -78,13 +80,6 @@ def _skip_consolidate() -> bool:
     任務不自動停」。伺服器改在任務結束後用背景執行緒併檔。獨立用命令列跑(沒設這個
     環境變數)時照常自己併,行為不變。"""
     return os.environ.get("GPSS_SKIP_CONSOLIDATE") == "1"
-
-
-def machine_id() -> str:
-    """本機代號:取主機名稱(過濾成檔名安全字元),與 traffic_monitor 一致。"""
-    raw = socket.gethostname() or "PC"
-    mid = re.sub(r"[^A-Za-z0-9]+", "-", raw).strip("-")
-    return mid or "PC"
 
 
 MACHINE_ID = machine_id()
@@ -176,11 +171,6 @@ def load_config() -> dict:
 #   - 顯示與 log 一律遮罩(label + 前4碼),平常看不到全碼;切換靠 label/id,
 #     永遠不必看明碼。
 
-def _mask_code(uc) -> str:
-    uc = str(uc or "")
-    return uc if len(uc) <= 4 else uc[:4] + "*" * (len(uc) - 4)
-
-
 def save_keys(keys: list) -> None:
     KEYS_PATH.write_text(
         json.dumps({"keys": keys}, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -200,19 +190,16 @@ def _build_keys_from_legacy() -> list:
         seen[uc] = label
         order.append(uc)
 
-    try:
-        if CONFIG_PATH.exists():
-            add(json.loads(CONFIG_PATH.read_text(encoding="utf-8")).get("userCode", ""), "共用")
-    except Exception:
-        pass
+    shared = read_json(CONFIG_PATH, default={})
+    if isinstance(shared, dict):
+        add(shared.get("userCode", ""), "共用")
     for p in sorted(BASE.glob("api_config_*.json")):
         m = re.match(r"api_config_(.+)\.json$", p.name)
         if not m:
             continue
-        try:
-            add(json.loads(p.read_text(encoding="utf-8")).get("userCode", ""), m.group(1))
-        except Exception:
-            pass
+        cfg = read_json(p, default={})
+        if isinstance(cfg, dict):
+            add(cfg.get("userCode", ""), m.group(1))
 
     keys = []
     for i, uc in enumerate(order):
@@ -240,23 +227,16 @@ def load_keys() -> list:
 
 
 def read_active_key_id():
-    if MACHINE_CONFIG_PATH.exists():
-        try:
-            return json.loads(MACHINE_CONFIG_PATH.read_text(encoding="utf-8")).get("active_key")
-        except Exception:
-            return None
-    return None
+    cfg = read_json(MACHINE_CONFIG_PATH, default={})
+    return cfg.get("active_key") if isinstance(cfg, dict) else None
 
 
 def write_active_key(key: dict) -> None:
     """把選定的 key 寫回本機設定:存 active_key(id),並同步 userCode
     (讓 traffic_monitor 的每組額度統計沿用既有的『機器→userCode』對應)。"""
-    data = {}
-    if MACHINE_CONFIG_PATH.exists():
-        try:
-            data = json.loads(MACHINE_CONFIG_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
+    data = read_json(MACHINE_CONFIG_PATH, default={})
+    if not isinstance(data, dict):
+        data = {}
     data["active_key"] = key.get("id", "")
     data["userCode"] = key.get("userCode", "")
     MACHINE_CONFIG_PATH.write_text(
@@ -274,13 +254,8 @@ def resolve_current_key(keys: list):
         for k in keys:
             if k.get("id") == active_id:
                 return k
-    legacy_uc = ""
-    if MACHINE_CONFIG_PATH.exists():
-        try:
-            legacy_uc = str(json.loads(
-                MACHINE_CONFIG_PATH.read_text(encoding="utf-8")).get("userCode", "")).strip()
-        except Exception:
-            pass
+    cfg = read_json(MACHINE_CONFIG_PATH, default={})
+    legacy_uc = str(cfg.get("userCode", "")).strip() if isinstance(cfg, dict) else ""
     if legacy_uc:
         for k in keys:
             if k.get("userCode") == legacy_uc:

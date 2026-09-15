@@ -40,6 +40,8 @@ sys.dont_write_bytecode = True
 # 這是全專案唯一動 sys.path 的地方（每個進入點各一行），取代原本散在模組內的路徑魔法。
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from common.jsonio import file_sig, read_json, write_json_atomic   # noqa: E402  (sys.path 設定後才能匯入)
+
 BASE = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE / "data"
 TARGETS_PATH = DATA_DIR / "config" / "targets.json"
@@ -65,36 +67,21 @@ def as_int(value) -> int:
         return 0
 
 
-def file_signature(path: Path) -> str:
-    """檔案大小與修改時間組成的簽章；內容不變時不必再次開啟 Excel。"""
-    try:
-        stat = path.stat()
-        return f"{stat.st_size}:{stat.st_mtime_ns}:v{CACHE_VERSION}"
-    except OSError:
-        return ""
-
-
 def load_cache() -> dict:
     """讀取跨次啟動仍可使用的統計快取；壞檔安全退回空快取。"""
-    try:
-        data = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, json.JSONDecodeError):
-        return {}
+    data = read_json(CACHE_PATH, default={})
+    return data if isinstance(data, dict) else {}
 
 
 def save_cache(cache: dict) -> None:
     """以暫存檔原子替換快取，避免同步／中斷時留下半截 JSON。"""
-    CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    temp = CACHE_PATH.with_suffix(".tmp")
-    temp.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
-    temp.replace(CACHE_PATH)
+    write_json_atomic(CACHE_PATH, cache)
 
 
 def cached_parse(cache: dict, path: Path, parser):
     """簽章命中就回快取；檔案更新時才呼叫 parser 重新讀取 Excel。"""
     key = str(path.resolve())
-    signature = file_signature(path)
+    signature = file_sig(path, version=CACHE_VERSION)
     cached = cache.get(key)
     if cached and cached.get("signature") == signature:
         return cached.get("data"), True
@@ -104,11 +91,12 @@ def cached_parse(cache: dict, path: Path, parser):
 
 
 def load_annual_target() -> int:
+    targets = read_json(TARGETS_PATH, default={})
     try:
-        value = int(json.loads(TARGETS_PATH.read_text(encoding="utf-8")).get("annual_target", 0) or 0)
-        return max(0, value)
-    except Exception:
+        value = int(targets.get("annual_target", 0) or 0) if isinstance(targets, dict) else 0
+    except (TypeError, ValueError):
         return 0
+    return max(0, value)
 
 
 def month_key(path: Path):

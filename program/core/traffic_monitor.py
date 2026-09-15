@@ -57,6 +57,7 @@ except Exception:
     monthly_progress = None
 
 
+from common.jsonio import read_json, write_json_atomic
 # Windows ESTATS(每條 TCP 連線的精準收/發位元組)已抽到獨立模組 estats.py。
 # 對外只用到這兩個函式:process_is_elevated() 判是否有提權、estats_probe() 取逐連線位元組。
 from core.estats import process_is_elevated, estats_probe
@@ -422,11 +423,9 @@ class Monitor:
         # state.json,讓今天已累積的流量無縫接續(下方網卡比對仍會擋掉別台資料)。
         for path in (STATE_PATH, DATA_DIR / "state.json"):
             if path.exists():
-                try:
-                    saved = json.loads(path.read_text(encoding="utf-8"))
+                saved = read_json(path, default=None)
+                if saved is not None:
                     break
-                except Exception:
-                    saved = None
 
         # 換電腦偵測:存檔記的是「本機網卡名稱」。若存檔有網卡、卻沒有任何一張
         # 跟現在這台對得上,代表這份 state.json 是別台電腦複製過來的 ——
@@ -478,10 +477,7 @@ class Monitor:
             "per_nic": self.per_nic,
             "last_per_nic": self.last_per_nic,
         }
-        STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = STATE_PATH.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(STATE_PATH)
+        write_json_atomic(STATE_PATH, data)
 
     def sample(self):
         cur = self._counters_fn()
@@ -1185,10 +1181,9 @@ class Handler(BaseHTTPRequestHandler):
             for name in ("api_config.json", f"api_config_{MACHINE_ID}.json"):
                 apath = gpss_path(cfg, name)
                 if apath.exists():
-                    try:
-                        ac.update(json.loads(apath.read_text(encoding="utf-8")))
-                    except Exception:
-                        pass
+                    one = read_json(apath, default={})
+                    if isinstance(one, dict):
+                        ac.update(one)
             api_set = bool(str(ac.get("userCode", "")).strip())
             patdb = ac.get("patDB", "")
             # 本機 UI 偏好(用量通知);未設過回 None,讓前端沿用當下狀態並回寫種子。
@@ -1446,12 +1441,9 @@ def _ensure_machines_file():
     """確保 data/config/machines.json 存在,並把本機代號加進去(值留空 = 顯示時用代號)。
     妳只要把值改成「桌機」「筆電」之類,各機統計欄位就會顯示友善名稱。"""
     MACHINES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    data = {}
-    if MACHINES_PATH.exists():
-        try:
-            data = json.loads(MACHINES_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
+    data = read_json(MACHINES_PATH, default={})
+    if not isinstance(data, dict):
+        data = {}
     if MACHINE_ID not in data:
         data[MACHINE_ID] = ""   # 留空 → machine_label 會退回顯示代號
         try:

@@ -31,7 +31,6 @@ import sys
 import csv
 import json
 import time
-import socket
 import random
 import asyncio
 from pathlib import Path
@@ -42,6 +41,8 @@ from playwright.async_api import async_playwright
 # 把 program/ 放上 sys.path，讓 core / gpss / common / yearly_stats 都能以套件匯入。
 # 這是全專案唯一動 sys.path 的地方（每個進入點各一行），取代原本散在模組內的路徑魔法。
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from common.ident import machine_id   # noqa: E402  (sys.path 設定後才能匯入)
 
 try:
     from gpss import output_store   # 把零散的 summary CSV 併成各機一個 Excel(一天一張工作表)
@@ -55,14 +56,6 @@ def _skip_consolidate() -> bool:
     任務不自動停」。伺服器改在任務結束後用背景執行緒併檔。獨立用命令列跑(沒設這個
     環境變數)時照常自己併,行為不變。"""
     return os.environ.get("GPSS_SKIP_CONSOLIDATE") == "1"
-
-
-def machine_id() -> str:
-    """本機代號:取主機名稱(過濾成檔名安全字元),與 traffic_monitor / API 版一致。
-    Google Drive 同步時各機檔名帶上它,輸出與執行紀錄就不會互相覆蓋。"""
-    raw = socket.gethostname() or "PC"
-    mid = re.sub(r"[^A-Za-z0-9]+", "-", raw).strip("-")
-    return mid or "PC"
 
 
 MACHINE_ID = machine_id()
