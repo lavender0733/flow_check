@@ -15,13 +15,10 @@
 Google Drive 同步會重寫 mtime，靠時間挑會在別台機器挑到舊檔。
 """
 
-import json
 import re
 import sys
 import threading
-import webbrowser
 from datetime import date
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 try:
@@ -41,6 +38,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common.jsonio import file_sig, read_json, write_json_atomic   # noqa: E402  (sys.path 設定後才能匯入)
+from common.webapp import HttpError, serve                         # noqa: E402
 
 BASE = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE / "data"
@@ -364,64 +362,27 @@ def statistics():
     }
 
 
-class Handler(BaseHTTPRequestHandler):
-    def send_json(self, obj, code=200):
-        body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store, must-revalidate")
-        self.end_headers()
-        self.wfile.write(body)
+def stats(req) -> dict:
+    """年度統計。失敗時仍要帶 systems: [] —— 前端 render() 直接對它取陣列，
+    給通用的錯誤形狀會讓整頁在 data.systems 上炸掉。"""
+    try:
+        return statistics()
+    except Exception as exc:
+        raise HttpError(500, {"ok": False, "systems": [],
+                              "message": f"統計計算失敗：{exc}"})
 
-    def do_GET(self):
-        path = self.path.split("?", 1)[0]
-        if path == "/api/stats":
-            try:
-                self.send_json(statistics())
-            except Exception as exc:
-                self.send_json({"ok": False, "systems": [], "message": f"統計計算失敗：{exc}"}, 500)
-            return
-        if path in ("/", "/index.html"):
-            target = WEB_DIR / "index.html"
-            content_type = "text/html; charset=utf-8"
-        elif path == "/style.css":
-            target = WEB_DIR / "style.css"
-            content_type = "text/css; charset=utf-8"
-        elif path == "/app.js":
-            target = WEB_DIR / "app.js"
-            content_type = "application/javascript; charset=utf-8"
-        else:
-            self.send_error(404)
-            return
-        try:
-            body = target.read_bytes()
-        except OSError:
-            self.send_error(404)
-            return
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store, must-revalidate")
-        self.end_headers()
-        self.wfile.write(body)
 
-    def log_message(self, fmt, *args):
-        print(f"[web] {self.address_string()} - {fmt % args}")
+ROUTES = {("GET", "/api/stats"): stats}
 
 
 def main():
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    url = f"http://127.0.0.1:{PORT}"
-    print(f"年度檢索統計已啟動：{url}")
-    print("按 Ctrl+C 可停止。")
-    webbrowser.open(url)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\n年度檢索統計已停止。")
-    finally:
-        server.server_close()
+    serve(
+        PORT,
+        ROUTES,
+        static_dir=WEB_DIR,
+        quiet=False,     # 保留原本每個請求印一行 [web] ... 存取記錄的行為
+        banner=f"年度檢索統計已啟動：http://127.0.0.1:{PORT}\n按 Ctrl+C 可停止。",
+    )
 
 
 if __name__ == "__main__":
