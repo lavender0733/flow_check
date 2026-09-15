@@ -157,6 +157,13 @@ class TestHistoryMerge(TempDataCase):
         super().setUp()
         self.machines = self.tmp / "machines"
         self.machines.mkdir(parents=True, exist_ok=True)
+        # HISTORY_PATH 是模組層常數,_load_history() 直接讀它 —— 只 patch
+        # MACHINE_DATA_DIR 擋不住,測試會讀到本機真實的快照檔,結果隨真實資料浮動。
+        # 在這裡一併導向暫存目錄,整個類別的測試都完全隔離。
+        self._hist_patch = patch.object(
+            mp, "HISTORY_PATH", self.machines / "monthly_progress_history_TEST.json")
+        self._hist_patch.start()
+        self.addCleanup(self._hist_patch.stop)
 
     def _write_history(self, machine, snaps):
         self.write_json(f"machines/monthly_progress_history_{machine}.json", snaps)
