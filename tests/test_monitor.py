@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from _util import TempDataCase
 
-from core import traffic_monitor as tm
+from core import sampler as tm
 
 
 # 形狀與 psutil.net_io_counters(pernic=True) 的值相同（只取用得到的兩欄）
