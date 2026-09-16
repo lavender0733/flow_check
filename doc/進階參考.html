@@ -129,7 +129,7 @@
 </table>
 
 <blockquote>
-  <p><strong>流量暴增預警 / 用量通知的設定不放這裡</strong>:<code>surge_enabled</code> / <code>surge_min_mb</code> / <code>surge_factor</code> / <code>surge_window_min</code> / <code>surge_cooldown_sec</code> 與 <code>notify_enabled</code> / <code>notify_threshold</code> 雖在版本紀錄寫過「config.json 新增」,實際開關與門檻以本機偏好 <code>data/machines/prefs_&lt;機器&gt;.json</code> 為權威來源(各台獨立、頁面即時切換),<code>config.json</code> 未設時走程式內建預設(暴增 50MB、4×、冷卻 300 秒;通知門檻 80%)。</p>
+  <p><strong>流量暴增預警 / 用量通知的設定不放這裡</strong>:<code>surge_enabled</code> / <code>surge_min_mb</code> / <code>surge_factor</code> / <code>surge_window_min</code> / <code>surge_cooldown_sec</code> 與 <code>notify_enabled</code> / <code>notify_threshold</code> 雖在版本紀錄寫過「config.json 新增」,實際開關與門檻以本機偏好 <code>data/machines/prefs_&lt;機器&gt;.json</code> 為權威來源(各台獨立、頁面即時切換),<code>config.json</code> 未設時走程式內建預設(暴增 50MB、4×、冷卻 300 秒;通知門檻 80%)。<strong>外觀</strong>(<code>theme</code>,值為 <code>dark</code> / <code>light</code> / <code>classic</code>,預設 <code>dark</code>)同樣只存在這份本機偏好,<code>config.json</code> 沒有這個欄位。</p>
 </blockquote>
 
 <p><strong><code>program/gpss/api_keys.json</code>(驗證碼池;集中放多組 <code>userCode</code>)</strong></p>
@@ -189,12 +189,13 @@
 ├─ config.json            主設定:額度、port、取樣間隔、網段護欄等
 ├─ web/                   網頁介面(免打包純 HTML/JS;四個頁籤)
 │  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
-│  ├─ style.css           樣式(原內嵌,已抽成外部檔)
+│  ├─ style.css           樣式:深色 / 淺色共用一份骨架,靠 &lt;html data-theme&gt; 切 token
+│  ├─ style-classic.css   「原版」外觀(7.4.0 改版前的設計,獨立保存)
 │  ├─ partials/           各分頁 HTML(monitor / control / analytics / progress)
 │  └─ js/                 依功能切分的程式(util / monitor / control / analytics / progress / main)
 ├─ data/                  設定與資料
 │  ├─ config/             共用設定: targets.json / holidays.json / machines.json / api_quota_baseline.json
-│  ├─ machines/           各機執行期資料: state / prefs / run_log / 月進度快照(檔名含機器代號)
+│  ├─ machines/           各機執行期資料: state / prefs(含外觀偏好)/ run_log / 月進度快照(檔名含機器代號)
 │  ├─ exports/            ★ 手動從後台下載的簡易版*.xls / API*.xls(可直接覆蓋舊檔)
 │  ├─ 620/ 630/ 680/      ★ 年度統計的來源檔(各系統的月統計 Excel)
 │  └─ 年度統計快取.json    年度統計的解析快取(檔案沒變就不重讀 Excel)

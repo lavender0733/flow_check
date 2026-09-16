@@ -1,4 +1,4 @@
-# Flow Check — 局網流量監控 + GPSS 批次檢索  `v7.3.1`
+# Flow Check — 局網流量監控 + GPSS 批次檢索  `v7.4.0`
 
 一個本機小工具:**量測當日網路用量**(對每日 2GB 額度),並在同一個網頁裡**批次檢索 TIPO GPSS 專利**(可選**官方 API** 或**傳統前端**兩種方式)。背景常駐、開瀏覽器即看。
 
@@ -14,6 +14,24 @@
 ---
 
 ## 版本紀錄
+
+### 7.4.0 — 2026-09-16
+- **外觀可切換:深色(預設)/ 淺色 / 原版**(功能、數字、操作方式完全不變,只換視覺)。套用 style-samples 的 **Raycast × Y2K 紫**,並把改版前的設計原封不動保留成「原版」。
+  - **兩支 CSS、三種外觀**:深色與淺色共用 `web/style.css`(同一份骨架,靠 `<html data-theme>` 只覆寫 token 值);原版是獨立的 `web/style-classic.css`,切過去即回到改版前的樣子、日後也不隨新樣式變動。`style.css` 重寫成三段式 —— **token 區**(只有值、沒有選擇器)/ **骨架區**(版面尺寸,不寫死顏色)/ **招牌招式區**(光暈與毛玻璃,整段刪掉仍是完整可用的介面)。
+  - **互動不位移**:任何 hover / focus 都只改變光暈(`box-shadow`),不動元素位置,滑鼠掃過整頁不會有東西在跳。
+  - **警示色語意沿用原版**:紅=超標、黃(琥珀)=接近上限、綠=正常、藍=資訊、橘=執行中、金=達標。
+  - **切換選單**:放在頁籤列最右,預設深色。選擇同時寫 `localStorage`(擋開頁閃色)與**伺服器本機偏好** `prefs_<機器>.json`(換瀏覽器仍在,以伺服器為準)。`POST /api/prefs` 新收 `theme`(白名單比對 `dark`/`light`/`classic`,擋掉手工塞進對應不到的字串),`GET /api/config` 帶回。
+  - **切換邏輯寫在 `index.html` 的 `<head>` 內同步執行**,不另開 `theme.js`:7.3.1 起 `routes.py` 只注入「有配對 partial」的 js,單獨一支 `theme.js` 不會被載入;放 `<head>` 也順帶避免開頁先閃一下舊色。
+- **自繪下拉選單**(`web/js/util.js` 的 `enhanceSelect`):原生 `<select>` 展開後的面板由作業系統畫 —— 方角、系統配色,和頁面對不起來。改成「**隱藏的 select + 自繪按鈕/面板**」:`value` / `onchange` / `disabled` 語意照舊,既有的 `loadKeys` / `switchKey` / `buildGoalMonths` **一行未改**;選項變動由 `MutationObserver` 同步。標上 `data-picker` 即自動套用,全站三處(外觀 / 驗證碼 / 月份)。
+  - 修一個堆疊層級的坑:展開的面板被下方 `.patbox` 蓋住 —— 招牌招式給那些區塊加了 `backdrop-filter`,各自建立了堆疊環境;改用 `:has()` 抬升整個容器解掉。
+- **配色依實際渲染像素量測對比重新調整**(標準 4.5,原版一律不動):
+  - 主色拆成 `--btn`(色塊填充)與 `--btn-ink`(文字)—— 底色要夠深才襯得起白字、當文字時卻需要另一個方向,一個值兩用解不開。深色下當文字原本只有 3.39 → 深色 6.90、淺色 5.93。
+  - `danger` / `ok` 改用 Raycast 範本色碼,同樣拆出 `-ink`;`warn`(琥珀)維持不動。
+  - `--muted` 提高對比:淺色 4.03→5.14、深色 5.27→6.95(多用於 12px 小字)。
+  - 深色補 `color-scheme`(修原生下拉與捲軸的白底);`<option>` 給實色底(否則白字白底看不見)。
+- **配合修正**:`web/js/` 裡寫死的色碼全改走 token,同一份 js 在三種外觀下都正確;`style-classic.css` 補上 js 需要但原本沒定義的 `--ok` / `--track` / `--warn-ink` / `--r-pill`;favicon 是 canvas 畫的(吃解析後色值、不認 `var()`),換外觀後重畫一次;圓環中央的洞改用實色 `--hole-bg`(原本吃半透明的 `--card`,環色會透進來);`control.html` 拿掉寫死的 `background:#fff`。
+- **清理**:移除沒有任何規則引用的 token(`--ok-bg` / `--ok-line` / `--info` / `--btn-fg` / `--inset-pad`)。
+  (`web/style.css`、`web/style-classic.css`、`web/index.html`、`web/js/util.js`、`web/js/{monitor,control,analytics,progress,main}.js`、`web/partials/{control,progress}.html`、`program/core/routes.py`)
 
 ### 7.3.1 — 2026-09-15
 - **新增網頁頁籤改成「丟兩個新檔」**(畫面與功能完全不變):原本加一個頁籤要改 5 個地方 —— `index.html` 的頁籤鈕、`<!--#include-->` 標記、`<script>` 標籤,加上 `main.js` 的頁籤陣列與切換 hook;漏掉 `main.js` 那個陣列最麻煩,按鈕會出現、面板卻不切換,而且不報錯。現在只要丟 `web/partials/xxx.html` 與 `web/js/xxx.js`,**現有檔案一行都不用改**,重整瀏覽器即生效(不必重啟)。
@@ -289,7 +307,8 @@ flow_check/
 ├─ config.json            主設定:額度、port、取樣間隔、網段護欄、要呼叫的檢索程式
 ├─ web/                   網頁介面(免打包純 HTML/JS;頁籤:流量監控 / 檢索控制台 / 爬取統計 / 檢索進度)
 │  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
-│  ├─ style.css           樣式(原內嵌於 index.html,已抽成外部檔)
+│  ├─ style.css           樣式:深色 / 淺色共用一份骨架,靠 <html data-theme> 切 token
+│  ├─ style-classic.css   「原版」外觀(7.4.0 改版前的設計,完整保留、不隨新樣式變動)
 │  ├─ partials/           各分頁 HTML(monitor / control / analytics / progress;送頁時由後端即時併入)
 │  └─ js/                 依功能切分的傳統 script(util / monitor / control / analytics / progress / main;載入順序即相依順序、共用全域作用域)
 ├─ data/
@@ -300,7 +319,7 @@ flow_check/
 │  │  └─ api_quota_baseline.json ★ 下載額度校正基準(各 userCode 的 used/since;含明碼,不進版控)
 │  ├─ machines/            各電腦執行期資料(檔名含機器代號,同步不互相覆蓋)
 │  │  ├─ state_<機器>.json 執行期資料:當日用量(跨重啟保留、跨日歸零)
-│  │  ├─ prefs_<機器>.json 本機偏好:通知 / 暴增預警 / 排除內網開關與門檻
+│  │  ├─ prefs_<機器>.json 本機偏好:通知 / 暴增預警 / 排除內網開關與門檻、外觀(深色 / 淺色 / 原版)
 │  │  ├─ run_log_<機器>.jsonl 各機檢索執行紀錄(讀取時掃全部相加)
 │  │  └─ monthly_progress_history_<機器>.json 月進度分析快照(讀取時合併全部機器)
 │  ├─ exports/             ★ 手動下載的『簡易版』與『API』匯出檔(可直接覆蓋舊檔)
