@@ -69,7 +69,7 @@ async function loadConfig() {
     }
     if (cfg.userCode_set) {
       apiNoteText = "API 驗證碼:已設定 ✓";
-      apiNoteColor = "#2f9e44";
+      apiNoteColor = "var(--ok)";
     } else {
       apiNoteText = "API 驗證碼:未設定 — 請編輯 gpss/api_config.json 填入 userCode";
       apiNoteColor = "var(--warn)";
@@ -221,7 +221,7 @@ async function savePatents() {
     if (d.ok) {
       const pt = document.getElementById("pattoast");
       pt.textContent = "✓ " + d.message;
-      pt.style.color = "#2f9e44";
+      pt.style.color = "var(--ok)";
       closePatentsEditor();
     } else {
       t.textContent = "失敗:" + d.message;
@@ -279,7 +279,7 @@ async function tickJob() {
     const toast = document.getElementById("toast");
     if (prevStatus === "running" && j.status === "done") {
       toast.textContent = `✓ 執行完成（共送出約 ${j.est_done} 筆）`;
-      toast.style.color = "#2f9e44";
+      toast.style.color = "var(--ok)";
     } else if (prevStatus === "running" && j.status === "stopped") {
       toast.textContent = "■ 已停止（停在批次邊界,結果已保存）";
       toast.style.color = "var(--warn)";

@@ -12,8 +12,9 @@
     <div class="apibox" id="keysel-row" style="margin-bottom:var(--sp-md);">
       <div class="apibox-row">
         <span class="hint">使用驗證碼</span>
-        <select id="keysel" onchange="switchKey()"
-          style="border:1px solid var(--line); border-radius:8px; background:#fff;"></select>
+        <!-- 外觀由 style.css 的 select 規則統一(原本這裡寫死 background:#fff,
+             深色模式下會變成一塊白框)。 -->
+        <select id="keysel" onchange="switchKey()"></select>
         <!-- 目前選用的驗證碼狀態(和「使用驗證碼」同一排):字樣 + 等寬遮罩碼 -->
         <span class="apicfg" id="ctl-note">讀取中…</span>
         <span class="code" id="ctl-code">—</span>
@@ -21,10 +22,9 @@
         <span class="hint" id="keytoast"></span>
       </div>
       <div class="apibox-row" id="keyadd-form" style="display:none; margin-top:var(--sp-sm);">
-        <input id="keyadd-label" placeholder="名稱(例:備用-3)" autocomplete="off"
-          style="border:1px solid var(--line); border-radius:8px; width:150px;">
+        <input id="keyadd-label" placeholder="名稱(例:備用-3)" autocomplete="off" style="width:150px;">
         <input id="keyadd-code" class="code" placeholder="驗證碼(存後只顯示前四碼)" autocomplete="off"
-          style="border:1px solid var(--line); border-radius:8px; width:240px;">
+          style="width:240px;">
         <button class="btn btn-go btn-sm" onclick="addKey()">儲存</button>
         <button class="btn btn-stop btn-sm" onclick="toggleAddKey()">取消</button>
         <span class="hint" id="keyadd-toast"></span>

@@ -126,11 +126,11 @@ function toggleNotify() {
     applyNotify(true);
     try { localStorage.setItem("usageNotify", "1"); } catch (e) {}
     saveNotifyPrefs();
-    setNotifyHint(notifyHintText(), "#2f9e44");
+    setNotifyHint(notifyHintText(), "var(--ok)");
     // 桌面通知能用就順便要權限(被封鎖/拒絕也沒關係,頁內提醒照常運作)
     if (("Notification" in window) && Notification.permission === "default") {
       Notification.requestPermission().then(() => {
-        if (notifyEnabled) setNotifyHint(notifyHintText(), "#2f9e44");
+        if (notifyEnabled) setNotifyHint(notifyHintText(), "var(--ok)");
       });
     }
   } else {
@@ -146,7 +146,7 @@ function toggleNotify() {
 
 // 還原 notifyhint 的小字到「平時該顯示的內容」(開:視桌面通知狀態補一句;關:清空)。
 function baselineNotifyHint() {
-  setNotifyHint(notifyEnabled ? notifyHintText() : "", notifyEnabled ? "#2f9e44" : undefined);
+  setNotifyHint(notifyEnabled ? notifyHintText() : "", notifyEnabled ? "var(--ok)" : undefined);
 }
 
 function saveNotifyThreshold() {
@@ -159,7 +159,7 @@ function saveNotifyThreshold() {
   try { localStorage.setItem("usageNotifyThreshold", String(v)); } catch (e) {}
   saveNotifyPrefs();
   // 文字說明:確認剛變更的門檻 %(短暫顯示後回到平時的小字)。
-  setNotifyHint(`✓ 已更新:用量達 ${v}% 時提醒`, "#2f9e44");
+  setNotifyHint(`✓ 已更新:用量達 ${v}% 時提醒`, "var(--ok)");
   clearTimeout(notifyHintTimer);
   notifyHintTimer = setTimeout(baselineNotifyHint, 4000);
 }
@@ -176,7 +176,7 @@ function applyNotifyFromServer(enabled, threshold) {
     return;
   }
   applyNotify(!!enabled);
-  setNotifyHint(enabled ? notifyHintText() : "", enabled ? "#2f9e44" : undefined);
+  setNotifyHint(enabled ? notifyHintText() : "", enabled ? "var(--ok)" : undefined);
 }
 
 function restoreNotify() {
@@ -192,7 +192,7 @@ function restoreNotify() {
   // 頁內提醒不需通知權限,故只看先前是否開啟即可還原
   if (on === "1") {
     applyNotify(true);
-    setNotifyHint(notifyHintText(), "#2f9e44");
+    setNotifyHint(notifyHintText(), "var(--ok)");
   } else {
     applyNotify(false);
   }
@@ -279,7 +279,7 @@ function saveSurgeThreshold() {
   surgeThreshold = v;
   try { localStorage.setItem("surgeThreshold", String(v)); } catch (e) {}
   saveSurgePrefs();   // 後端會即時套到執行中的 Monitor,不必重啟
-  setSurgeHint(`✓ 已更新:單分鐘達 ${v}MB 起偵測`, "#2f9e44");
+  setSurgeHint(`✓ 已更新:單分鐘達 ${v}MB 起偵測`, "var(--ok)");
   clearTimeout(surgeHintTimer);
   surgeHintTimer = setTimeout(() => setSurgeHint(""), 4000);
 }
@@ -572,12 +572,19 @@ function ensureFavicon() {
   return faviconEl;
 }
 
+// canvas 的 fillStyle 不認得 var(--x),必須先把 token 解析成實際色值。
+// 讀不到就退回原本的預設色(例如 CSS 還沒載入完就先畫了 favicon)。
+function cssColor(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
 function drawFavicon(alert) {
   const c = document.createElement("canvas");
   c.width = c.height = 64;
   const x = c.getContext("2d");
-  // 底:紫色圓角方塊 + 三根長條(流量意象)
-  x.fillStyle = "#9e80db";
+  // 底:主色圓角方塊 + 三根長條(流量意象)
+  x.fillStyle = cssColor("--btn", "#853bf6");
   if (x.roundRect) { x.beginPath(); x.roundRect(4, 4, 56, 56, 14); x.fill(); }
   else x.fillRect(4, 4, 56, 56);
   x.fillStyle = "rgba(255,255,255,.92)";
@@ -585,7 +592,8 @@ function drawFavicon(alert) {
   // 達門檻:右上角紅點(白邊,任何底色上都明顯)
   if (alert) {
     x.beginPath(); x.arc(50, 14, 13, 0, Math.PI * 2); x.fillStyle = "#fff"; x.fill();
-    x.beginPath(); x.arc(50, 14, 9, 0, Math.PI * 2); x.fillStyle = "#e5484d"; x.fill();
+    x.beginPath(); x.arc(50, 14, 9, 0, Math.PI * 2);
+    x.fillStyle = cssColor("--danger", "#e5484d"); x.fill();
   }
   return c.toDataURL("image/png");
 }
@@ -596,6 +604,14 @@ function updateFavicon(alert) {
   faviconState = st;
   try { ensureFavicon().href = drawFavicon(alert); } catch (e) {}
 }
+
+// 換外觀時由 index.html 的 applyTheme 呼叫。favicon 是 canvas 畫的,吃的是解析後的
+// 色值而非 var(),所以換色後得重畫一次 —— 清掉狀態快取讓它重跑(狀態本身不變)。
+window.repaintFavicon = function () {
+  const wasAlert = faviconState === "alert";
+  faviconState = null;
+  updateFavicon(wasAlert);
+};
 
 // 紅點 =「還有未看的提醒」,由用量通知與流量暴增共用。任一橫幅還顯示著就保持亮,
 // 兩者都關掉(按掉或關開關)才熄 —— 故所有「按掉/關閉」路徑都要呼叫這支重算,
@@ -640,11 +656,11 @@ function renderPeak() {
   const mbps = bpsToMbps(lastPeakBps);
   pdEl.textContent = mbps >= 0.01 ? mbps.toFixed(2) + " Mbps" : "—";
   const ok = mbps >= speedFloor;
-  pdEl.style.color = ok ? "#2f9e44" : "var(--dim)";
+  pdEl.style.color = ok ? "var(--ok)" : "var(--dim)";
   const vEl = document.getElementById("peakverdict");
   if (ok) {
     vEl.textContent = "✓ 未被限速";
-    vEl.style.color = "#2f9e44";
+    vEl.style.color = "var(--ok)";
   } else {
     // 偏低無法斷定:不佔一整行,改放資訊 icon,滑入看說明
     vEl.innerHTML = '<i class="info" tabindex="0" data-tip="速率偏低,無法斷定 — 可能只是閒置(沒在下載、不耗流量),也可能被限速;按「測速」可確認。"></i>';
@@ -673,9 +689,9 @@ async function runSpeedTest() {
         verdict.textContent = `⚠ 疑似被限速(< ${d.floor_mbps}M)`;
         verdict.style.color = "var(--danger)";
       } else {
-        res.style.color = "#2f9e44";
+        res.style.color = "var(--ok)";
         verdict.textContent = "✓ 未被限速";
-        verdict.style.color = "#2f9e44";
+        verdict.style.color = "var(--ok)";
       }
       toast.textContent = `· ${fmtBytes(d.bytes)} / ${d.seconds}s`;
     } else {
@@ -735,7 +751,7 @@ async function tickStatus() {
     if (lanEl) {
       const ex = s.lan_excluded_bytes || 0;
       lanEl.textContent = ex > 0 ? fmtBytes(ex) : "—";
-      lanEl.style.color = ex > 0 ? "#2f9e44" : "var(--dim)";
+      lanEl.style.color = ex > 0 ? "var(--ok)" : "var(--dim)";
     }
 
     const color = s.percent >= 90 ? "var(--danger)"
@@ -744,7 +760,7 @@ async function tickStatus() {
     // 進度與底色的交界會看到階梯狀的鋸齒。留一點過渡空間就平滑了,寬度小到看不出漸層。
     const deg = Math.min(100, s.percent) * 3.6;
     document.getElementById("u-donut").style.background =
-      `conic-gradient(${color} ${deg}deg, #ece7f7 ${deg + 0.6}deg)`;
+      `conic-gradient(${color} ${deg}deg, var(--track) ${deg + 0.6}deg)`;
     document.getElementById("u-rem").textContent = "今日已用";
     document.getElementById("u-ratio").textContent =
       (s.used_bytes / 1073741824).toFixed(2) + " / " + s.quota_gb + " GB";

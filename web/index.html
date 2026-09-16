@@ -4,7 +4,47 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>流量監控 + GPSS 控制台</title>
-<link rel="stylesheet" href="style.css">
+<!-- 外觀切換。這段必須在 <head> 內同步執行(不能搬進 js/,也不能加 defer):
+     頁面一開始畫之前就要把正確的 CSS 掛上,晚一步會先閃一下預設色再跳成使用者選的。
+     另外 core/routes.py 只載入「有配對 partials/xxx.html」的 js,單獨一支 theme.js
+     不會被注入,所以這段就放在這裡。選單本身由下方 #themebar 的 script 生成。 -->
+<link rel="stylesheet" href="style.css" id="themecss">
+<script>
+// 三種外觀:深色(預設)、淺色、原版。前兩者共用 style.css(靠 <html data-theme> 切換
+// token),原版是換掉整支 CSS 檔 —— 它是套用新樣式前的設計,完整保留在 style-classic.css。
+var THEMES = [
+  { id: "dark",    label: "深色",  css: "style.css",         attr: "dark"  },
+  { id: "light",   label: "淺色",  css: "style.css",         attr: "light" },
+  { id: "classic", label: "原版",  css: "style-classic.css", attr: ""      },
+];
+function applyTheme(id) {
+  var t = THEMES.find(function (x) { return x.id === id; }) || THEMES[0];
+  var link = document.getElementById("themecss");
+  // 只在真的換檔時才改 href:重設成同一個值會讓瀏覽器重新抓一次 CSS,畫面閃一下。
+  if (link && link.getAttribute("href") !== t.css) link.setAttribute("href", t.css);
+  if (t.attr) document.documentElement.setAttribute("data-theme", t.attr);
+  else document.documentElement.removeAttribute("data-theme");
+  try { localStorage.setItem("theme", t.id); } catch (e) {}
+  var bar = document.getElementById("themebar");
+  if (bar) for (var b of bar.children) b.classList.toggle("on", b.dataset.theme === t.id);
+  // favicon 用 canvas 畫,吃的是解析後的色值而不是 var() → 換外觀後要重畫一次。
+  // 換 CSS 檔時瀏覽器是非同步載入的,得等它套用後再畫,否則會拿到舊配色;
+  // 用兩層 rAF 等「下一次真正繪製之後」,比固定 setTimeout 可靠。
+  if (window.repaintFavicon) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { window.repaintFavicon(); });
+    });
+  }
+}
+// 先讀偏好再畫頁面。沒存過就用深色(THEMES[0])。
+(function () {
+  var saved = null;
+  try { saved = localStorage.getItem("theme"); } catch (e) {}
+  var t = THEMES.find(function (x) { return x.id === saved; }) || THEMES[0];
+  document.getElementById("themecss").setAttribute("href", t.css);
+  if (t.attr) document.documentElement.setAttribute("data-theme", t.attr);
+})();
+</script>
 </head>
 <body>
 <!-- 這個檔是外殼。各分頁(panel)拆成 partials/*.html,由伺服器送頁時掃目錄注入,
@@ -24,8 +64,29 @@
   <div id="healthbanner" class="banner banner-danger banner-x" onclick="dismissHealth()"
        title="點此關閉(再有新錯誤會重新跳出)" style="display:none;"></div>
 
-  <!-- 頁籤按鈕列由 main.js 依 util.js 的 TABS 註冊表生成。 -->
-  <div class="tabs" id="tabs"></div>
+  <!-- 頁籤按鈕列由 main.js 依 util.js 的 TABS 註冊表生成;外觀選單靠右擺同一排。 -->
+  <div class="tabbar">
+    <div class="tabs" id="tabs"></div>
+    <div class="themebar" id="themebar" role="group" aria-label="外觀"></div>
+  </div>
+  <script>
+  // 外觀選單:按鈕依上面的 THEMES 產生,加一種外觀只要往那個陣列加一筆。
+  (function () {
+    var bar = document.getElementById("themebar");
+    var cur = null;
+    try { cur = localStorage.getItem("theme"); } catch (e) {}
+    if (!THEMES.some(function (t) { return t.id === cur; })) cur = THEMES[0].id;
+    THEMES.forEach(function (t) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "themebtn" + (t.id === cur ? " on" : "");
+      b.dataset.theme = t.id;
+      b.textContent = t.label;
+      b.onclick = function () { applyTheme(t.id); };
+      bar.appendChild(b);
+    });
+  })();
+  </script>
 
   <!--#include-partials-->
 

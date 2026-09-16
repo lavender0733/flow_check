@@ -127,27 +127,29 @@ function renderApiUsage(api, quota, caseHourly) {
   box.innerHTML = "";
   for (const c of rows) {
     const pct = c.pct || 0;
-    const color = pct >= 100 ? "var(--stop,#e03131)" : pct >= 80 ? "var(--warn,#f08c00)" : "#2f9e44";
+    // 顏色一律走 token(--danger/--warn/--ok),深淺配色才會跟著切換。
+    // 舊寫法 var(--stop,#e03131) 的 --stop 從來沒定義過,實際永遠吃後面的備援值。
+    const color = pct >= 100 ? "var(--danger)" : pct >= 80 ? "var(--warn)" : "var(--ok)";
     const cMax = c.caseMax || 0;
     const cPct = caseCap ? Math.round(cMax / caseCap * 100) : 0;
-    const cColor = cPct >= 100 ? "var(--stop,#e03131)" : cPct >= 80 ? "var(--warn,#f08c00)" : "#2f9e44";
+    const cColor = cPct >= 100 ? "var(--danger)" : cPct >= 80 ? "var(--warn)" : "var(--ok)";
     const row = document.createElement("div");
-    row.style.cssText = "margin:10px 0;padding-bottom:9px;border-bottom:1px solid #eee;";
+    row.style.cssText = "margin:10px 0;padding-bottom:9px;border-bottom:1px solid var(--line);";
     let html =
       `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">`
       + `<b style="font-size:var(--fs-body);">${c.code}</b></div>`
-      + `<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:var(--fs-sm);color:#555;margin-bottom:5px;">`
+      + `<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:var(--fs-sm);color:var(--dim);margin-bottom:5px;">`
       + `<span>月 <b>${(c.month || 0).toLocaleString()}</b> / 60,000</span>`
       + (c.hasQuota ? `<span>時段 <b style="color:${color};">${(c.used || 0).toLocaleString()}</b> / ${cap.toLocaleString()}${pct >= 100 ? " ⚠" : ""}</span>` : "")
       + (cMax ? `<span>本時同號 <i class="info" tabindex="0" data-tip="${caseTip}"></i> <b style="color:${cColor};">${cMax}</b> / ${caseCap}${cPct >= 100 ? " ⚠" : ""}</span>` : "")
       + `</div>`;
     if (c.hasQuota) {
-      html += `<div style="height:8px;border-radius:5px;background:#ece7f7;overflow:hidden;">`
+      html += `<div style="height:8px;border-radius:var(--r-pill);background:var(--track);overflow:hidden;">`
         + `<div style="height:100%;width:${Math.min(100, pct)}%;background:${color};"></div></div>`;
     }
     if (c.caseNear && c.caseTop && c.caseTop.length) {
       const tops = c.caseTop.map(x => `${x.patent}×${x.count}`).join("、");
-      html += `<div style="font-size:var(--fs-hint);color:var(--warn,#f08c00);margin-top:3px;">`
+      html += `<div style="font-size:var(--fs-hint);color:var(--warn-ink);margin-top:3px;">`
         + `⚠ 本小時這些案號快到每小時上限:${tops}</div>`;
     }
     row.innerHTML = html;

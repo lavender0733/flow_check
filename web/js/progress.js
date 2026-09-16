@@ -31,7 +31,7 @@ function renderMonthly(m) {
   const reached = pct >= 100;                              // 達標 → 轉金(獎勵色);未達標 → 紫(進行中)
   const color = reached ? "var(--gold)" : "var(--btn)";
   id("m-donut").style.background =
-    `conic-gradient(${color} ${Math.min(100, pct) * 3.6}deg, #ece7f7 0deg)`;
+    `conic-gradient(${color} ${Math.min(100, pct) * 3.6}deg, var(--track) 0deg)`;
   id("m-pct").textContent = pct.toFixed(1) + "%";
   id("m-pct").style.color = reached ? "var(--gold-ink)" : "var(--txt)";
   id("m-rem").textContent = "本月累積";
@@ -108,7 +108,9 @@ function checkDailyGoal() {
 function celebrateGoal() {
   const fx = document.getElementById("goalfx");
   const toast = document.getElementById("goaltoast");
-  const colors = ["#f59f00", "#9e80db", "#5b9bd5", "#2f9e44", "#e5484d", "#f97316"];
+  // 彩帶用 token(設在 style.background 上瀏覽器會自己解析 var()),換配色時一起跟著變
+  const colors = ["var(--gold)", "var(--btn)", "var(--blue)", "var(--ok)",
+                  "var(--danger)", "var(--accent)"];
   fx.innerHTML = "";
   for (let i = 0; i < 90; i++) {
     const p = document.createElement("div");
