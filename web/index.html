@@ -7,7 +7,8 @@
 <!-- 外觀切換。這段必須在 <head> 內同步執行(不能搬進 js/,也不能加 defer):
      頁面一開始畫之前就要把正確的 CSS 掛上,晚一步會先閃一下預設色再跳成使用者選的。
      另外 core/routes.py 只載入「有配對 partials/xxx.html」的 js,單獨一支 theme.js
-     不會被注入,所以這段就放在這裡。選單本身由下方 #themebar 的 script 生成。 -->
+     不會被注入,所以這段就放在這裡。選單本身由下方 #themepick 的 script 生成。
+     選擇同時存 localStorage(擋開頁閃色)與伺服器偏好(換瀏覽器仍在,伺服器為準)。 -->
 <link rel="stylesheet" href="style.css" id="themecss">
 <script>
 // 三種外觀:深色(預設)、淺色、原版。前兩者共用 style.css(靠 <html data-theme> 切換
@@ -17,16 +18,43 @@ var THEMES = [
   { id: "light",   label: "淺色",  css: "style.css",         attr: "light" },
   { id: "classic", label: "原版",  css: "style-classic.css", attr: ""      },
 ];
-function applyTheme(id) {
+// 目前套用中的外觀 id。給 loadConfig 判斷「伺服器沒存過時要種哪個值」用。
+function currentTheme() {
+  var attr = document.documentElement.getAttribute("data-theme");
+  var css = document.getElementById("themecss").getAttribute("href");
+  var t = THEMES.find(function (x) { return x.css === css && x.attr === (attr || ""); });
+  return (t || THEMES[0]).id;
+}
+// 套用外觀。save=false 用於「從伺服器讀回來的值」—— 那是既有設定,不需要再寫回去。
+function applyTheme(id, save) {
   var t = THEMES.find(function (x) { return x.id === id; }) || THEMES[0];
   var link = document.getElementById("themecss");
   // 只在真的換檔時才改 href:重設成同一個值會讓瀏覽器重新抓一次 CSS,畫面閃一下。
   if (link && link.getAttribute("href") !== t.css) link.setAttribute("href", t.css);
   if (t.attr) document.documentElement.setAttribute("data-theme", t.attr);
   else document.documentElement.removeAttribute("data-theme");
-  try { localStorage.setItem("theme", t.id); } catch (e) {}
-  var bar = document.getElementById("themebar");
-  if (bar) for (var b of bar.children) b.classList.toggle("on", b.dataset.theme === t.id);
+  // 回頭同步選單:設 select 的值,自繪按鈕與勾選由 enhanceSelect 的
+  // MutationObserver/refreshPicker 跟上(開頁最早期呼叫時選單還沒建好,略過)。
+  var sel = document.getElementById("themesel");
+  if (sel && sel.value !== t.id) {
+    sel.value = t.id;
+    if (sel.refreshPicker) sel.refreshPicker();
+  }
+
+  if (save !== false) {
+    // localStorage:下次開頁在第一個位元組畫出來之前就讀得到,用來擋換色閃爍。
+    try { localStorage.setItem("theme", t.id); } catch (e) {}
+    // 伺服器:跟著本機偏好檔走(prefs_<機器>.json),換瀏覽器或清快取後仍在。
+    // 失敗不擋事 —— 外觀已經套用了,localStorage 也還留著。
+    try {
+      fetch("/api/prefs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme: t.id }),
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   // favicon 用 canvas 畫,吃的是解析後的色值而不是 var() → 換外觀後要重畫一次。
   // 換 CSS 檔時瀏覽器是非同步載入的,得等它套用後再畫,否則會拿到舊配色;
   // 用兩層 rAF 等「下一次真正繪製之後」,比固定 setTimeout 可靠。
@@ -36,7 +64,9 @@ function applyTheme(id) {
     });
   }
 }
-// 先讀偏好再畫頁面。沒存過就用深色(THEMES[0])。
+// 開頁時先用 localStorage 的值把 CSS 掛上(同步,趕在第一次繪製之前,不閃色)。
+// 伺服器的偏好稍後由 loadConfig 帶回來覆寫 —— 伺服器為準,localStorage 只是預填。
+// 兩者一致時 applyTheme 會發現 href 沒變,不會重新載入 CSS。
 (function () {
   var saved = null;
   try { saved = localStorage.getItem("theme"); } catch (e) {}
@@ -67,24 +97,30 @@ function applyTheme(id) {
   <!-- 頁籤按鈕列由 main.js 依 util.js 的 TABS 註冊表生成;外觀選單靠右擺同一排。 -->
   <div class="tabbar">
     <div class="tabs" id="tabs"></div>
-    <div class="themebar" id="themebar" role="group" aria-label="外觀"></div>
+    <!-- 外觀選單。和控制台的驗證碼下拉共用同一套自繪選單(見 util.js 的
+         enhanceSelect 與 style.css 的 .picker)—— 原生 select 的展開面板由系統畫,
+         樣式對不起來。這裡放原生 select 當骨架,選項由下方 script 填。 -->
+    <div class="picker themepick" id="themepick">
+      <select id="themesel" data-picker data-picker-head="外觀" aria-label="外觀"
+              onchange="applyTheme(this.value)"></select>
+    </div>
   </div>
   <script>
-  // 外觀選單:按鈕依上面的 THEMES 產生,加一種外觀只要往那個陣列加一筆。
+  // 選項依上面的 THEMES 產生 —— 加一種外觀只要往那個陣列加一筆,這裡不用改。
   (function () {
-    var bar = document.getElementById("themebar");
+    var sel = document.getElementById("themesel");
     var cur = null;
     try { cur = localStorage.getItem("theme"); } catch (e) {}
     if (!THEMES.some(function (t) { return t.id === cur; })) cur = THEMES[0].id;
     THEMES.forEach(function (t) {
-      var b = document.createElement("button");
-      b.type = "button";
-      b.className = "themebtn" + (t.id === cur ? " on" : "");
-      b.dataset.theme = t.id;
-      b.textContent = t.label;
-      b.onclick = function () { applyTheme(t.id); };
-      bar.appendChild(b);
+      var o = document.createElement("option");
+      o.value = t.id;
+      o.textContent = t.label;
+      sel.appendChild(o);
     });
+    sel.value = cur;
+    // 這個 select 之後由 util.js 的 enhanceAllSelects 換成自繪選單
+    // (它在 body 末尾載入,晚於這裡;#themepick 已是 .picker,會被直接沿用)。
   })();
   </script>
 

@@ -12,9 +12,9 @@
     <div class="apibox" id="keysel-row" style="margin-bottom:var(--sp-md);">
       <div class="apibox-row">
         <span class="hint">使用驗證碼</span>
-        <!-- 外觀由 style.css 的 select 規則統一(原本這裡寫死 background:#fff,
-             深色模式下會變成一塊白框)。 -->
-        <select id="keysel" onchange="switchKey()"></select>
+        <!-- data-picker:由 util.js 的 enhanceSelect 換成自繪下拉(原生的展開面板
+             由系統畫,和頁面樣式對不起來)。select 本身留著,value/onchange 照舊。 -->
+        <select id="keysel" data-picker aria-label="使用驗證碼" onchange="switchKey()"></select>
         <!-- 目前選用的驗證碼狀態(和「使用驗證碼」同一排):字樣 + 等寬遮罩碼 -->
         <span class="apicfg" id="ctl-note">讀取中…</span>
         <span class="code" id="ctl-code">—</span>

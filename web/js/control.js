@@ -67,9 +67,17 @@ async function loadConfig() {
     if (typeof applyExcludeLanFromServer === "function") {
       applyExcludeLanFromServer(cfg.exclude_lan);
     }
+    // 外觀:同樣以伺服器本機偏好為準(換瀏覽器、清快取後仍在)。
+    // 開頁時 index.html 已用 localStorage 先掛好 CSS 擋閃色,這裡是伺服器值勝出。
+    // 帶 save=false:這是讀回來的既有設定,不必再 POST 回去。
+    // 伺服器沒存過(回 null)時把目前這個種下去,順手把舊的 localStorage 設定遷移上去。
+    if (typeof applyTheme === "function") {
+      if (cfg.theme) applyTheme(cfg.theme, false);
+      else applyTheme(currentTheme());   // 沒存過:把目前這個種上去
+    }
     if (cfg.userCode_set) {
       apiNoteText = "API 驗證碼:已設定 ✓";
-      apiNoteColor = "var(--ok)";
+      apiNoteColor = "var(--ok-ink)";
     } else {
       apiNoteText = "API 驗證碼:未設定 — 請編輯 gpss/api_config.json 填入 userCode";
       apiNoteColor = "var(--warn)";
@@ -221,7 +229,7 @@ async function savePatents() {
     if (d.ok) {
       const pt = document.getElementById("pattoast");
       pt.textContent = "✓ " + d.message;
-      pt.style.color = "var(--ok)";
+      pt.style.color = "var(--ok-ink)";
       closePatentsEditor();
     } else {
       t.textContent = "失敗:" + d.message;
@@ -279,7 +287,7 @@ async function tickJob() {
     const toast = document.getElementById("toast");
     if (prevStatus === "running" && j.status === "done") {
       toast.textContent = `✓ 執行完成（共送出約 ${j.est_done} 筆）`;
-      toast.style.color = "var(--ok)";
+      toast.style.color = "var(--ok-ink)";
     } else if (prevStatus === "running" && j.status === "stopped") {
       toast.textContent = "■ 已停止（停在批次邊界,結果已保存）";
       toast.style.color = "var(--warn)";
@@ -346,7 +354,7 @@ async function runJob() {
       body: JSON.stringify(payload),
     });
     const d = await r.json();
-    toast.style.color = d.ok ? "var(--btn)" : "var(--warn)";
+    toast.style.color = d.ok ? "var(--btn-ink)" : "var(--warn)";
     toast.textContent = d.message;
     tickJob();
   } catch (e) { toast.textContent = "送出失敗: " + e; }

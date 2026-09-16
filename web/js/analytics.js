@@ -129,10 +129,12 @@ function renderApiUsage(api, quota, caseHourly) {
     const pct = c.pct || 0;
     // 顏色一律走 token(--danger/--warn/--ok),深淺配色才會跟著切換。
     // 舊寫法 var(--stop,#e03131) 的 --stop 從來沒定義過,實際永遠吃後面的備援值。
-    const color = pct >= 100 ? "var(--danger)" : pct >= 80 ? "var(--warn)" : "var(--ok)";
+    // color 同時用於數字文字與進度條填充 —— 文字取 ink(對比足),條用主色
+    const color = pct >= 100 ? "var(--danger-ink)" : pct >= 80 ? "var(--warn-ink)" : "var(--ok-ink)";
+    const barColor = pct >= 100 ? "var(--danger)" : pct >= 80 ? "var(--warn)" : "var(--ok)";
     const cMax = c.caseMax || 0;
     const cPct = caseCap ? Math.round(cMax / caseCap * 100) : 0;
-    const cColor = cPct >= 100 ? "var(--danger)" : cPct >= 80 ? "var(--warn)" : "var(--ok)";
+    const cColor = cPct >= 100 ? "var(--danger-ink)" : cPct >= 80 ? "var(--warn-ink)" : "var(--ok-ink)";
     const row = document.createElement("div");
     row.style.cssText = "margin:10px 0;padding-bottom:9px;border-bottom:1px solid var(--line);";
     let html =
@@ -145,7 +147,7 @@ function renderApiUsage(api, quota, caseHourly) {
       + `</div>`;
     if (c.hasQuota) {
       html += `<div style="height:8px;border-radius:var(--r-pill);background:var(--track);overflow:hidden;">`
-        + `<div style="height:100%;width:${Math.min(100, pct)}%;background:${color};"></div></div>`;
+        + `<div style="height:100%;width:${Math.min(100, pct)}%;background:${barColor};"></div></div>`;
     }
     if (c.caseNear && c.caseTop && c.caseTop.length) {
       const tops = c.caseTop.map(x => `${x.patent}×${x.count}`).join("、");

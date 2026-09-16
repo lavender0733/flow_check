@@ -36,7 +36,8 @@
       <div class="goal-chart-head">
         <h2>達標情況分析 <span class="spinner spinner-sm" id="ga-spin" style="display:none;"></span></h2>
         <label class="goal-month-label">月份
-          <select id="ga-month" onchange="changeGoalMonth(this.value)"></select>
+          <select id="ga-month" data-picker aria-label="月份"
+                  onchange="changeGoalMonth(this.value)"></select>
         </label>
       </div>
       <div class="goal-mode-tabs" role="tablist" aria-label="圖表方式">

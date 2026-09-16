@@ -41,6 +41,7 @@ function buildTabs() {
 
 // ----- 啟動 -----
 buildTabs();
+enhanceAllSelects();   // 原生下拉換成自繪版(見 util.js);各頁 js 稍後填的 option 會自動同步
 for (const t of tabs) if (t.onInit) t.onInit();   // 各頁自己的初始化(不論是否顯示)
 // 開第一頁。走 showTab 而不是直接設 class,第一頁才跟其他頁一樣拿得到
 // onFirstShow / onShow —— 日後若有人用小一點的 order 插隊到最前面,

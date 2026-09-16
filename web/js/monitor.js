@@ -126,11 +126,11 @@ function toggleNotify() {
     applyNotify(true);
     try { localStorage.setItem("usageNotify", "1"); } catch (e) {}
     saveNotifyPrefs();
-    setNotifyHint(notifyHintText(), "var(--ok)");
+    setNotifyHint(notifyHintText(), "var(--ok-ink)");
     // 桌面通知能用就順便要權限(被封鎖/拒絕也沒關係,頁內提醒照常運作)
     if (("Notification" in window) && Notification.permission === "default") {
       Notification.requestPermission().then(() => {
-        if (notifyEnabled) setNotifyHint(notifyHintText(), "var(--ok)");
+        if (notifyEnabled) setNotifyHint(notifyHintText(), "var(--ok-ink)");
       });
     }
   } else {
@@ -146,7 +146,7 @@ function toggleNotify() {
 
 // 還原 notifyhint 的小字到「平時該顯示的內容」(開:視桌面通知狀態補一句;關:清空)。
 function baselineNotifyHint() {
-  setNotifyHint(notifyEnabled ? notifyHintText() : "", notifyEnabled ? "var(--ok)" : undefined);
+  setNotifyHint(notifyEnabled ? notifyHintText() : "", notifyEnabled ? "var(--ok-ink)" : undefined);
 }
 
 function saveNotifyThreshold() {
@@ -159,7 +159,7 @@ function saveNotifyThreshold() {
   try { localStorage.setItem("usageNotifyThreshold", String(v)); } catch (e) {}
   saveNotifyPrefs();
   // 文字說明:確認剛變更的門檻 %(短暫顯示後回到平時的小字)。
-  setNotifyHint(`✓ 已更新:用量達 ${v}% 時提醒`, "var(--ok)");
+  setNotifyHint(`✓ 已更新:用量達 ${v}% 時提醒`, "var(--ok-ink)");
   clearTimeout(notifyHintTimer);
   notifyHintTimer = setTimeout(baselineNotifyHint, 4000);
 }
@@ -176,7 +176,7 @@ function applyNotifyFromServer(enabled, threshold) {
     return;
   }
   applyNotify(!!enabled);
-  setNotifyHint(enabled ? notifyHintText() : "", enabled ? "var(--ok)" : undefined);
+  setNotifyHint(enabled ? notifyHintText() : "", enabled ? "var(--ok-ink)" : undefined);
 }
 
 function restoreNotify() {
@@ -192,7 +192,7 @@ function restoreNotify() {
   // 頁內提醒不需通知權限,故只看先前是否開啟即可還原
   if (on === "1") {
     applyNotify(true);
-    setNotifyHint(notifyHintText(), "var(--ok)");
+    setNotifyHint(notifyHintText(), "var(--ok-ink)");
   } else {
     applyNotify(false);
   }
@@ -279,7 +279,7 @@ function saveSurgeThreshold() {
   surgeThreshold = v;
   try { localStorage.setItem("surgeThreshold", String(v)); } catch (e) {}
   saveSurgePrefs();   // 後端會即時套到執行中的 Monitor,不必重啟
-  setSurgeHint(`✓ 已更新:單分鐘達 ${v}MB 起偵測`, "var(--ok)");
+  setSurgeHint(`✓ 已更新:單分鐘達 ${v}MB 起偵測`, "var(--ok-ink)");
   clearTimeout(surgeHintTimer);
   surgeHintTimer = setTimeout(() => setSurgeHint(""), 4000);
 }
@@ -656,11 +656,11 @@ function renderPeak() {
   const mbps = bpsToMbps(lastPeakBps);
   pdEl.textContent = mbps >= 0.01 ? mbps.toFixed(2) + " Mbps" : "—";
   const ok = mbps >= speedFloor;
-  pdEl.style.color = ok ? "var(--ok)" : "var(--dim)";
+  pdEl.style.color = ok ? "var(--ok-ink)" : "var(--dim)";
   const vEl = document.getElementById("peakverdict");
   if (ok) {
     vEl.textContent = "✓ 未被限速";
-    vEl.style.color = "var(--ok)";
+    vEl.style.color = "var(--ok-ink)";
   } else {
     // 偏低無法斷定:不佔一整行,改放資訊 icon,滑入看說明
     vEl.innerHTML = '<i class="info" tabindex="0" data-tip="速率偏低,無法斷定 — 可能只是閒置(沒在下載、不耗流量),也可能被限速;按「測速」可確認。"></i>';
@@ -689,9 +689,9 @@ async function runSpeedTest() {
         verdict.textContent = `⚠ 疑似被限速(< ${d.floor_mbps}M)`;
         verdict.style.color = "var(--danger)";
       } else {
-        res.style.color = "var(--ok)";
+        res.style.color = "var(--ok-ink)";
         verdict.textContent = "✓ 未被限速";
-        verdict.style.color = "var(--ok)";
+        verdict.style.color = "var(--ok-ink)";
       }
       toast.textContent = `· ${fmtBytes(d.bytes)} / ${d.seconds}s`;
     } else {
@@ -751,7 +751,7 @@ async function tickStatus() {
     if (lanEl) {
       const ex = s.lan_excluded_bytes || 0;
       lanEl.textContent = ex > 0 ? fmtBytes(ex) : "—";
-      lanEl.style.color = ex > 0 ? "var(--ok)" : "var(--dim)";
+      lanEl.style.color = ex > 0 ? "var(--ok-ink)" : "var(--dim)";
     }
 
     const color = s.percent >= 90 ? "var(--danger)"

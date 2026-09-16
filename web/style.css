@@ -6,18 +6,20 @@
      2) 骨架區      每個元件的版面與尺寸,值一律走 token,不寫死顏色。
      3) 招牌招式區  光暈與毛玻璃等視覺效果。整段刪掉仍是一頁完整可用的介面。
    ------------------------------------------------------------------------
-   原版設計保留在 web/style-classic.css。要換回去:把 index.html 的
-     <link rel="stylesheet" href="style.css">
-   改成 style-classic.css,重整即可(伺服器對 web/ 下任何 .css 都直接送,
-   不必重啟;見 core/traffic_monitor.py 的靜態檔分支)。
+   這支檔同時供深色與淺色用,靠 <html data-theme> 切換 token;原版設計是另一支
+   web/style-classic.css。三者由頁籤列右邊的外觀選單切換(見 index.html 的
+   THEMES / applyTheme),選擇同時存 localStorage 與伺服器本機偏好,預設深色。
    ------------------------------------------------------------------------
    互動規則:任何 hover/focus 都不移動元素,只改變光(box-shadow)。
    版面因此是靜的,滑鼠掃過整頁不會有東西在跳。
    ------------------------------------------------------------------------
-   警示色沿用原版語意:警告琥珀 / 危險紅 / 正常綠 / 資訊藍 / 執行中橘 / 達標金。
-   色相不隨風格改變 —— 使用者已經學會「橘=接近上限、紅=超標、綠=正常」。
+   顏色有兩種角色,別混用:
+     主色       --btn 色塊填充 / --btn-ink 文字
+     警示色     --danger|--ok 色塊 / --danger-ink|--ok-ink 文字
+                --warn 琥珀(黃) / --warn-ink 文字
+   文字版在淺色模式另外壓深 —— 底色與文字對比的需求方向相反,一個值兩用不夠。
+   色相語意固定:紅=超標、黃=接近上限、綠=正常、藍=資訊、金=達標。
    ------------------------------------------------------------------------
-   深色模式:預設淺色。要試深色,在 index.html 的 <html> 加 data-theme="dark"。
    字體一律系統內建 —— 這支程式在管流量額度,開頁去外網抓字型會扣自己的量。
    ========================================================================== */
 
@@ -28,25 +30,35 @@
   --body-pad: 28px 24px 40px;
   --btn: #853bf6;
   --btn-bd: 1px solid transparent;
-  --btn-fg: #ffffff;
   --btn-hover: #7430e8;
   --btn-line: rgba(139,69,245,.48);
   --btn-pad: 10px 20px;
   --btn-pad-sm: 6px 15px;
   --btn-r: 999px;
   --btn-weak: rgba(133,59,246,.14);
+  /* ── 主色的「文字版」──
+     --btn 是按鈕底色:要夠深才襯得起上面的白字。但同一個值拿來當文字色時,
+     深色模式下對比只有 3.39(遠不足 4.5)—— 底色與文字色的需求方向相反,
+     一個值兩用是解不開的,所以分成兩個 token:
+       --btn      色塊填充(按鈕底、圓環、進度條、開關、勾選框)
+       --btn-ink  文字(統計數字、強調字、hover 的圖示)
+     兩者同色相,只有明度不同,看起來仍是同一個紫。 */
+  --btn-ink: #7326e0;
   --card: rgba(255,255,255,.45);
   --card-bd: 1px solid rgba(255,255,255,.9);
   --card-pad: 24px 26px;
   --cell-pad: 8px 11px;
-  /* ── 警示色:整組沿用原專案的語意配色,不用範本的洋紅/紫 ──
-     每色三件套 bg(底) / line(框) / ink(字),和原本 .banner-* 的三個值一一對應。
-     色相本身(warn 琥珀・danger 紅・ok 綠・info 藍)不因換風格而改變 ——
-     使用者已經學會「橘=接近上限、紅=超標、綠=正常」,換色等於把這層記憶洗掉。 */
-  --danger: #e5484d;
-  --danger-bg: #fdecec;
-  --danger-line: #e5484d;
-  --danger-ink: #a11526;
+  /* ── 警示色 ──
+     主色當色塊、ink 當文字;需要整塊底的(橫幅)另有 bg/line。
+     danger 與 ok 用 Raycast 範本的色碼;warn 維持原專案的琥珀(黃)不動。
+     ink 只在淺色模式另外壓深 —— 範本的值拿來當色塊夠用,但當文字對比不足
+     (綠 3.63、紅 4.51),而文字與色塊的需求方向相反,同 --btn/--btn-ink 的道理。
+     深色模式的 ink 直接等於主色(深底上本來就夠亮)。
+     色相語意不變:紅=超標、綠=正常、黃=接近上限、藍=資訊。 */
+  --danger: #d4176f;
+  --danger-bg: rgba(212,23,111,.10);
+  --danger-line: rgba(212,23,111,.28);
+  --danger-ink: #ad1159;
   --dim: #5d5378;
   --donut-size: 204px;
   --dur: 420ms;
@@ -76,7 +88,6 @@
   --hd-pad: 10px 13px;
   --hole-size: 166px;
   --hole-bg: #f6f1fe;          /* 圓環中央的洞:實色,不可半透明(環色會透進來) */
-  --info: #2b6cb0;
   --info-bg: #e7f0ff;
   --info-line: #2b6cb0;
   --info-ink: #1a3e6e;
@@ -86,7 +97,6 @@
   --input-bg: rgba(255,255,255,.55);
   --input-pad: 8px 11px;
   --inset-bd: 1px solid var(--line);
-  --inset-pad: 16px 18px;
   --knob: 21px;
   --knob-bg: #ffffff;
   --knob-on: 21px;
@@ -99,10 +109,12 @@
   --ls-label: .06em;
   --ls-num: -.01em;
   --mask: rgba(38,26,62,.45);
-  --muted: #7b7196;
-  --ok: #2f9e44;
-  --ok-bg: #e9f7ec;
-  --ok-line: #2f9e44;
+  /* 範本原值是 #7b7196,但那在卡片上的對比只有 4.03(未達 4.5)。
+     這個色用在區塊標題、表頭與 .hint 小字,量不小 —— 同色相壓暗到 6b6180,
+     對比拉到 5.14(頁底上 4.65),看得清楚但仍明顯次於主文字。 */
+  --muted: #6b6180;
+  --ok: #3f8f21;
+  --ok-ink: #317219;
   --pop-bd: 1px solid rgba(255,255,255,.12);
   --pop-bg: rgba(38,26,62,.97);
   --pop-fg: #ffffff;
@@ -127,7 +139,7 @@
   --tab-on-fg: #5b21b6;
   --tab-pad: 6px 14px;
   --th-bg: rgba(255,255,255,.34);
-  --th-fg: #7b7196;
+  --th-fg: #6b6180;
   --track: rgba(88,50,160,.12);
   --txt: #1c1230;
   --warn: #d98e04;
@@ -161,21 +173,20 @@
 /* ─── Token:深色(只覆寫「值」,骨架一行都不用改)───────────────── */
 html[data-theme="dark"] {
   --bg: #0c0714;
-  --btn-fg: #16082e;
   --btn-hover: #9d63ff;
   --btn-weak: rgba(139,69,245,.18);
+  --btn-ink: #b18cff;          /* 深底上的文字紫(對比 6.92) */
   --card: rgba(255,255,255,.055);
   --card-bd: 1px solid rgba(255,255,255,.10);
   /* 警示色深色版:色相和淺色完全相同(紅/琥珀/綠/藍),只把亮度拉高到深底看得見。
      底改成半透明同色薄膜,框保持實色 —— 深底上實色底塊會太搶。 */
-  --danger: #ff6b6b;
-  --danger-bg: rgba(229,72,77,.18);
-  --danger-line: rgba(229,72,77,.55);
-  --danger-ink: #ff8f8f;
+  --danger: #ff5fae;
+  --danger-bg: rgba(255,95,174,.14);
+  --danger-line: rgba(255,95,174,.36);
+  --danger-ink: #ff5fae;
   --dim: #b8b0cc;
   --gold: #ffcc4d;
   --gold-ink: #ffcc4d;
-  --info: #74b3ef;
   --info-bg: rgba(43,108,176,.22);
   --info-line: rgba(91,155,213,.5);
   --info-ink: #9ecbf5;
@@ -189,10 +200,12 @@ html[data-theme="dark"] {
   --log-bg: rgba(255,255,255,.04);
   --log-fg: #cfc7e0;
   --mask: rgba(8,4,16,.6);
-  --muted: #8e87a3;
-  --ok: #51cf66;
-  --ok-bg: rgba(47,158,68,.18);
-  --ok-line: rgba(47,158,68,.5);
+  /* 範本原值 #8e87a3 在卡片上是 5.27 —— 過得了門檻,但這個色幾乎都用在
+     12px 的標題、表頭與 hint,深底上細字本來就比淺底難讀,實際看仍偏灰。
+     同色相提亮到 a49db8(6.95),小字看得清楚,又還是明顯次於白色主文。 */
+  --muted: #a49db8;
+  --ok: #9fe870;
+  --ok-ink: #9fe870;
   --pop-bd: 1px solid rgba(196,170,255,.16);
   --pop-bg: rgba(34,26,50,.96);
   --row-hover: rgba(255,255,255,.055);
@@ -205,7 +218,7 @@ html[data-theme="dark"] {
   --tab-on-bg: rgba(255,255,255,.12);
   --tab-on-fg: #ffffff;
   --th-bg: rgba(255,255,255,.05);
-  --th-fg: #8e87a3;
+  --th-fg: #a49db8;
   --track: rgba(255,255,255,.10);
   --txt: #ffffff;
   --warn: #fcc419;
@@ -328,7 +341,7 @@ tbody tr:hover > td { background: var(--row-hover); }
 .mtable td.num { text-align: right; font-family: var(--ff-mono); font-variant-numeric: tabular-nums;
                  font-weight: var(--fw-num); white-space: nowrap; }
 .mtable tr:first-child td { font-weight: var(--fw-label); }
-.mtable tr:first-child td.num { color: var(--btn); font-size: var(--fs-num); }
+.mtable tr:first-child td.num { color: var(--btn-ink); font-size: var(--fs-num); }
 .mtable tr:last-child td { border-bottom: none; }
 .mtable tr:hover > td { background: none; }
 
@@ -338,9 +351,12 @@ input[type=number], input[type=text], select, textarea {
   border-radius: var(--r-sm); padding: var(--input-pad); font: inherit; font-size: var(--fs-sm);
   transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
 input[type=number] { width: 78px; font-family: var(--ff-mono); font-variant-numeric: tabular-nums; }
-/* 原生下拉展開後的選項面板由作業系統畫,吃不到上面的 background。
-   color-scheme 是唯一能讓它跟著深色的方法(同時也修正捲軸與日期選擇器的配色)。 */
+/* 原生下拉「展開後」的選項面板由作業系統畫,收合時的外框才是 CSS 管得到的。
+   option 預設背景透明、字色繼承 select(深色下是白字)→ 面板被系統畫成白底時
+   會變成白字白底、整片看不到。所以 option 必須自己指定實色的底與字,
+   不能只靠 color-scheme(它只換捲軸與外框,管不到面板底色)。 */
 select { color-scheme: light; }
+select option { background: var(--hole-bg); color: var(--txt); }
 html[data-theme="dark"] select,
 html[data-theme="dark"] input { color-scheme: dark; }
 /* 深色時整頁的捲軸也跟著換,不然右側會留一條亮白 */
@@ -377,7 +393,7 @@ hr.sep { border: none; border-top: var(--row-bd); margin: var(--sp-lg) 0; }
 .caret { display: inline-block; color: var(--muted); font-size: 19px; line-height: 1; cursor: pointer;
          padding: 2px 6px; border-radius: var(--r-sm);
          transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
-.caret:hover { background: var(--btn-weak); color: var(--btn); }
+.caret:hover { background: var(--btn-weak); color: var(--btn-ink); }
 .detailbox.open .caret { transform: rotate(90deg); }
 .detailbody { display: none; padding: 0 var(--sp-md) var(--sp-md); }
 .detailbox.open .detailbody { display: block; }
@@ -401,17 +417,67 @@ hr.sep { border: none; border-top: var(--row-bd); margin: var(--sp-lg) 0; }
 .tabbar { display: flex; align-items: center; justify-content: space-between;
           gap: var(--sp-sm) var(--sp-md); flex-wrap: wrap; }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-/* 外觀選單:一顆藥丸裡三個分段(深色 / 淺色 / 原版),選中的填主色 */
-.themebar { display: flex; gap: 2px; margin-left: auto; padding: 3px;
-            background: var(--surface); border: var(--inset-bd); border-radius: var(--r-pill); }
-.themebtn { font-family: var(--ff-label); border: 0; background: transparent; color: var(--dim);
-            cursor: pointer; font-size: var(--fs-hint); font-weight: var(--fw-label);
-            padding: 6px 13px; border-radius: var(--r-pill);
-            transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
-                        box-shadow var(--dur-fast) var(--ease); }
-.themebtn:hover { color: var(--txt); background: var(--tab-hover); }
-.themebtn.on, .themebtn.on:hover { color: #fff; background: var(--btn); }
-.themebtn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* ─── 自繪下拉選單(全站共用)─────────────────────────────────────
+   原生 <select> 展開後的面板由作業系統畫 —— 方角、系統配色、自己的字體,
+   和頁面收合時的樣子永遠對不起來,CSS 也管不到。所以按鈕與面板都自己畫:
+   同一組圓角、同一個底色系統、同一個字級,展開收合看起來是同一個元件。
+   結構由 util.js 的 enhanceSelect 產生(原生 select 留著但藏起來,
+   value/onchange 照舊)。外觀選單 .themepick 另外只加它自己的定位。 */
+.picker { position: relative; display: inline-block; }
+.picker > select { position: absolute; opacity: 0; pointer-events: none;
+                   width: 100%; height: 100%; left: 0; top: 0; }
+.picker-btn {
+  font-family: var(--ff-label); font-size: var(--fs-hint); font-weight: var(--fw-label);
+  border: var(--inset-bd); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--txt); cursor: pointer;
+  text-align: center; padding: 7px 30px 7px 16px; min-width: 104px; width: 100%;
+  /* 下拉箭頭:內嵌 SVG(不外連)。SVG 的 stroke 吃不到 var(),深淺各給一次。 */
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%236b6180' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 10px 7px;
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease); }
+html[data-theme="dark"] .picker-btn {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23a49db8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.picker-btn:hover { border-color: var(--btn-line); background-color: var(--tab-hover); }
+.picker-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* 展開時按鈕維持高亮,和面板連成一體 */
+.picker.open .picker-btn { border-color: var(--btn-line); background-color: var(--tab-hover); }
+/* 空的驗證碼池等情況:select disabled 時整顆變灰不可點 */
+.picker.disabled .picker-btn { opacity: .5; cursor: not-allowed; }
+
+/* 面板:和卡片同一套語彙(毛玻璃、同圓角家族、同陰影) */
+.picker-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; display: none;
+  min-width: 100%; max-height: 320px; overflow-y: auto;
+  padding: 5px; border: var(--card-bd); border-radius: var(--r-md);
+  background: var(--pop-bg); box-shadow: var(--sh-pop);
+  backdrop-filter: blur(22px) saturate(190%); }
+.picker.open .picker-menu { display: block; }
+/* 展開的面板要蓋過後面的兄弟區塊。招牌招式給 .apibox/.patbox 等都加了
+   backdrop-filter,那會各自建立堆疊環境 —— DOM 在後面的(.patbox)就會蓋住
+   前面區塊裡的面板,單靠 .picker-menu 的 z-index 壓不過去。所以把「裝著展開
+   選單的那個容器」整個抬起來。 */
+.apibox:has(.picker.open),
+.goal-chart-head:has(.picker.open),
+.tabbar:has(.picker.open) { position: relative; z-index: 41; }
+.picker-hd { padding: 5px 12px 6px; font-family: var(--ff-label); font-size: var(--fs-hint);
+             font-weight: var(--fw-label); color: var(--muted);
+             letter-spacing: var(--ls-label); white-space: nowrap; }
+.picker-opt {
+  display: block; width: 100%; text-align: left; white-space: nowrap;
+  font-family: var(--ff-label); font-size: var(--fs-hint); font-weight: var(--fw-label);
+  border: 0; border-radius: var(--r-sm); background: transparent; color: var(--pop-fg);
+  padding: 7px 28px 7px 12px; cursor: pointer; position: relative;
+  transition: background var(--dur-fast) var(--ease); }
+.picker-opt:hover { background: rgba(255,255,255,.12); }
+.picker-opt.on { color: #fff; background: var(--btn); }
+/* 目前選用的那一項打勾(用 ::after 畫,不另外插 DOM) */
+.picker-opt.on::after { content: "✓"; position: absolute; right: 10px; font-weight: 700; }
+.picker-opt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* 外觀選單:HTML 上同時掛 .picker 與 .themepick,樣式全部沿用上面那套,
+   這裡只補「推到頁籤列最右」。 */
+.themepick { margin-left: auto; }
 .tab { font-family: var(--ff-label); padding: 8px 18px; border: 1px solid transparent;
        background: var(--surface); color: var(--dim); border-radius: var(--r-pill); cursor: pointer;
        font-size: var(--fs-sm); font-weight: var(--fw-label);
@@ -428,7 +494,7 @@ tr.surge-row > td { background: var(--warn-bg); }
 .surge-expand { width: 23px; height: 23px; border: 0; border-radius: var(--r-sm); background: transparent;
                 color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1;
                 transition: transform var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
-.surge-expand:hover { background: var(--btn-weak); color: var(--btn); }
+.surge-expand:hover { background: var(--btn-weak); color: var(--btn-ink); }
 .surge-group-row.open .surge-expand { transform: rotate(90deg); }
 .surge-group-row > td { background: var(--card); }
 .surge-group-row.open > td { background: var(--warn-bg); }
@@ -510,7 +576,7 @@ tr.surge-row > td { background: var(--warn-bg); }
 .apicfg { font-size: var(--fs-sm); }
 .patbox { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .patbox .cnt { font-size: var(--fs-sm); }
-.patbox .cnt b { font-size: var(--fs-num); color: var(--btn); font-family: var(--ff-mono); }
+.patbox .cnt b { font-size: var(--fs-num); color: var(--btn-ink); font-family: var(--ff-mono); }
 .runblock { display: grid; gap: var(--sp-sm); }
 .runbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .runbar .field { display: flex; }
@@ -528,7 +594,7 @@ tr.surge-row > td { background: var(--warn-bg); }
 .dot.done { background: var(--ok); }
 .dot.stop { background: var(--warn); }
 .dot.idle { background: var(--muted); }
-.st-run { color: var(--accent); } .st-done { color: var(--ok); }
+.st-run { color: var(--accent); } .st-done { color: var(--ok-ink); }
 .st-stop { color: var(--warn); } .st-idle { color: var(--muted); }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -568,7 +634,8 @@ pre.log { background: var(--log-bg); border: var(--inset-bd); border-radius: var
                    gap: var(--sp-sm); flex-wrap: wrap; }
 .goal-month-label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted);
                     font-size: var(--fs-sm); }
-.goal-month-label select { padding: 5px 9px; }
+/* 月份選單比外觀選單窄一點,且不需要固定最小寬度 */
+.goal-month-label .picker-btn { padding: 5px 26px 5px 11px; min-width: 0; }
 .goal-mode-tabs { display: flex; gap: 4px; margin-top: var(--sp-md); }
 .goal-mode { font-family: var(--ff-label); padding: var(--tab-pad); border: 1px solid transparent;
              border-radius: var(--r-sm); background: transparent; color: var(--dim); cursor: pointer;
@@ -683,9 +750,8 @@ body { background: var(--bg-soft); background-attachment: fixed; }
 /* 主按鈕:hover 時亮起而不位移 */
 .btn-go { box-shadow: 0 0 0 rgba(0,0,0,0); }
 .btn-go:hover:not(:disabled) { box-shadow: var(--glow-btn); }
-/* 選中的頁籤與外觀持續發光 */
+/* 選中的頁籤持續發光 */
 .tab.on, .tab.on:hover { box-shadow: var(--glow-btn); }
-.themebtn.on, .themebtn.on:hover { box-shadow: var(--glow-btn); }
 
 /* 鍵盤焦點一律蓋過上面那些裝飾光暈 —— 上面的光是「狀態」,這圈是「你現在在這」,
    兩者撞在一起時必須看得出焦點在哪,所以放最後並加一層 :is() 提高優先序。 */
@@ -699,10 +765,12 @@ body { background: var(--bg-soft); background-attachment: fixed; }
 /* 檢索進度左欄只有 3 列表格,比右邊圓環矮;置中讓左右視覺高度一致 */
 #panel-calc .calc-hero .col { justify-content: center; }
 /* 爬取統計的「檢索筆數」是該頁主角數字,用主色標出來 */
-#an-q { color: var(--btn); }
+#an-q { color: var(--btn-ink); }
 /* 控制台的欄位標籤比別處短,輸入框也略緊一些 */
 #panel-control .field label { min-width: 80px; }
-#panel-control input, #panel-control select { padding: 8px 12px; }
+#panel-control input { padding: 8px 12px; }
+/* 驗證碼選單:名稱可長可短,靠內容決定寬度(不吃 .picker-btn 的最小寬) */
+#panel-control .picker-btn { padding: 8px 30px 8px 14px; min-width: 0; text-align: left; }
 #panel-control .actions .btn { padding: 9px 16px; }
 /* 筆數 + 開始停止 + 提示為一排,狀態列在下,彼此距離縮小 */
 .runblock .actions { margin-top: 0; justify-content: flex-start; }

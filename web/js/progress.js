@@ -66,7 +66,7 @@ function renderToday() {
     id("t-target").textContent = "—";
     head.innerHTML = onTrack
       ? `<span style="color:var(--gold-ink);">✓ 今日無需額外檢索</span>`
-      : `今日已完成 <span style="color:var(--btn);">${done.toLocaleString()}</span> 筆`;
+      : `今日已完成 <span style="color:var(--btn-ink);">${done.toLocaleString()}</span> 筆`;
     bar.style.width = onTrack ? "100%" : "0%";
     bar.style.background = onTrack ? "var(--gold)" : "var(--btn)";
     return;
@@ -81,7 +81,7 @@ function renderToday() {
       + `(已完成 ${done.toLocaleString()} / ${target.toLocaleString()})</span>`;
     bar.style.background = "var(--gold)";
   } else {
-    head.innerHTML = `今日還需 <span style="color:var(--btn);">${remain.toLocaleString()}</span> `
+    head.innerHTML = `今日還需 <span style="color:var(--btn-ink);">${remain.toLocaleString()}</span> `
       + `<span style="font-size:var(--fs-h2);color:var(--dim);font-weight:500;">筆</span>`;
     bar.style.background = "var(--btn)";
   }
