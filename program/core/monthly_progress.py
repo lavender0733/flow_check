@@ -358,7 +358,7 @@ def api_runlog_since(ym, after_ts):
 
 
 def api_breakdown(today=None):
-    """讀最新 API 匯出檔,依 API驗證碼 加總『本月』檢索次數,**依驗證碼歸戶**:
+    """讀最新 API 匯出檔,依 API驗證碼 加總『本月輸出筆數』,**依驗證碼歸戶**:
     凡是本月有用量的碼都列出 —— 後台匯出檔出現過的、或本工具跑過的、或目前設定在用的
     (聯集),不再因為『某碼現在沒被任何機器選用』就把它的本月用量藏起來(那會讓切換過的
     舊碼看起來像 0)。
@@ -379,7 +379,14 @@ def api_breakdown(today=None):
     f_api = pick_export("api")
     rows = read_table(f_api) if f_api else []
     header = rows[0] if rows else []
-    ci = col_index(header, "檢索次數")
+    # 月上限 60,000 算的是『輸出筆數』,不是『檢索次數』(= API 呼叫次數,量級差十幾倍)。
+    # run_log 的 queries 記的也是處理的案號筆數,兩邊同單位才能相加 —— 取「輸出筆數(單筆)」。
+    # 舊版誤取「檢索次數」,會把 66(呼叫) + 223(筆數) 加成沒有意義的 374。
+    # 退路要指名「單筆」:col_index 是模糊比對,只找「輸出筆數」會先撞到旁邊的
+    # 「輸出筆數(結果)」(量級大十幾倍),那比抓錯欄更慘 —— 所以寧可只認含「單筆」的欄。
+    ci = next((i for i, h in enumerate(header) if "輸出筆數" in h and "單筆" in h), None)
+    if ci is None:
+        ci = col_index(header, "檢索次數")     # 真的找不到才退回舊行為,至少不會整個算不出來
     code_i = col_index(header, "API驗證碼")
     if code_i is None:
         code_i = col_index(header, "驗證碼")
