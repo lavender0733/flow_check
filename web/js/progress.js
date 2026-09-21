@@ -7,9 +7,24 @@
 // ----- 狀態 -----
 let monthlyData = null;       // 最近一次本月進度資料(供今日達標慶祝判斷用 per_workday)
 
+// 匯出檔防呆橫幅:後端 export_health() 認出的狀況(缺檔/兩份存反檔名/認不出種類)。
+// 種類一律依表頭內容判斷,數字不受影響;這條純粹是叫使用者把檔名改回來,免得一錯再錯。
+function renderExportWarn(m) {
+  const box = document.getElementById("exportwarn");
+  if (!box) return;
+  const ws = (m && m.export_warnings) || [];
+  if (!ws.length) { box.style.display = "none"; return; }
+  box.innerHTML = `⚠ 匯出檔要注意:<br>`
+    + ws.map((w) => `・${w}`).join("<br>")
+    + `<br><span style="font-weight:400;">數字已依檔案內容(表頭)正確歸類,不影響統計;`
+    + `但請把 data/exports/ 的檔名改正,以免日後混淆。</span>`;
+  box.style.display = "";
+}
+
 function renderMonthly(m) {
   monthlyData = m;
   const id = (x) => document.getElementById(x);
+  renderExportWarn(m);
   id("m-month").textContent = m.month || "—";
   id("m-target").textContent = (m.monthly_target || 0).toLocaleString();
 

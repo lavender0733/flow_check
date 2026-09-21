@@ -173,9 +173,63 @@ def month_workday_progress(day, holidays, makeups):
 
 
 def latest(pattern):
-    """從 data/exports/ 找最新匯出檔。"""
+    """從 data/exports/ 找最新匯出檔（純檔名比對;一般請改用 pick_export）。"""
     files = glob.glob(str(EXPORTS_DIR / pattern))
     return max(files, key=os.path.getmtime) if files else None
+
+
+def _kind_of(path):
+    """看『表頭內容』判斷這份匯出檔到底是哪一種,不信檔名 —— 後台兩份報表很容易
+    存反檔名(曾實際發生:API.xls 裡裝的是簡易版報表),那會讓 API 月用量整個歸零。
+      ‧ API 報表:有『API驗證碼』欄(每碼一列,可依驗證碼歸戶)
+      ‧ 簡易版報表:有『系統版本』或『年月』欄(依 IP/年月統計,沒有驗證碼)
+    認不出來回 None。"""
+    rows = read_table(path)
+    header = rows[0] if rows else []
+    if col_index(header, "API驗證碼") is not None or col_index(header, "驗證碼") is not None:
+        return "api"
+    if col_index(header, "系統版本") is not None or col_index(header, "年月") is not None:
+        return "simple"
+    return None
+
+
+def pick_export(kind):
+    """挑出 data/exports/ 裡最新的一份『指定種類』匯出檔 —— 以表頭內容認種類,
+    不信檔名。kind 為 'api' 或 'simple'。找不到該種類就回 None(寧可顯示「缺檔」,
+    也不要拿另一種硬湊)。
+
+    為什麼不退回檔名比對:那會在『兩份檔剛好同種』時(例如 API 下載兩次,其中一份
+    被改名成簡易版)把同一份 API 資料當成簡易版再加一次 —— 總量灌水,比缺檔更難發現。"""
+    cands = [p for p in glob.glob(str(EXPORTS_DIR / "*.xls")) if _kind_of(p) == kind]
+    return max(cands, key=os.path.getmtime) if cands else None
+
+
+def export_health():
+    """檢查 data/exports/ 的匯出檔狀態,供 CLI 與網頁顯示防呆提示。回傳
+    {"ok": bool, "warnings": [人話說明, ...], "api": 路徑或None, "simple": 路徑或None}。
+    抓得到的狀況:缺其中一種、檔名與內容不符(兩份存反)、有認不出種類的 .xls。"""
+    f_api, f_simple = pick_export("api"), pick_export("simple")
+    warns = []
+    if not f_api:
+        warns.append("找不到『API』匯出檔(需有「API驗證碼」欄);API 用量會算不出來。")
+    if not f_simple:
+        warns.append("找不到『簡易版』匯出檔(需有「系統版本」欄);本月累積會少一大塊。")
+    # 檔名與內容不符 —— 數字已依內容算對,但仍要講,否則下次還會再存反一次。
+    # 判準:API 檔名該含「API」且不含「簡易版」,簡易版檔名該含「簡易版」;兩邊對稱檢查,
+    # 免得像 aaa.xls 這種兩個關鍵字都沒有的名字,只有簡易版那側被抱怨。
+    if f_api:
+        n = os.path.basename(f_api)
+        if "簡易版" in n or "API" not in n.upper():
+            warns.append(f"檔名與內容不符:{n} 裝的其實是 API 報表(建議命名含「API」)。")
+    if f_simple:
+        n = os.path.basename(f_simple)
+        if "簡易版" not in n:
+            warns.append(f"檔名與內容不符:{n} 裝的其實是簡易版報表(建議命名含「簡易版」)。")
+    for p in glob.glob(str(EXPORTS_DIR / "*.xls")):
+        if _kind_of(p) is None:
+            warns.append(f"認不出種類:{os.path.basename(p)}(表頭既無「API驗證碼」也無「系統版本」)。")
+    return {"ok": not warns, "warnings": warns,
+            "api": f_api, "simple": f_simple}
 
 
 def load_used_codes():
@@ -322,7 +376,7 @@ def api_breakdown(today=None):
     ours.update(used)
     orig_of = dict(ours)               # 遮罩顯示用;export 出現的原碼下面再補(只補我們自己的)
 
-    f_api = latest(API_GLOB)
+    f_api = pick_export("api")
     rows = read_table(f_api) if f_api else []
     header = rows[0] if rows else []
     ci = col_index(header, "檢索次數")
@@ -401,8 +455,8 @@ def compute(today=None):
     holidays, makeups = load_holidays()
     target = load_monthly_target()
 
-    f_simple = latest(SIMPLE_GLOB)
-    f_api = latest(API_GLOB)
+    f_simple = pick_export("simple")
+    f_api = pick_export("api")
 
     simple_total = simple_rows = 0
     simple_file = simple_last = ""
@@ -461,6 +515,8 @@ def compute(today=None):
         "data_date": data_date,
         "data_mtime": data_mtime,
         "files_found": bool(f_simple or f_api),
+        # 匯出檔防呆提示(缺檔/存反檔名/認不出種類);網頁與 CLI 都直接顯示這串人話。
+        "export_warnings": export_health()["warnings"],
     }
 
 
@@ -574,6 +630,13 @@ def main():
     print("=" * 56)
     print(f"  月檢索進度  —  {datetime.date.today().isoformat()}（本月 {r['month'].replace('-', '')}）")
     print("=" * 56)
+
+    # 檔名與內容不符時明講(後台兩份報表很容易存反檔名);程式已改以表頭內容認種類,
+    # 數字不會算錯,但印出的檔名看起來會「對調」,不提醒反而像是程式抓錯檔。
+    for w in r.get("export_warnings") or []:
+        print(f"[提醒] {w}")
+    if r.get("export_warnings"):
+        print("      (種類一律依表頭內容判斷,故上列數字正確;但建議把檔名改回來。)")
 
     if r["simple_file"]:
         print(f"簡易版檔：{r['simple_file']}")

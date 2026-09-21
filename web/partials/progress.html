@@ -1,6 +1,10 @@
 <!-- 檢索進度分頁(本月)。搭配 js/progress.js。 -->
   <div class="panel hidden" id="panel-calc">
 
+    <!-- 匯出檔防呆提示:缺檔 / 兩份存反檔名 / 認不出種類。數字一律依表頭內容算,
+         所以這條只是提醒去改檔名 —— 但不提醒的話,下次還是會再存反一次。 -->
+    <div id="exportwarn" class="banner banner-warn" style="display:none;"></div>
+
     <!-- 本月進度(來自後台手動下載的匯出檔:簡易版 + API) -->
     <div class="card">
       <h2>本月檢索進度 <span class="hint">(<span id="m-month">—</span>;月目標 <span id="m-target">—</span> 筆)</span></h2>
