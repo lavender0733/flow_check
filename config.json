@@ -7,6 +7,7 @@
   "exclude_lan": true,
   "lan_ranges": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"],
   "count_ranges": ["10.65.0.0/16"],
+  "local_ranges": ["127.0.0.0/8", "::1/128"],
   "max_count_per_run": 2000,
   "gpss_dir": "program/gpss",
   "gpss_script": "gpss_api_query.py",

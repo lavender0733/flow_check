@@ -92,6 +92,27 @@ KEYS_PATH = GPSS_DIR / "api_keys.json"                           # 驗證碼池(
 PATENTS_PATH = GPSS_DIR / "patents.txt"
 OUTPUT_DIR = GPSS_DIR / "output"
 
+# 合作式停止:網頁按「立即停止」時,伺服器建立這個旗標檔而不是直接砍掉本程序,
+# 讓這裡在批次邊界自己收尾(寫完 CSV、run_log、印統計)再退出。
+# 沒有這個環境變數(命令列直接跑)時一切照舊。
+STOP_FILE = os.environ.get("GPSS_STOP_FILE", "")
+
+
+def stop_requested() -> bool:
+    return bool(STOP_FILE) and os.path.exists(STOP_FILE)
+
+
+def sleep_unless_stopped(seconds: float) -> bool:
+    """分段睡,期間收到停止就提早回來。回傳 False 表示「該停了」。
+    控速間隔可達數十秒,整段睡死會讓使用者按了停止卻等很久才有反應。"""
+    end = time.time() + seconds
+    while time.time() < end:
+        if stop_requested():
+            return False
+        time.sleep(min(1.0, end - time.time()))
+    return not stop_requested()
+
+
 DEFAULT_CONFIG = {
     "userCode": "",
     "aps": [1, 2, 3, 4],
@@ -764,6 +785,9 @@ def run(count: int, offset: int):
     try:
         done = 0
         for bi, batch in enumerate(batches):
+            if stop_requested():
+                print("--- 收到停止指令,於批次邊界停下(已完成的結果都已保存)---", flush=True)
+                break
             base_pos = bi * batch_size            # 本批第一筆在 run_list 的位置
 
             # ── 第一段:用 PN(公開公告號)查整批(換台/重試由 resolve_batch 處理)──
@@ -878,7 +902,9 @@ def run(count: int, offset: int):
             # 控速:本批不是最後一批才需要間隔。控速永遠生效(避免超額),
             # 不受 GPSS_LIMIT_DETECT 開關影響;detect 只管前面的延遲/失敗警告。
             if done < total:
-                time.sleep(request_delay(cfg, len(batch)))
+                if not sleep_unless_stopped(request_delay(cfg, len(batch))):
+                    print("--- 收到停止指令,於批次邊界停下(結果已保存)---", flush=True)
+                    break
     except KeyboardInterrupt:
         print("\n--- 收到中止訊號,停止(結果已保存)---")
     finally:

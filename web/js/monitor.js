@@ -20,6 +20,7 @@ let speedFloorUserSet = false;// 使用者是否已自訂下限(優先於 config
 let lastPeakBps = 0;          // 最近一次 status 的近 N 分最高下載速率(bytes/s)
 let lastPeakWinMin = 0;       // 被動觀測視窗(分鐘)
 let lastDataSig = null;       // 上次看到的「檢索資料變動簽章」;變了才刷新爬取統計(不再每 5 秒盲刷)
+let lastPatentsSig = null;    // 上次看到的「檢索清單變動簽章」;變了才重讀清單(見下方 tickStatus)
 let surgeEnabled = false;     // 流量暴增預警開關
 let surgeThreshold = 50;      // 單分鐘用量達幾 MB 起偵測
 let surgeHintTimer = 0;       // 門檻變更確認小字的還原計時器
@@ -334,15 +335,12 @@ function renderSurges(s) {
   }
 }
 
-// ===== 用量明細(計費明細 + 流量暴增,合併成同一張時間軸表)=====
-// 後端每次 NIC 結算(預設 60 秒)記一筆:網卡下載總量、其中判為內網(不計費)的部分、
-// 真正算進額度的下載/上傳。同一時刻若有暴增事件,就把 🔺 與兇手程式併進該列的「狀態」。
-// 一律只顯示近 5 分鐘(前端依時間戳截斷,不靠後端 deque 長度)。
-
 // ===== 整合面板(網卡 + 用量明細 + 暴增紀錄):收合/展開 + 頁籤切換 =====
 // 網卡、用量明細與暴增紀錄合併成同一張可收合面板,以子頁籤切換。狀態都記在 localStorage:
 //   monitorPanelOpen — 面板收合/展開(預設展開,網卡是平時要看的)
-//   monitorTab       — 目前停在哪個頁籤(nics / calclog / surges;預設 nics)
+//   monitorTab       — 目前停在哪個頁籤(nics / apps / calclog / surges;預設 nics)
+
+const MONITOR_TABS = ["nics", "apps", "calclog", "surges"];
 
 // 收合/展開(由標頭的 caret 觸發)。
 function applyCalcLogCollapse(open) {
@@ -362,10 +360,10 @@ function restoreCalcLogCollapse() {
   applyCalcLogCollapse(v !== "0");   // 預設展開
 }
 
-// 頁籤切換(網卡 / 用量明細 / 暴增紀錄)。使用者點頁籤時若面板正收合著就順手展開;
+// 頁籤切換(網卡 / 今日程式排行 / 用量明細 / 暴增紀錄)。使用者點頁籤時若面板正收合著就順手展開;
 // 還原狀態(fromUser 省略)則只切頁籤、不動收合狀態,以免覆寫使用者的收合偏好。
 function switchMonitorTab(which, fromUser) {
-  if (which !== "nics" && which !== "calclog" && which !== "surges") which = "nics";
+  if (!MONITOR_TABS.includes(which)) which = "nics";
   const box = document.getElementById("detailbox");
   if (fromUser && box && !box.classList.contains("open")) {
     applyCalcLogCollapse(true);
@@ -373,6 +371,7 @@ function switchMonitorTab(which, fromUser) {
   }
   const map = {
     nics: ["tab-nics", "pane-nics"],
+    apps: ["tab-apps", "pane-apps"],
     calclog: ["tab-calclog", "pane-calclog"],
     surges: ["tab-surges", "pane-surges"],
   };
@@ -384,77 +383,134 @@ function switchMonitorTab(which, fromUser) {
     if (tab) tab.classList.toggle("on", on);
     if (pane) pane.style.display = on ? "block" : "none";
   }
+  const tools = document.getElementById("calclog-tools");
+  if (tools) tools.style.display = which === "calclog" ? "" : "none";
   try { localStorage.setItem("monitorTab", which); } catch (e) {}
+  if (which === "calclog") loadCalcLog(false);   // 切進來才去拉明細;整天的量不隨每 5 秒輪詢送
 }
 function restoreMonitorTab() {
   let v;
   try { v = localStorage.getItem("monitorTab"); } catch (e) {}
-  switchMonitorTab(v === "calclog" || v === "surges" ? v : "nics");
+  switchMonitorTab(MONITOR_TABS.includes(v) ? v : "nics");
 }
 
-// "HH:MM:SS" → 當日秒數(供把暴增事件對到時間最接近的明細列)。
-function hmsToSec(t) {
-  const p = String(t || "").split(":");
-  return p.length === 3 ? (+p[0]) * 3600 + (+p[1]) * 60 + (+p[2]) : NaN;
+// ===== 用量明細(逐分鐘,伺服器端記錄)=====
+// 後端每次 NIC 結算(預設 60 秒)記一筆並寫進本機明細檔:網卡下載總量、其中判為內網(不計費)
+// 的部分、真正算進額度的下載/上傳。暴增事件另看「暴增紀錄」頁籤。
+// 以前明細只放在記憶體、只看近 5 分鐘,網頁沒開著的時段就什麼都查不到;現在整天都在、重開監控
+// 也接得回來,可切換日期回頭查(額度用完的隔天還能查前一天)。整天的量不隨每 5 秒的輪詢送:切到這個頁籤、換日期,
+// 或輪詢看到後端多了新的一筆(log_last 變了)時,才向 /api/traffic/log 拉。
+let calcLogRows = [];          // 目前顯示那天的明細(舊到新)
+let calcLogDate = null;        // 目前顯示的日期;null = 還沒載過
+let calcLogToday = null;       // 後端的「今天」
+let calcLogSeenLast = null;    // 已載入的最後一筆時間(今天);輪詢的 log_last 變了才重拉
+let calcLogLoading = false;
+
+const APP_LABELS = { __unattributed__: "未歸因(UDP/QUIC・標頭)", __offline__: "監控未執行期間" };
+function appLabel(name) { return APP_LABELS[name] || name || "未知程式"; }
+// 程序名稱欄(exe 檔名,可對照工作管理員)。「未歸因」「監控未執行期間」不是程式,沒有檔名。
+function exeCell(exe) {
+  return exe ? escHtml(exe) : "—";
 }
 
-function renderCalcLog(s) {
-  const rows = s.sample_log || [];
-  const surges = s.surges || [];   // 新到舊
-  // 暴增與明細都在同一次結算內蓋時間戳,通常同一秒;容許 ±3 秒邊界誤差就視為同一筆。
-  const findSurge = (rowT) => {
-    const rs = hmsToSec(rowT);
-    if (!Number.isFinite(rs)) return null;
-    let best = null, bestD = 4;
-    for (const ev of surges) {
-      const d = Math.abs(hmsToSec(ev.time) - rs);
-      if (d < bestD) { bestD = d; best = ev; }
+async function loadCalcLog(fromPicker) {
+  if (calcLogLoading) return;
+  const sel = document.getElementById("calclog-date");
+  const want = fromPicker && sel && sel.value ? sel.value : (calcLogDate || "");
+  calcLogLoading = true;
+  try {
+    const d = await (await fetch("/api/traffic/log" + (want ? "?date=" + encodeURIComponent(want) : ""))).json();
+    calcLogRows = d.rows || [];
+    calcLogDate = d.date;
+    calcLogToday = (d.dates && d.dates[0]) || d.date;
+    if (d.date === calcLogToday) {
+      calcLogSeenLast = calcLogRows.length ? calcLogRows[calcLogRows.length - 1].t : null;
     }
-    return best;
-  };
+    if (sel) {
+      const opts = (d.dates || [d.date]).map(x =>
+        `<option value="${x}"${x === d.date ? " selected" : ""}>${x === calcLogToday ? x + "(今天)" : x}</option>`);
+      sel.innerHTML = opts.join("");
+      sel.value = d.date;
+      if (sel.refreshPicker) sel.refreshPicker();
+    }
+    renderCalcLog();
+  } catch (e) {
+    // 拉不到就保留舊畫面;tickStatus 的連線橫幅會另外提醒後端斷線
+  } finally {
+    calcLogLoading = false;
+  }
+}
 
-  // 只顯示近 5 分鐘:不論後端 deque 多長,前端一律依時間戳截到 5 分鐘內。
-  const d = new Date();
-  const nowSec = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
-  const visible = rows.filter(e => {
-    const rs = hmsToSec(e.t);
-    if (!Number.isFinite(rs)) return true;
-    let diff = nowSec - rs;
-    if (diff < -2) diff += 86400;   // 跨午夜
-    return diff <= 300;
-  });
+// 由 tickStatus 呼叫:只在「正看著今天的明細」且後端多了新的一筆時才重拉。
+function maybeRefreshCalcLog(s) {
+  const pane = document.getElementById("pane-calclog");
+  if (!pane || pane.style.display === "none") return;
+  if (calcLogDate !== null && calcLogDate !== s.date) return;   // 在看別天,不動
+  if (s.log_last && s.log_last !== calcLogSeenLast) loadCalcLog(false);
+}
 
+function renderCalcLog() {
   const tb = document.getElementById("calclogbody");
   if (!tb) return;
+  const onlyBusy = !!(document.getElementById("calclog-busy") || {}).checked;
+
   tb.innerHTML = "";
-  let surgeCount = 0;
-  for (const e of visible) {
-    // 「狀態」欄只保留流量暴增標記(🔺);其餘診斷備註已移除。
-    const surge = findSurge(e.t);
-    let note = "";
-    if (surge) {
-      surgeCount++;
-      const top = (surge.top && surge.top[0]) ? surge.top[0].name : "未能歸因";
-      note = `<span class="surge-tag">🔺暴增 ${fmtBytes(surge.bytes)}・${escHtml(top)}</span>`;
-    }
+  for (let i = calcLogRows.length - 1; i >= 0; i--) {   // 新到舊
+    const e = calcLogRows[i];
+    if (onlyBusy && (e.cnt_recv || 0) + (e.cnt_sent || 0) < 1048576) continue;
     const tr = document.createElement("tr");
-    if (surge) tr.className = "surge-row";
     const exc = e.excl_recv > 0 ? fmtBytes(e.excl_recv) : "—";
     tr.innerHTML =
         `<td>${e.t}</td>`
       + `<td class="num">${fmtBytes(e.nic_recv)}</td>`
       + `<td class="num">${exc}</td>`
       + `<td class="num">${fmtBytes(e.cnt_recv)}</td>`
-      + `<td class="num">${fmtBytes(e.cnt_sent)}</td>`
-      + `<td>${note}</td>`;
+      + `<td class="num">${fmtBytes(e.cnt_sent)}</td>`;
     tb.appendChild(tr);
   }
-
-  const sc = document.getElementById("surgecount");
-  if (sc) {
-    if (surgeCount > 0) { sc.textContent = `・🔺 ${surgeCount} 次暴增`; sc.style.color = "var(--warn)"; }
-    else sc.textContent = "";
+  if (!tb.children.length) {
+    tb.innerHTML = `<tr><td colspan="5" class="empty-row">${calcLogRows.length ? "這天沒有 ≥1 MB 的分鐘。" : "這天還沒有明細。"}</td></tr>`;
   }
+}
+
+// ===== 今日程式排行 =====
+// 後端從早上累計到現在的各程式用量(計入額度的量,已扣內網),含「未歸因」與「監控未執行期間」。
+// 暴增預警只抓得到「某一分鐘突然變大」;整天細水長流的背景流量(雲端同步、備份、系統更新)
+// 從來不會觸發暴增,卻一樣會把額度吃完 —— 這張表才看得出誰累積最多。
+function renderApps(s) {
+  const tb = document.getElementById("appsbody");
+  if (!tb) return;
+  const apps = s.day_apps || [];
+  // 分母取「今日計入量」與「排行加總」較大者:升級當天排行從升級那刻才起算,加總會小於今日量;
+  // 反過來也不讓占比超過 100%。
+  const total = Math.max(s.used_bytes || 0, apps.reduce((t, a) => t + a.recv + a.sent, 0));
+  if (!apps.length) {
+    tb.innerHTML = `<tr><td colspan="6" class="empty-row">今天還沒有累計資料(每分鐘結算一次)。</td></tr>`;
+    return;
+  }
+  const html = [];
+  let shown = 0, rest = [0, 0];
+  for (const a of apps) {
+    const sum = a.recv + a.sent;
+    // 小於 1MB 的併成一列,不讓一長串零碎程式把表撐爆
+    if (shown >= 25 || (sum < 1048576 && !APP_LABELS[a.name])) { rest[0] += a.recv; rest[1] += a.sent; continue; }
+    shown++;
+    const pct = total > 0 ? (sum / total * 100) : 0;
+    const special = APP_LABELS[a.name] ? " dim" : "";
+    const label = escHtml(appLabel(a.name));
+    html.push(`<tr><td class="${special}" title="${label}">${label}</td>`
+      + `<td class="${special}" title="${escHtml(a.exe || "")}">${exeCell(a.exe)}</td>`
+      + `<td class="num">${fmtBytes(a.recv)}</td><td class="num">${fmtBytes(a.sent)}</td>`
+      + `<td class="num"><b>${fmtBytes(sum)}</b></td>`
+      + `<td class="num"><span class="pctbar" style="--p:${Math.min(100, pct).toFixed(1)}%"></span>${pct.toFixed(1)}%</td></tr>`);
+  }
+  if (rest[0] + rest[1] > 0) {
+    const sum = rest[0] + rest[1];
+    html.push(`<tr><td class="dim">其他(零碎)</td><td class="dim">—</td><td class="num">${fmtBytes(rest[0])}</td>`
+      + `<td class="num">${fmtBytes(rest[1])}</td><td class="num">${fmtBytes(sum)}</td>`
+      + `<td class="num">${total > 0 ? (sum / total * 100).toFixed(1) : "0.0"}%</td></tr>`);
+  }
+  tb.innerHTML = html.join("");
 }
 
 // 當日暴增紀錄:先依「應用程式 + 發生時間」收合、加總流量;需要時才展開查看每筆 IP／PID 明細。
@@ -473,6 +529,12 @@ function toggleSurgeGroup(key) {
 }
 
 function renderSurgeLog(s) {
+  const sc = document.getElementById("surgecount");
+  if (sc) {
+    const n = (s.surges || []).length;
+    sc.textContent = n > 0 ? `・🔺 ${n}` : "";
+    sc.style.color = n > 0 ? "var(--warn)" : "";
+  }
   const tb = document.getElementById("surgelogbody");
   if (!tb) return;
   tb.innerHTML = "";
@@ -485,11 +547,11 @@ function renderSurgeLog(s) {
       ? ev.top
       : [{ ip: "—", name: "未能歸因", pid: null, bytes: ev.bytes || 0 }];
     for (const source of top) {
-      const name = String(source.name || "未知程式");
+      const name = appLabel(String(source.name || ""));
       const key = surgeGroupKey(name, time);
       let group = groups.get(key);
       if (!group) {
-        group = { key, name, time, bytes: 0, details: [] };
+        group = { key, name, exe: String(source.exe || ""), time, bytes: 0, details: [] };
         groups.set(key, group);
       }
       const bytes = Math.max(0, Number(source.bytes) || 0);
@@ -497,6 +559,7 @@ function renderSurgeLog(s) {
       group.details.push({
         ip: String(source.ip || "—"),
         pid: source.pid == null ? "—" : String(source.pid),
+        exe: String(source.exe || ""),
         bytes,
       });
     }
@@ -509,7 +572,7 @@ function renderSurgeLog(s) {
 
   if (!groups.size) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="5" class="empty-row">今日尚未偵測到流量暴增。</td>`;
+    tr.innerHTML = `<td colspan="6" class="empty-row">今日尚未偵測到流量暴增。</td>`;
     tb.appendChild(tr);
     return;
   }
@@ -521,6 +584,7 @@ function renderSurgeLog(s) {
     tr.innerHTML = `<td class="surge-expand-col"><button type="button" class="surge-expand" `
       + `aria-expanded="${expanded}" title="${expanded ? "收合" : "展開"}明細">▸</button></td>`
       + `<td>${escHtml(group.name)}</td>`
+      + `<td>${exeCell(group.exe)}</td>`
       + `<td>${escHtml(group.time)}</td>`
       + `<td class="num">${group.details.length}</td>`
       + `<td class="num">${fmtBytes(group.bytes)}</td>`;
@@ -531,11 +595,11 @@ function renderSurgeLog(s) {
       const detailTr = document.createElement("tr");
       detailTr.className = "surge-detail-row";
       const detailRows = group.details.map(detail =>
-        `<tr><td>${escHtml(detail.ip)}</td><td>${escHtml(group.name)}</td>`
+        `<tr><td>${escHtml(detail.ip)}</td>`
         + `<td class="num">${escHtml(detail.pid)}</td><td class="num">${fmtBytes(detail.bytes)}</td></tr>`
       ).join("");
-      detailTr.innerHTML = `<td colspan="5"><div class="surge-detail-wrap"><table class="surge-detail-table">`
-        + `<thead><tr><th>IP</th><th>應用程式</th><th class="num">PID</th><th class="num">使用流量</th></tr></thead>`
+      detailTr.innerHTML = `<td colspan="6"><div class="surge-detail-wrap"><table class="surge-detail-table">`
+        + `<thead><tr><th>IP</th><th class="num">PID</th><th class="num">使用流量</th></tr></thead>`
         + `<tbody>${detailRows}</tbody></table></div></td>`;
       tb.appendChild(detailTr);
     }
@@ -543,7 +607,7 @@ function renderSurgeLog(s) {
 }
 
 function fireSurgeAlert(ev) {
-  const top = (ev.top && ev.top[0]) ? ev.top[0].name : "未知來源";
+  const top = (ev.top && ev.top[0]) ? appLabel(ev.top[0].name) : "未知來源";
   const msg = `${ev.time} 流量暴增:該分鐘用 ${fmtBytes(ev.bytes)}`
             + `(平時約 ${fmtBytes(ev.baseline)}),最可能來源:${top}。`;
   const b = document.getElementById("surgebanner");
@@ -772,7 +836,8 @@ async function tickStatus() {
     renderPeak();
 
     renderSurges(s);
-    renderCalcLog(s);
+    renderApps(s);
+    maybeRefreshCalcLog(s);
     renderSurgeLog(s);
 
     const tb = document.getElementById("nics");
@@ -795,6 +860,19 @@ async function tickStatus() {
       lastDataSig = s.data_sig;
       // onDataChanged 定義在 analytics.js;單獨抽出本頁、沒有那支時自動略過。
       if (!firstSig && typeof onDataChanged === "function") onDataChanged();
+    }
+
+    // 檢索清單同理:patents.txt 是兩台共寫的同一個檔(別的資料都各機一檔),
+    // 對方存了新清單、Google Drive 同步過來之後,這台的筆數原本要等重整才會更新
+    //(loadPatents 只在開頁時跑一次)。簽章變了就重讀一次,兩台的清單自然對得上。
+    // 編輯視窗開著時不重讀 —— 那會把使用者正在打的字直接蓋掉(存檔時才以伺服器為準)。
+    const patModal = document.getElementById("patmodal");
+    const patEditing = patModal && patModal.classList.contains("show");
+    if (s.patents_sig !== undefined && s.patents_sig !== lastPatentsSig && !patEditing) {
+      const firstPat = lastPatentsSig === null;
+      lastPatentsSig = s.patents_sig;   // 只在真的處理掉時才記下,編輯中不記 ——
+      // 記了就等於「這個版本看過了」,關掉視窗後就永遠補不回那次變動。
+      if (!firstPat && typeof loadPatents === "function") loadPatents();
     }
   } catch (e) {
     // 拿不到 /api/status:後端關閉、連線中斷、或電腦剛睡眠喚醒使 socket 失效。

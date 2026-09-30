@@ -10,7 +10,10 @@ process_is_elevated() 與 estats_probe();其餘為內部 ctypes 結構與輔助�
 改用 IP Helper 的 ESTATS:GetPerTcpConnectionEStats(TcpConnectionEstatsData) 直接取每條
 TCP 連線自啟用收集以來累積的應用層 DataBytesIn/Out。再按對方 IP 判內/外網,精準扣掉內網。
 限制:① 需以系統管理員身分啟動(SetPerTcpConnectionEStats 啟用收集是特權操作,非提權回
-ACCESS_DENIED);② 目前只處理 IPv4(內網 FTP/NAS 都是 IPv4)。
+ACCESS_DENIED);② 只看得到 TCP。UDP(含 QUIC —— Chrome/YouTube/Meet 大量走它)沒有逐連線計數器,
+抓不到程式名,sampler 會把這部分列成「未歸因」而不是默默漏掉。
+IPv4 與 IPv6 都收:實測 Google Drive、Mattermost 在這台是走 IPv6 連線,只看 IPv4 時它們的
+流量全都歸不到程式,暴增紀錄也看不到它們。
 """
 
 import os
@@ -32,6 +35,21 @@ class _MIB_TCPROW2(ctypes.Structure):
                 ("dwLocalPort", wintypes.DWORD), ("dwRemoteAddr", wintypes.DWORD),
                 ("dwRemotePort", wintypes.DWORD), ("dwOwningPid", wintypes.DWORD),
                 ("dwOffloadState", wintypes.DWORD)]
+
+
+class _MIB_TCP6ROW2(ctypes.Structure):
+    _fields_ = [("LocalAddr", ctypes.c_ubyte * 16), ("dwLocalScopeId", wintypes.DWORD),
+                ("dwLocalPort", wintypes.DWORD), ("RemoteAddr", ctypes.c_ubyte * 16),
+                ("dwRemoteScopeId", wintypes.DWORD), ("dwRemotePort", wintypes.DWORD),
+                ("State", wintypes.DWORD), ("dwOwningPid", wintypes.DWORD),
+                ("dwOffloadState", wintypes.DWORD)]
+
+
+class _MIB_TCP6ROW(ctypes.Structure):
+    _fields_ = [("State", wintypes.DWORD), ("LocalAddr", ctypes.c_ubyte * 16),
+                ("dwLocalScopeId", wintypes.DWORD), ("dwLocalPort", wintypes.DWORD),
+                ("RemoteAddr", ctypes.c_ubyte * 16), ("dwRemoteScopeId", wintypes.DWORD),
+                ("dwRemotePort", wintypes.DWORD)]
 
 
 class _MIB_TCPROW(ctypes.Structure):
@@ -65,50 +83,80 @@ def process_is_elevated() -> bool:
         return False
 
 
-def _get_tcp_table2():
-    """列舉所有 IPv4 TCP 連線(含 owning PID)。回傳 _MIB_TCPROW2 list。"""
+def _get_table(fn, row_cls):
+    """列舉 TCP 連線表(GetTcpTable2 / GetTcp6Table2,含 owning PID)。回傳 row_cls list。"""
     size = wintypes.DWORD(0)
-    _iphlpapi.GetTcpTable2(None, ctypes.byref(size), True)
+    fn(None, ctypes.byref(size), True)
     buf = (ctypes.c_byte * size.value)()
-    ret = _iphlpapi.GetTcpTable2(buf, ctypes.byref(size), True)
+    ret = fn(buf, ctypes.byref(size), True)
     if ret != 0:
-        raise OSError(f"GetTcpTable2 failed: {ret}")
+        raise OSError(f"{fn.__name__} failed: {ret}")
     n = ctypes.cast(buf, ctypes.POINTER(wintypes.DWORD))[0]
     rows_addr = ctypes.addressof(buf) + ctypes.sizeof(wintypes.DWORD)
-    return list((_MIB_TCPROW2 * n).from_address(rows_addr))
+    return list((row_cls * n).from_address(rows_addr))
+
+
+def _read_data_stats(set_fn, get_fn, row) -> "_TCP_ESTATS_DATA_ROD_v0 | None":
+    """對一條連線啟用 Data 統計收集並讀回累積值;啟用或讀取失敗回 None。"""
+    rw = _TCP_ESTATS_DATA_RW_v0(EnableCollection=1)
+    en = set_fn(ctypes.byref(row), _TCP_ESTATS_DATA,
+                ctypes.byref(rw), 0, ctypes.sizeof(rw), 0)
+    if en != 0:
+        return None             # 啟用失敗(多半沒提權)→ 此連線數字不可信,跳過
+    rod = _TCP_ESTATS_DATA_ROD_v0()
+    ret = get_fn(ctypes.byref(row), _TCP_ESTATS_DATA,
+                 None, 0, 0, None, 0, 0,
+                 ctypes.byref(rod), 0, ctypes.sizeof(rod))
+    return rod if ret == 0 else None
+
+
+def _v6_to_str(raw) -> str:
+    """IPv6 位址轉字串;IPv4-mapped(::ffff:a.b.c.d)轉回 IPv4 寫法,內網網段比對才對得上。"""
+    b = bytes(raw)
+    if b[:12] == bytes(10) + bytes((0xFF, 0xFF)):
+        return socket.inet_ntoa(b[12:])
+    return socket.inet_ntop(socket.AF_INET6, b)
 
 
 def estats_probe():
-    """回傳 {(laddr,lport,raddr,rport): (pid, raddr_ip, data_in, data_out)} —— 每條已建立的
-    IPv4 TCP 連線自啟用收集以來累積的應用層收/發位元組。只收『啟用收集成功(en==0)』的連線
-    (沒提權時 SetPerTcpConnectionEStats 回 ACCESS_DENIED=5,且讀回的 ROD 是垃圾值,一律不收)。
-    全程 best-effort,失敗回空 dict。"""
+    """回傳 {conn_key: (pid, raddr_ip, data_in, data_out)} —— 每條已建立的 TCP 連線(IPv4 +
+    IPv6)自啟用收集以來累積的應用層收/發位元組。只收『啟用收集成功(en==0)』的連線
+    (沒提權時 SetPerTcp*ConnectionEStats 回 ACCESS_DENIED=5,且讀回的 ROD 是垃圾值,一律不收)。
+    全程 best-effort,失敗回空 dict;IPv6 那半失敗不影響 IPv4。"""
     if not _IS_WINDOWS:
         return {}
-    try:
-        rows = _get_tcp_table2()
-    except OSError:
-        return {}
-    rw = _TCP_ESTATS_DATA_RW_v0(EnableCollection=1)
     conns = {}
+    try:
+        rows = _get_table(_iphlpapi.GetTcpTable2, _MIB_TCPROW2)
+    except OSError:
+        rows = []
     for r in rows:
         if r.dwState != _MIB_TCP_STATE_ESTAB:
             continue
         row = _MIB_TCPROW(r.dwState, r.dwLocalAddr, r.dwLocalPort,
                           r.dwRemoteAddr, r.dwRemotePort)
-        en = _iphlpapi.SetPerTcpConnectionEStats(
-            ctypes.byref(row), _TCP_ESTATS_DATA,
-            ctypes.byref(rw), 0, ctypes.sizeof(rw), 0)
-        if en != 0:
-            continue            # 啟用失敗(多半沒提權)→ 此連線數字不可信,跳過
-        rod = _TCP_ESTATS_DATA_ROD_v0()
-        ret = _iphlpapi.GetPerTcpConnectionEStats(
-            ctypes.byref(row), _TCP_ESTATS_DATA,
-            None, 0, 0, None, 0, 0,
-            ctypes.byref(rod), 0, ctypes.sizeof(rod))
-        if ret != 0:
+        rod = _read_data_stats(_iphlpapi.SetPerTcpConnectionEStats,
+                               _iphlpapi.GetPerTcpConnectionEStats, row)
+        if rod is None:
             continue
         raddr = socket.inet_ntoa(struct.pack("<I", r.dwRemoteAddr))
         key = (r.dwLocalAddr, r.dwLocalPort, r.dwRemoteAddr, r.dwRemotePort)
         conns[key] = (r.dwOwningPid, raddr, rod.DataBytesIn, rod.DataBytesOut)
+
+    try:
+        rows6 = _get_table(_iphlpapi.GetTcp6Table2, _MIB_TCP6ROW2)
+    except OSError:
+        rows6 = []
+    for r in rows6:
+        if r.State != _MIB_TCP_STATE_ESTAB:
+            continue
+        row = _MIB_TCP6ROW(r.State, r.LocalAddr, r.dwLocalScopeId, r.dwLocalPort,
+                           r.RemoteAddr, r.dwRemoteScopeId, r.dwRemotePort)
+        rod = _read_data_stats(_iphlpapi.SetPerTcp6ConnectionEStats,
+                               _iphlpapi.GetPerTcp6ConnectionEStats, row)
+        if rod is None:
+            continue
+        # 鍵與 IPv4 的不同形(開頭多一個 6),兩邊不會撞在一起。
+        key = (6, bytes(r.LocalAddr), r.dwLocalPort, bytes(r.RemoteAddr), r.dwRemotePort)
+        conns[key] = (r.dwOwningPid, _v6_to_str(r.RemoteAddr), rod.DataBytesIn, rod.DataBytesOut)
     return conns

@@ -7,6 +7,8 @@ exports(手動下載匯出檔)。各機存檔/偏好檔名帶上機器代號,Goo
 互相覆蓋。
 """
 
+import os
+import tempfile
 from pathlib import Path
 
 from common.ident import machine_id
@@ -28,6 +30,10 @@ STATE_PATH = MACHINE_DATA_DIR / f"state_{MACHINE_ID}.json"   # 流量存檔各�
 # 網頁 UI 偏好(用量通知開關/門檻等)各機獨立。原本只存瀏覽器 localStorage,
 # 但瀏覽器關閉清資料/換瀏覽器就會掉 —— 改存到這個檔,重開一定留得住(各台自己記自己的)。
 PREFS_PATH = MACHINE_DATA_DIR / f"prefs_{MACHINE_ID}.json"
+# 流量逐分鐘明細(每次取樣一行 JSONL,一天一檔)。刻意放本機 LOCALAPPDATA、不放 data/machines:
+# 這個檔每分鐘都在長,放在 Google Drive 同步夾裡會讓 Drive 每分鐘重傳整個檔 —— 到傍晚一個檔
+# 幾百 KB、一天重傳上千次,監控工具自己就成了吃流量的元兇。它是各機自己的診斷紀錄,本來就不必同步。
+TRAFFIC_LOG_DIR = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "flow_check" / "traffic"
 RUN_LOG_PATH = MACHINE_DATA_DIR / f"run_log_{MACHINE_ID}.jsonl"
 HISTORY_PATH = MACHINE_DATA_DIR / f"monthly_progress_history_{MACHINE_ID}.json"
 

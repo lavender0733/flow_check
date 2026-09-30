@@ -116,6 +116,64 @@ ALLOW_HOSTS = ("tiponet.tipo.gov.tw",)
 
 SUMMARY_PATH = OUTPUT_DIR / f"summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{MACHINE_ID}.csv"
 
+# 合作式停止:網頁按「立即停止」時,伺服器建立這個旗標檔而不是直接砍掉本程序。
+# 硬殺對 Playwright 特別糟 —— Python 一瞬間消失,底下的 node driver 還在往已斷掉的
+# 管道寫 CDP 事件,噴一整片 EPIPE 堆疊;而且最後一批已經查完的結果來不及寫進 CSV。
+# 改成自己看旗標:在途的那幾筆讓它跑完,批次邊界停下,照常關瀏覽器、寫 CSV 與
+# run_log、印統計後正常退出。沒有這個環境變數(命令列直接跑)時一切照舊。
+STOP_FILE = os.environ.get("GPSS_STOP_FILE", "")
+
+
+def stop_requested() -> bool:
+    return bool(STOP_FILE) and os.path.exists(STOP_FILE)
+
+
+async def sleep_unless_stopped(seconds: float) -> bool:
+    """分段睡,期間收到停止就提早回來。回傳 False 表示「該停了」。
+    恢復暫停可長達數分鐘,整段睡死會讓使用者按了停止卻等很久才有反應。"""
+    end = time.time() + seconds
+    while time.time() < end:
+        if stop_requested():
+            return False
+        await asyncio.sleep(min(1.0, end - time.time()))
+    return not stop_requested()
+
+
+def _quiet_cancelled_futures(loop):
+    """取消在途查詢後,Playwright 內部那些還沒被取用的 future 會讓 asyncio 在回收時印
+    "Future exception was never retrieved" 加一段 net::ERR_ABORTED 堆疊。那是「被我們
+    取消」的殘骸,不是檢索出錯,但使用者在網頁 log 看到的又是一片紅字。收到停止之後
+    就把這類回報靜音;其餘時候照原樣回報,真出事仍看得到。"""
+    default = loop.get_exception_handler()
+
+    def handler(lp, ctx):
+        if stop_requested():
+            exc = ctx.get("exception")
+            msg = ctx.get("message", "")
+            if isinstance(exc, asyncio.CancelledError) or "never retrieved" in msg:
+                return
+        (default or lp.default_exception_handler)(lp, ctx)
+
+    loop.set_exception_handler(handler)
+
+
+async def watch_stop_file(tasks_holder: dict, poll: float = 0.5):
+    """背景盯著停止旗標:一出現就立刻取消所有在途的查詢任務。
+
+    只在 worker 進入時檢查旗標是不夠的 —— 一旦進了 query_patent,裡面是一串 Playwright
+    的等待(goto 15s、networkidle 15s、等輸入框 15s、按鈕後 networkidle 15s、inner_text 5s),
+    再乘上重試與退避,最壞要 130 秒以上才回得來。使用者想按停止的時機,往往正是查詢卡住
+    的時候,於是「按了沒反應、開始鈕一直不能按」。改成直接 cancel:Playwright 的等待都是
+    可取消的 awaitable,cancel 會讓它們當場拋 CancelledError 結束。
+    """
+    while True:
+        if stop_requested():
+            for t in list(tasks_holder.get("tasks") or ()):
+                if not t.done():
+                    t.cancel()
+            return
+        await asyncio.sleep(poll)
+
 
 def load_patents() -> list:
     """讀 patents.txt(與 API 版共用);一行一筆,# 開頭為註解。"""
@@ -239,8 +297,20 @@ async def query_patent(context, search_text: str, idx: int, total: int) -> dict:
                 status = "OK"
         else:
             status = "UNKNOWN"
+    except asyncio.CancelledError:
+        # 被停止指令取消:安靜收掉分頁就好,不印狀態行(這筆沒查完,不算數)。
+        # shield 讓 close() 不會被同一個 cancel 再打斷,否則分頁會殘留、瀏覽器關不乾淨。
+        try:
+            await asyncio.shield(page.close())
+        except Exception:
+            pass
+        raise
     finally:
-        await page.close()
+        if not page.is_closed():
+            try:
+                await asyncio.shield(page.close())
+            except Exception:
+                pass
 
     print(f"{label}  -> {status}  ({human_bytes(counter['bytes'])})")
     return {"patent": search_text, "status": status, "hits": hits,
@@ -343,16 +413,29 @@ async def run(query_count: int, offset: int = 0):
 
     async def worker(context, idx: int, patent: str):
         async with sem:
+            if stop_requested():
+                # 已收到停止:這筆還沒開跑就不要再送出去,標記後跳過(不寫 CSV、不列統計)。
+                results[idx - offset - 1] = {"patent": patent, "status": "STOPPED",
+                                             "hits": 0, "bytes": 0}
+                return
             result = None
             for attempt in range(1, RETRIES + 1):
                 try:
                     result = await query_patent(context, patent, idx, end_idx)
+                except asyncio.CancelledError:
+                    # 使用者按了停止 → 這筆沒查完,標記成沒查(不寫 CSV、不列統計)。
+                    results[idx - offset - 1] = {"patent": patent, "status": "STOPPED",
+                                                 "hits": 0, "bytes": 0}
+                    raise
                 except Exception as e:
                     if attempt < RETRIES:
                         backoff = RETRY_BACKOFF * attempt
                         print(f"[{idx}/{end_idx}] {patent}  retry {attempt}/{RETRIES - 1} "
                               f"in {backoff}s ({type(e).__name__})")
-                        await asyncio.sleep(backoff)
+                        if not await sleep_unless_stopped(backoff):
+                            results[idx - offset - 1] = {"patent": patent, "status": "STOPPED",
+                                                         "hits": 0, "bytes": 0}
+                            return
                         continue
                     print(f"[{idx}/{end_idx}] {patent}  FAILED after {RETRIES}: {e}")
                     result = {"patent": patent, "status": f"EXCEPTION: {e}", "hits": 0, "bytes": 0}
@@ -363,12 +446,15 @@ async def run(query_count: int, offset: int = 0):
                     backoff = RETRY_BACKOFF * attempt
                     print(f"[{idx}/{end_idx}] {patent}  UNKNOWN, retry "
                           f"{attempt}/{RETRIES - 1} in {backoff}s")
-                    await asyncio.sleep(backoff)
+                    if not await sleep_unless_stopped(backoff):
+                        results[idx - offset - 1] = {"patent": patent, "status": "STOPPED",
+                                                     "hits": 0, "bytes": 0}
+                        return
                     continue
                 break
 
             results[idx - offset - 1] = result
-            await asyncio.sleep(DELAY_SECONDS)
+            await sleep_unless_stopped(DELAY_SECONDS)   # 停止時不必再等這個禮貌停頓
 
     indexed = [(offset + j + 1, run_list[j]) for j in range(total)]
     batches = [indexed[i:i + BATCH_SIZE] for i in range(0, total, BATCH_SIZE)]
@@ -383,6 +469,10 @@ async def run(query_count: int, offset: int = 0):
     done = 0
     bad_streak = 0
     aborted = False
+    stopped = False       # 使用者按了「立即停止」,於批次邊界收尾
+    holder = {"tasks": []}                                   # 目前在途的查詢任務(供取消)
+    _quiet_cancelled_futures(asyncio.get_running_loop())
+    stop_watch = asyncio.ensure_future(watch_stop_file(holder))
     warned = False        # 目前是否已對使用者發出管制警告(供 ##CLEAR## 收回)
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=HEADLESS)
@@ -408,28 +498,45 @@ async def run(query_count: int, offset: int = 0):
                         await context.route("**/*", block_route)
                         # 瀏覽器下載到的靜態 script,即時抓進行程內快取供後續查詢餵回。
                         context.on("response", lambda r: asyncio.create_task(cache_response(r)))
-                    await asyncio.gather(*(worker(context, idx, pat) for idx, pat in batch))
+                    # 包成任務才取消得掉:停止監看器一看到旗標就 cancel 這些在途查詢,
+                    # 使用者不必等 Playwright 那串逾時跑完(最壞曾要 130 秒以上)。
+                    tasks = [asyncio.ensure_future(worker(context, idx, pat))
+                             for idx, pat in batch]
+                    holder["tasks"] = tasks
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    holder["tasks"] = []
                     await context.close()
                 except Exception as e:
                     print(f"--- batch {bnum} ERROR: {e} ---")
 
                 # 寫這批(補齊批次級錯誤留下的空洞)。
+                batch_stopped = stop_requested()
                 for idx, pat in batch:
                     pos = idx - offset - 1
                     if results[pos] is None:
+                        # 收到停止時,還排在並行上限後面、根本沒輪到的那些筆是「沒查」,
+                        # 不是「失敗」—— 記成 EXCEPTION 會讓收尾統計憑空多出一堆失敗筆數。
                         results[pos] = {"patent": pat,
-                                        "status": f"EXCEPTION: batch {bnum} failed",
+                                        "status": "STOPPED" if batch_stopped
+                                        else f"EXCEPTION: batch {bnum} failed",
                                         "hits": 0, "bytes": 0}
                     r = results[pos]
+                    if r["status"] == "STOPPED":
+                        continue      # 停止後沒真的查,不寫進 CSV 也不計入進度
                     w.writerow([idx, r["patent"], r["status"], r.get("hits", 0), r.get("bytes", 0), "web"])
+                    done += 1
                 f.flush()
 
-                done += len(batch)
                 elapsed = time.time() - start_time
                 rate = done / elapsed if elapsed else 0
                 eta = (total - done) / rate if rate else 0
                 print(f"--- progress {done}/{total}  "
                       f"elapsed {fmt_dur(elapsed)}  eta {fmt_dur(eta)} ---")
+
+                if stop_requested():
+                    print("--- 收到停止指令,於批次邊界停下(已完成的結果都已保存)---", flush=True)
+                    stopped = True
+                    break
 
                 # 管制偵測:一批大部分都失敗就算「異常批」。
                 batch_fail = sum(1 for idx, _ in batch
@@ -459,15 +566,23 @@ async def run(query_count: int, offset: int = 0):
                         pause = RECOVERY_PAUSE * bad_streak
                         print(f"##WARN## 偵測到管制,恢復暫停 {pause}s 後續跑"
                               f"(第 {bad_streak} 次)…", flush=True)
-                        await asyncio.sleep(pause)
+                        if not await sleep_unless_stopped(pause):
+                            print("--- 收到停止指令,中斷恢復暫停(結果已保存)---", flush=True)
+                            stopped = True
+                            break
                     else:
-                        await asyncio.sleep(BATCH_COOLDOWN)
+                        if not await sleep_unless_stopped(BATCH_COOLDOWN):
+                            print("--- 收到停止指令,於批次邊界停下(結果已保存)---", flush=True)
+                            stopped = True
+                            break
         finally:
+            stop_watch.cancel()
             f.close()
             await browser.close()
 
     # 統計(CSV 已寫):成功 / 判讀不出(UNKNOWN) / 失敗(EXCEPTION/SESSION_EXPIRED)。
-    processed = [r for r in results if r is not None]
+    # STOPPED 的是「按下停止後就沒再送出去」的,沒查過 → 不列入任何統計。
+    processed = [r for r in results if r is not None and r["status"] != "STOPPED"]
     n = len(processed)
     total_bytes = sum(r.get("bytes", 0) for r in processed)
     elapsed = time.time() - start_time
@@ -482,6 +597,8 @@ async def run(query_count: int, offset: int = 0):
     print(f"Summary: {SUMMARY_PATH}")
     if aborted:
         print(f"⛔ 已中止(疑似被管制)— 完成 {n} 筆")
+    if stopped:
+        print(f"■ 已依停止指令收尾 — 完成 {n} 筆(未查的不列入統計)")
     print(f"成功: {success}  |  查無: {no_result}  |  判讀不出(UNKNOWN): {unknown}  |  失敗: {failed}  (共 {n} 筆)")
     print(f"網路流量總計(實際下線位元組): {human_bytes(total_bytes)}  ({total_bytes:,} bytes)")
     if n:
@@ -525,6 +642,7 @@ async def run(query_count: int, offset: int = 0):
             "elapsed_sec": round(elapsed, 1),
             "method": "web",
             "machine": MACHINE_ID,
+            "note": "stopped" if stopped else ("aborted" if aborted else ""),
             "summary": SUMMARY_PATH.name,
         }
         RUN_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)

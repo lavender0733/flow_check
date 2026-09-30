@@ -13,6 +13,7 @@
 
 import collections
 import ipaddress
+import json
 import threading
 import time
 import urllib.request
@@ -23,8 +24,103 @@ import psutil
 from common.jsonio import read_json, write_json_atomic
 from core.estats import process_is_elevated, estats_probe
 from core.health import record_error
-from core.paths import DATA_DIR, STATE_PATH
+from core.procinfo import describe as describe_process, describe_exe_name
+from core.paths import DATA_DIR, STATE_PATH, TRAFFIC_LOG_DIR
 from core.storage import load_prefs
+
+
+# 今日程式排行裡兩個「不是程式」的桶。鍵以雙底線包起來,不會跟真的程序名撞在一起。
+# UNATTRIBUTED:NIC 確實計到、但 ESTATS 沒對到任何 TCP 連線的量 —— UDP/QUIC(Chrome、YouTube、
+#   視訊會議大量走它)、TCP/IP 標頭與 ACK、沒提權時的全部流量。以前這部分直接消失,
+#   「沒看到暴增卻用完」多半就藏在這裡;現在單獨列一桶,至少看得到它有多大。
+# OFFLINE:監控程式沒在跑(關掉、重開機)那段期間的量。重啟時網卡計數器的差額一次補進來,
+#   以前會被當成重啟後第一分鐘的流量,看起來像莫名的暴增、又歸不到任何程式。
+UNATTRIBUTED = "__unattributed__"
+OFFLINE = "__offline__"
+
+# 逐分鐘明細檔保留天數(本機 LOCALAPPDATA,不進雲端同步)。
+TRAFFIC_LOG_KEEP_DAYS = 31
+# 一次取樣「未歸因」超過這個量時,順手記下當時持有 UDP 通訊埠的程式當線索(QUIC 抓不到逐連線位元組)。
+UDP_HINT_BYTES = 20 * 1024 * 1024
+
+
+def traffic_log_path(date: str):
+    return TRAFFIC_LOG_DIR / f"traffic_{date}.jsonl"
+
+
+def read_traffic_log(date: str) -> list:
+    """讀某一天的逐分鐘明細(舊到新)。檔不在或壞行一律略過。"""
+    rows = []
+    try:
+        with traffic_log_path(date).open(encoding="utf-8") as f:
+            for line in f:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(rec, dict):
+                    rows.append(rec)
+    except OSError:
+        pass
+    return rows
+
+
+def traffic_log_dates() -> list:
+    """有逐分鐘明細的日期(新到舊)。"""
+    try:
+        names = [p.stem[len("traffic_"):] for p in TRAFFIC_LOG_DIR.glob("traffic_*.jsonl")]
+    except OSError:
+        return []
+    return sorted((n for n in names if len(n) == 10), reverse=True)
+
+
+def _prune_traffic_logs(keep_days: int = TRAFFIC_LOG_KEEP_DAYS):
+    for d in traffic_log_dates()[keep_days:]:
+        try:
+            traffic_log_path(d).unlink()
+        except OSError:
+            pass
+
+
+def _udp_owner_names() -> list:
+    """目前持有非迴路 UDP 通訊埠的程式名(依持有數排序)。只當線索:UDP 沒有逐連線位元組可查。"""
+    names = collections.Counter()
+    try:
+        for c in psutil.net_connections(kind="udp"):
+            ip = c.laddr.ip if c.laddr else ""
+            if not c.pid or ip.startswith("127.") or ip == "::1":
+                continue
+            try:
+                names[psutil.Process(c.pid).name()] += 1
+            except Exception:
+                continue
+    except Exception:
+        return []
+    return [n for n, _ in names.most_common(8)]
+
+
+def _upgrade_surge(ev: dict) -> dict:
+    """升級前存下的暴增事件:來源只有程序檔名(chrome.exe)、也沒有「未歸因」那一列。
+    讀檔時補齊成新格式 —— 檔名換成軟體名稱,事件總量減掉各來源加總的差額補成「未歸因」,
+    網頁顯示才會和新紀錄一致。已是新格式(來源帶 exe 欄)的原樣回傳。"""
+    top = ev.get("top")
+    if not isinstance(top, list) or any("exe" in t for t in top if isinstance(t, dict)):
+        return ev
+    names = {}
+    new_top = []
+    for t in top:
+        if not isinstance(t, dict):
+            continue
+        exe = str(t.get("name") or "")
+        if exe not in names:
+            names[exe] = describe_exe_name(exe)
+        new_top.append(dict(t, name=names[exe], exe=exe))
+    rest = int(ev.get("bytes", 0)) - sum(int(t.get("bytes", 0)) for t in new_top)
+    if rest > 0:
+        new_top.append({"ip": "—", "name": UNATTRIBUTED, "pid": None,
+                        "bytes": rest, "recv": None, "sent": None})
+    new_top.sort(key=lambda x: x.get("bytes", 0), reverse=True)
+    return dict(ev, top=new_top)
 
 
 # ============================================================
@@ -77,9 +173,16 @@ class Monitor:
         self.surges = collections.deque(maxlen=200)
         self._last_surge_at = 0.0     # 最近一次記錄暴增的 monotonic 時刻(冷卻用)
         self._surge_seq = 0           # 事件流水號(前端據此判斷有沒有「新的」暴增)
-        # 逐次取樣的計費明細(供網頁 log 框即時診斷:每筆 = 一次 NIC 結算怎麼分內/外網)。
-        # 只保留近 5 分鐘(頁面只顯示 5 分鐘):依取樣間隔換算筆數,至少留 5 筆。
-        self.sample_log = collections.deque(maxlen=max(5, (300 + interval - 1) // interval))
+        # 逐次取樣的計費明細:每筆 = 一次 NIC 結算怎麼分內/外網、算進額度多少、主要來源是誰。
+        # 由伺服器每次取樣寫進本機明細檔(traffic_<日期>.jsonl)並留一整天在記憶體,
+        # 不靠網頁開著 —— 網頁關著的時段、重開監控之後,明細都還在。
+        self.sample_log = collections.deque(maxlen=(86400 + interval - 1) // interval + 60)
+        # 今日各程式累計(計入額度的外網量):name -> [recv, sent]。暴增偵測只抓「單分鐘突然變大」,
+        # 抓不到一整天細水長流的背景流量(雲端同步、備份、更新);這張排行才看得出誰累積吃最多。
+        self.day_apps = {}
+        # 重啟時若沿用當日存檔,上次存檔到這次啟動之間的流量(監控沒在跑)會在第一次取樣一次補進來;
+        # 記下上次存檔時間,第一次取樣就把那筆標成「監控未執行期間」,不當成暴增、不亂歸因。
+        self._resume_gap_from = None
 
         # ── 排除內網流量 ──
         # exclude_lan 以本機 prefs 為準(頁面可切);內網/強制計入網段清單讀 config。
@@ -98,6 +201,16 @@ class Monitor:
                 self.count_nets.append(ipaddress.ip_network(c, strict=False))
             except ValueError:
                 pass
+        # 本機(loopback):127.x、::1。這種連線是程式跟同一台電腦上的另一支程式講話
+        # (例如瀏覽器連本工具的 127.0.0.1:8765),封包根本不經過網卡、不吃額度。
+        # 它不是內網也不是外網:以前沒有這一類,127.x 不在 lan_ranges 裡就被當成「外網」,
+        # 於是灌進今日程式排行與暴增歸因(明明沒出網卡),還稀釋了內網排除的比例。
+        self.local_nets = []
+        for c in cfg.get("local_ranges", ["127.0.0.0/8", "::1/128"]):
+            try:
+                self.local_nets.append(ipaddress.ip_network(c, strict=False))
+            except ValueError:
+                pass
         self.day_lan_excluded = 0     # 今日已排除(內網)位元組;跨重啟保留、跨日歸零
 
         # ── 高頻 ESTATS 探測(與 60s NIC 計費解耦)──
@@ -114,9 +227,11 @@ class Monitor:
         self._pending_lan_recv = 0    # 內網連線『下載』payload
         self._pending_ext_sent = 0    # 外網連線『上傳』payload(含 GPSS 10.65)
         self._pending_ext_recv = 0    # 外網連線『下載』payload
-        # (pid, 對方 IP) -> [程序名, bytes]:自上次 NIC 取樣以來的外網來源增量,供暴增歸因與明細。
+        # (pid, 對方 IP) -> [軟體名, recv, sent, 檔名]:自上次 NIC 取樣以來的外網來源增量,供歸因與明細。
         self._pending_source_net = {}
-        self._name_cache = {}         # pid -> 程序名(避免每輪都查 psutil)
+        self._name_cache = {}         # pid -> (軟體名, 檔名, 查詢時刻);避免每輪都查
+        # 今日程式排行各軟體名對應的程序檔名(顯示在名稱旁,方便對照工作管理員)。
+        self.day_app_exes = {}
 
         self._load_state()
 
@@ -161,10 +276,18 @@ class Monitor:
             self.day_sent = int(saved.get("day_sent", 0))
             self.day_recv = int(saved.get("day_recv", 0))
             self.day_lan_excluded = int(saved.get("day_lan_excluded", 0))
+            saved_apps = saved.get("day_apps", {})
+            if isinstance(saved_apps, dict):
+                self.day_apps = {str(k): [int(v[0]), int(v[1])] for k, v in saved_apps.items()
+                                 if isinstance(v, list) and len(v) == 2}
+            exes = saved.get("day_app_exes", {})
+            if isinstance(exes, dict):
+                self.day_app_exes = {str(k): str(v) for k, v in exes.items()}
+            self._resume_gap_from = saved.get("saved_at") or "?"
             # 舊版 state 沒有 surges 時自然從空白開始;新版本保存當日完整來源紀錄供頁面展開。
             saved_surges = saved.get("surges", [])
             if isinstance(saved_surges, list):
-                self.surges.extend(ev for ev in saved_surges if isinstance(ev, dict))
+                self.surges.extend(_upgrade_surge(ev) for ev in saved_surges if isinstance(ev, dict))
                 self._surge_seq = max((int(ev.get("seq", 0)) for ev in self.surges), default=0)
             self.per_nic = {k: list(v) for k, v in saved.get("per_nic", {}).items()}
             self.last_per_nic = {k: list(v) for k, v in saved.get("last_per_nic", {}).items()}
@@ -179,11 +302,16 @@ class Monitor:
             self.day_sent = 0
             self.day_recv = 0
             self.day_lan_excluded = 0
+            self.day_apps = {}
+            self.day_app_exes = {}
             self.surges.clear()
             self._surge_seq = 0
             self.per_nic = {}
             self._baseline(cur)
 
+        # 今天已寫過的明細接回記憶體(重啟監控不丟今天前段),順手清掉過期的明細檔。
+        self.sample_log.extend(read_traffic_log(today))
+        _prune_traffic_logs()
         self.last_time = time.monotonic()
 
     def _save_state(self):
@@ -192,6 +320,9 @@ class Monitor:
             "day_sent": self.day_sent,
             "day_recv": self.day_recv,
             "day_lan_excluded": self.day_lan_excluded,
+            "day_apps": self.day_apps,
+            "day_app_exes": self.day_app_exes,
+            "saved_at": datetime.now().strftime("%H:%M:%S"),
             "surges": list(self.surges),
             "per_nic": self.per_nic,
             "last_per_nic": self.last_per_nic,
@@ -211,6 +342,9 @@ class Monitor:
                 self.day_sent = 0
                 self.day_recv = 0
                 self.day_lan_excluded = 0
+                self.day_apps = {}
+                self.day_app_exes = {}
+                self.sample_log.clear()
                 self.surges.clear()
                 self._surge_seq = 0
                 self.per_nic = {}
@@ -268,21 +402,59 @@ class Monitor:
                           f"ext_pay={self._pending_ext_recv} excl={lan_recv}  |  "
                           f"sent: NIC={step_sent} lan_pay={self._pending_lan_sent} "
                           f"ext_pay={self._pending_ext_sent} excl={lan_sent}")
-            # 逐次計費明細(供網頁 log 框)：在 pending 歸零前快照本次結算怎麼分內/外網。
-            self.sample_log.append({
+            counted_sent = step_sent - lan_sent
+            counted_recv = step_recv - lan_recv
+            sources = self._pending_source_net
+            self._pending_source_net = {}
+            gap_from = self._resume_gap_from
+            self._resume_gap_from = None
+
+            # 歸因:ESTATS 對到的外網 TCP 連線照實記到各程式;NIC 計入量減掉這些,剩下的(UDP/QUIC、
+            # 標頭與 ACK、沒提權時的全部)記到「未歸因」,不再憑空消失。
+            # 剛重啟的第一筆含「監控沒在跑」那段的網卡差額,整筆記到 OFFLINE,不歸給當下的程式。
+            if gap_from:
+                app_step = {OFFLINE: [counted_recv, counted_sent]}
+                unattr_recv = unattr_sent = 0
+            else:
+                app_step = {}
+                for name, r, sd, exe in sources.values():
+                    acc = app_step.setdefault(name, [0, 0])
+                    acc[0] += r
+                    acc[1] += sd
+                    self.day_app_exes.setdefault(name, exe)
+                attr_recv = sum(v[0] for v in app_step.values())
+                attr_sent = sum(v[1] for v in app_step.values())
+                unattr_recv = max(0, counted_recv - attr_recv)
+                unattr_sent = max(0, counted_sent - attr_sent)
+                if unattr_recv or unattr_sent:
+                    app_step[UNATTRIBUTED] = [unattr_recv, unattr_sent]
+            for name, (r, sd) in app_step.items():
+                acc = self.day_apps.setdefault(name, [0, 0])
+                acc[0] += int(r)
+                acc[1] += int(sd)
+
+            top_sources = sorted(
+                ({"name": name, "exe": exe, "pid": pid, "ip": raddr, "recv": int(r), "sent": int(sd)}
+                 for (pid, raddr), (name, r, sd, exe) in sources.items() if r or sd),
+                key=lambda x: x["recv"] + x["sent"], reverse=True)[:8]
+            entry = {
                 "t": datetime.now().strftime("%H:%M:%S"),
                 "dt": round(dt, 1),
                 "nic_recv": int(step_recv), "nic_sent": int(step_sent),
                 "lan_pay_recv": int(self._pending_lan_recv), "ext_pay_recv": int(self._pending_ext_recv),
                 "lan_pay_sent": int(self._pending_lan_sent), "ext_pay_sent": int(self._pending_ext_sent),
                 "excl_recv": int(lan_recv), "excl_sent": int(lan_sent),
-                "cnt_recv": int(step_recv - lan_recv), "cnt_sent": int(step_sent - lan_sent),
+                "cnt_recv": int(counted_recv), "cnt_sent": int(counted_sent),
+                "unattr_recv": int(unattr_recv), "unattr_sent": int(unattr_sent),
+                "top": top_sources,
                 "exlan": bool(self.exclude_lan_enabled), "estats": bool(self._estats_ok),
-            })
+            }
+            if gap_from:
+                entry["gap_from"] = gap_from
             self._pending_lan_sent = self._pending_lan_recv = 0
             self._pending_ext_sent = self._pending_ext_recv = 0
-            self.day_sent += step_sent - lan_sent
-            self.day_recv += step_recv - lan_recv
+            self.day_sent += counted_sent
+            self.day_recv += counted_recv
             self.day_lan_excluded += lan_sent + lan_recv
             self.rate_up = step_sent / dt
             self.rate_down = step_recv / dt
@@ -297,14 +469,23 @@ class Monitor:
             self.last_sample_at = datetime.now()
 
             # 暴增偵測:用『實際計入額度』的量(已扣掉內網),不是網卡原始量 —— 否則內網
-            # 下載(NAS/FTP,已排除)會狂報假暴增「用了 X GB」,但其實沒吃額度。歸因用高頻
-            # ESTATS 探測自上次 NIC 取樣以來累積的「各 IP／程序來源網路增量」
-            # (_pending_source_net),消耗後歸零,下個 NIC 區間重新累積。
-            counted_sent = step_sent - lan_sent
-            counted_recv = step_recv - lan_recv
-            self._detect_surge(counted_sent + counted_recv, counted_sent, counted_recv,
-                               dt, self._pending_source_net, now)
-            self._pending_source_net = {}
+            # 下載(NAS/FTP,已排除)會狂報假暴增。重啟補進來的那一筆不是「這一分鐘」的量,不參與。
+            if not gap_from:
+                self._detect_surge(counted_sent + counted_recv, counted_sent, counted_recv,
+                                   dt, sources, now, unattr_recv + unattr_sent)
+            date = self.date
+
+        # 以下不佔鎖:查 UDP 持有者、寫明細檔都是磁碟/系統呼叫,不該卡住 probe 與網頁輪詢。
+        if unattr_recv + unattr_sent >= UDP_HINT_BYTES:
+            entry["udp"] = _udp_owner_names()
+        with self.lock:
+            self.sample_log.append(entry)
+        try:
+            TRAFFIC_LOG_DIR.mkdir(parents=True, exist_ok=True)
+            with traffic_log_path(date).open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except OSError as e:
+            record_error("traffic_log", e)
 
         self._save_state()
 
@@ -324,7 +505,7 @@ class Monitor:
 
         lan_sent = lan_recv = 0
         ext_sent = ext_recv = 0
-        source_net = {}           # (pid, 對方 IP) -> bytes(本區間外網增量,供暴增歸因)
+        source_net = {}           # (pid, 對方 IP) -> [recv, sent](本區間外網增量,供歸因)
         # 第一輪探測(剛啟動、或剛開啟排除把 _estats_prev 清空)時,所有連線都「看似新出現」,
         # 但其累計值可能含啟動前的歷史 → 這一輪只立基準、不灌歷史,避免一次性灌爆比例。
         first_probe = not self._estats_prev
@@ -345,11 +526,15 @@ class Monitor:
             if d_out < 0:
                 d_out = 0
             if d_in or d_out:
-                is_lan = self._is_lan_ip(raddr)
+                kind = self._classify_ip(raddr)
+                if kind == "local":
+                    continue      # 本機連線:沒經過網卡,不計入、不歸因、不參與內網比例
+                is_lan = kind == "lan"
                 # 暴增定義的是「計入額度」的外網量，來源明細同樣排除內網連線。
                 if not is_lan:
-                    source_key = (pid, raddr)
-                    source_net[source_key] = source_net.get(source_key, 0) + d_in + d_out
+                    rec = source_net.setdefault((pid, raddr), [0, 0])
+                    rec[0] += d_in
+                    rec[1] += d_out
                 if is_lan:
                     lan_recv += d_in
                     lan_sent += d_out
@@ -358,49 +543,63 @@ class Monitor:
                     ext_sent += d_out
 
         self._estats_prev = {k: (v[2], v[3]) for k, v in conns.items()}
+        names = {pid: self._proc_name(pid) for (pid, _) in source_net}
         with self.lock:
             self._pending_lan_sent += lan_sent
             self._pending_lan_recv += lan_recv
             self._pending_ext_sent += ext_sent
             self._pending_ext_recv += ext_recv
-            for (pid, raddr), b in source_net.items():
-                rec = self._pending_source_net.setdefault(
-                    (pid, raddr), [self._proc_name(pid), 0])
-                rec[1] += b
+            for (pid, raddr), (r, sd) in source_net.items():
+                label, exe = names[pid]
+                rec = self._pending_source_net.setdefault((pid, raddr), [label, 0, 0, exe])
+                rec[1] += r
+                rec[2] += sd
 
-    def _proc_name(self, pid) -> str:
-        """pid → 程序名(快取;查不到回 pid 字串)。供暴增歸因顯示用。"""
-        name = self._name_cache.get(pid)
-        if name is None:
-            try:
-                name = psutil.Process(pid).name()
-            except Exception:
-                name = f"pid {pid}"
-            self._name_cache[pid] = name
-        return name
+    def _proc_name(self, pid) -> tuple:
+        """pid → (軟體名, 檔名)(見 procinfo.describe),快取 10 分鐘 —— pid 會被新程序重用,
+        不定期重查的話,舊軟體名會一直掛在新程序上。"""
+        now = time.monotonic()
+        hit = self._name_cache.get(pid)
+        if hit is not None and now - hit[2] < 600:
+            return hit[0], hit[1]
+        if len(self._name_cache) > 4000:
+            self._name_cache.clear()
+        label, exe = describe_process(pid)
+        self._name_cache[pid] = (label, exe, now)
+        return label, exe
 
-    def _is_lan_ip(self, ip) -> bool:
-        """對方位址是否視為「內網、要排除」。count_ranges(強制計入)優先:落在其中一律
-        當成『非內網』回 False,確保對外/額度流量(如 GPSS 10.65.x.x)永不被排除。"""
+    def _classify_ip(self, ip) -> str:
+        """對方位址分三類:"local"(本機 loopback,不經網卡)/ "lan"(內網,要排除)/ "ext"(計入額度)。
+        判斷順序:本機 → count_ranges(強制計入,優先於 lan_ranges,確保 GPSS 10.65.x.x 等
+        對外/額度流量永不被排除)→ lan_ranges → 其餘一律計入。"""
         try:
             addr = ipaddress.ip_address(ip)
         except ValueError:
-            return False
+            return "ext"
+        if getattr(addr, "ipv4_mapped", None):
+            addr = addr.ipv4_mapped          # ::ffff:a.b.c.d 當成 IPv4 比對網段
+        if any(addr in net for net in self.local_nets):
+            return "local"
         if any(addr in net for net in self.count_nets):
-            return False
-        return any(addr in net for net in self.lan_nets)
+            return "ext"
+        if any(addr in net for net in self.lan_nets):
+            return "lan"
+        return "ext"
 
-    def _attribute_surge(self, source_net):
-        """以本區間各 IP／程序來源的 ESTATS 網路增量排名，供暴增紀錄逐列顯示。"""
-        deltas = sorted(
-            ((b, name, pid, raddr)
-             for (pid, raddr), (name, b) in source_net.items() if b > 0),
-            reverse=True)
-        return [{"ip": raddr, "name": name, "pid": pid, "bytes": int(b)}
-                for b, name, pid, raddr in deltas]
+    def _attribute_surge(self, source_net, unattributed=0):
+        """以本區間各 IP／程序來源的 ESTATS 網路增量排名，供暴增紀錄逐列顯示。
+        抓不到連線的部分(UDP/QUIC 等)併成一列「未歸因」,排行才不會把小咖當成兇手。"""
+        rows = [{"ip": raddr, "name": name, "exe": exe, "pid": pid, "bytes": int(r + sd),
+                 "recv": int(r), "sent": int(sd)}
+                for (pid, raddr), (name, r, sd, exe) in source_net.items() if r + sd > 0]
+        if unattributed > 0:
+            rows.append({"ip": "—", "name": UNATTRIBUTED, "pid": None,
+                         "bytes": int(unattributed), "recv": None, "sent": None})
+        rows.sort(key=lambda x: x["bytes"], reverse=True)
+        return rows
 
     def _detect_surge(self, step_total, step_sent, step_recv, dt,
-                      source_net, now):
+                      source_net, now, unattributed=0):
         """在鎖內呼叫。把本次取樣用量入回看視窗;達門檻即歸因並記事件。
         source_net = 本 NIC 區間各 IP／程序來源的 ESTATS 網路增量，供逐來源紀錄。
         門檻 = max(絕對門檻, 近期中位數×倍率);中位數會隨持續下載升高、加冷卻 → 不洗版。"""
@@ -427,8 +626,15 @@ class Monitor:
                 "sent": int(step_sent),
                 "interval_sec": round(dt, 1),
                 "baseline": int(median),
-                "top": self._attribute_surge(source_net),
+                "top": self._attribute_surge(source_net, unattributed),
             })
+
+    def traffic_log(self, date: str) -> list:
+        """某天的逐分鐘明細(舊到新)。今天直接給記憶體那份。"""
+        with self.lock:
+            if date == self.date:
+                return list(self.sample_log)
+        return read_traffic_log(date)
 
     def snapshot(self) -> dict:
         with self.lock:
@@ -467,8 +673,15 @@ class Monitor:
                 "surge_enabled": self.surge_enabled,
                 "surge_min_mb": round(self.surge_min_bytes / 1048576),
                 "surges": list(self.surges)[::-1],
-                # 逐次計費明細(新到舊),供網頁 log 框即時診斷內網排除。
-                "sample_log": list(self.sample_log)[::-1],
+                # 逐分鐘明細整天的量太大,不隨每 5 秒的輪詢送;只給筆數與最後一筆時間,
+                # 網頁看到變了才去 /api/traffic/log 拉整天。
+                "log_count": len(self.sample_log),
+                "log_last": self.sample_log[-1]["t"] if self.sample_log else None,
+                # 今日各程式累計(計入額度的量),大到小。
+                "day_apps": sorted(
+                    ({"name": k, "exe": self.day_app_exes.get(k, ""), "recv": v[0], "sent": v[1]}
+                     for k, v in self.day_apps.items()),
+                    key=lambda x: x["recv"] + x["sent"], reverse=True),
                 # 內網排除:開關 + 今日已排除(內網)位元組 + 是否提權(沒提權時 ESTATS
                 # 拿不到 per-connection byte,內網排除/暴增歸因停用,頁面據此提醒)。
                 "exclude_lan_enabled": self.exclude_lan_enabled,

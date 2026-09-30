@@ -64,7 +64,10 @@
   --dur: 420ms;
   --dur-fast: 180ms;
   --ease: cubic-bezier(.34,1.4,.64,1);
-  --ff-mono: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace;
+  /* 等寬字型沒有中文字:後面一定要接正黑體,否則「382,555 筆」「—」這類混了中文或全形符號的
+     等寬格子會退回系統的細明體(再被硬加粗),和旁邊正黑體的文字對不起來。 */
+  --ff-mono: "Cascadia Mono", "JetBrains Mono", Consolas, "Microsoft JhengHei UI", "Microsoft JhengHei",
+             ui-monospace, monospace;
   --ff-ui: "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", system-ui, sans-serif;
   --ff-display: var(--ff-ui);
   --ff-label: var(--ff-ui);
@@ -140,6 +143,9 @@
   --tab-pad: 6px 14px;
   --th-bg: rgba(255,255,255,.34);
   --th-fg: #6b6180;
+  /* 捲動表格的釘頂表頭專用底色:必須實色(理由見 .hist-scroll 那段)。
+     取和 --hole-bg 同一族的淺紫,比卡片略深,表頭才看得出是表頭。 */
+  --th-solid: #efe8fb;
   --track: rgba(88,50,160,.12);
   --txt: #1c1230;
   --warn: #d98e04;
@@ -150,9 +156,19 @@
   /* 進度圖四條線 + 執行中狀態:沿用原專案的 --blue / --accent(橘) */
   --blue: #5b9bd5;
   --accent: #f97316;
-  --bg-soft: radial-gradient(ellipse 70% 55% at 16% 2%,  rgba(139,69,245,.38), transparent 62%),
+  /* ── 底光三色的「搶眼程度」對齊 ──
+     三顆光暈的原色彩度天生不同(紫最濃、藍最淡),同樣的不透明度疊上去,紫會比
+     另外兩個濃一倍 —— 所以三個 alpha 不該相同。但要對齊的也不是彩度:
+     底色 #ece3fb 自己就是淡紫(OKLCH 色相 302.7,和紫光暈的 302 幾乎同一個),
+     紫疊上去等於「同色加深」會融進底色,藍離底色最遠,同樣彩度看起來就更跳。
+     所以對齊的是「與底色的感知距離」ΔE(OKLab),三顆都調到 0.095:
+       紫 a .22 → ΔE .095(彩度 .081)
+       粉 a .30 → ΔE .095(彩度 .082)
+       藍 a .48 → ΔE .095(彩度 .069 —— 彩度較低但離底色遠,看起來一樣重)
+     深色版不動:那裡紫是全站主色(卡片光暈、圓環都是它),本來就該領先。 */
+  --bg-soft: radial-gradient(ellipse 70% 55% at 16% 2%,  rgba(139,69,245,.22), transparent 62%),
              radial-gradient(ellipse 58% 42% at 84% 10%, rgba(255,95,174,.30), transparent 60%),
-             radial-gradient(ellipse 66% 58% at 86% 72%, rgba(95,201,248,.34), transparent 64%),
+             radial-gradient(ellipse 66% 58% at 86% 72%, rgba(95,201,248,.48), transparent 64%),
              #ece3fb;
   /* ── 光暈:取代範本的微傾與 hover 位移 ──
      元素永遠不動,只有光在變。三階:idle 靜止時的底光、hover 變亮、focus 更強。
@@ -219,6 +235,7 @@ html[data-theme="dark"] {
   --tab-on-fg: #ffffff;
   --th-bg: rgba(255,255,255,.05);
   --th-fg: #a49db8;
+  --th-solid: #1b1430;
   --track: rgba(255,255,255,.10);
   --txt: #ffffff;
   --warn: #fcc419;
@@ -323,8 +340,11 @@ th, td { text-align: left; padding: var(--cell-pad); border-bottom: var(--row-bd
 th { font-family: var(--ff-label); color: var(--th-fg); background: var(--th-bg);
      font-weight: var(--fw-label); font-size: var(--fs-hint); letter-spacing: var(--ls-label);
      white-space: nowrap; }
-th.num, td.num { text-align: right; white-space: nowrap;
-                 font-family: var(--ff-mono); font-variant-numeric: tabular-nums; }
+/* 數字欄和同一列的日期、名稱用同一套 UI 字型,只靠 tabular-nums(每個數字等寬)讓位數對齊。
+   以前這裡套 --ff-mono(Cascadia Mono):同一列裡日期是 Segoe UI、數字是程式碼字型,
+   數字又比上方統計卡(同樣是 Segoe UI)粗一截、窄一截,看起來像兩套字;
+   表頭的中文還因為等寬字型沒有中文字,退回細明體被硬加粗。原版外觀一直是這個做法。 */
+th.num, td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 td:first-child, th:first-child { max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
 tbody tr:last-child > td { border-bottom: 0; }
 tbody tr:hover > td { background: var(--row-hover); }
@@ -333,12 +353,22 @@ tbody tr:hover > td { background: var(--row-hover); }
 .hist-scroll { max-height: 200px; overflow-y: auto; margin-top: var(--sp-sm);
                border: var(--inset-bd); border-radius: var(--r-md); background: var(--surface); }
 .hist-scroll table { margin-top: 0; }
-.hist-scroll thead th, .nic-scroll thead th { position: sticky; top: 0; z-index: 1;
-                                              backdrop-filter: blur(12px); }
+/* 可捲動的表(每日明細、用量明細、暴增紀錄):表頭釘在區塊頂端,捲動時不消失。
+   兩點都是修過的坑,改動前請先讀:
+   ① 底色一定要實色。表頭本來吃 --th-bg(半透明)+ backdrop-filter,捲動時資料列
+      會從表頭底下透出來,看起來就像「筆數蓋住標題列」;backdrop-filter 碰上
+      overflow 捲動容器並不保證生效,不能只靠它。
+   ② 選擇器要逐層用 >,只釘「捲動容器直屬表格」的表頭。寫成後代選擇器的話,
+      暴增紀錄那張藏在 td 裡的明細表(.surge-detail-table)表頭也會被釘住,
+      展開後疊在外層表頭上。 */
+.hist-scroll > table > thead > tr > th,
+.nic-scroll > table > thead > tr > th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--th-solid); box-shadow: inset 0 -1px 0 var(--line); }
 /* 月進度那張三列小表:數值欄用主色、首列加重 */
 .mtable { width: 100%; border-collapse: collapse; margin-top: 0; }
 .mtable td { padding: 9px 4px; border-bottom: var(--row-bd); font-size: var(--fs-body); color: var(--txt); }
-.mtable td.num { text-align: right; font-family: var(--ff-mono); font-variant-numeric: tabular-nums;
+.mtable td.num { text-align: right; font-variant-numeric: tabular-nums;
                  font-weight: var(--fw-num); white-space: nowrap; }
 .mtable tr:first-child td { font-weight: var(--fw-label); }
 .mtable tr:first-child td.num { color: var(--btn-ink); font-size: var(--fs-num); }
@@ -460,6 +490,8 @@ html[data-theme="dark"] .picker-btn {
 .apibox:has(.picker.open),
 .goal-chart-head:has(.picker.open),
 .tabbar:has(.picker.open) { position: relative; z-index: 41; }
+/* 用量明細的日期選單在 .detailbox 裡,而 .detailbox 有 overflow:hidden(圓角裁切),展開時放開 */
+.detailbox:has(.picker.open) { overflow: visible; position: relative; z-index: 41; }
 .picker-hd { padding: 5px 12px 6px; font-family: var(--ff-label); font-size: var(--fs-hint);
              font-weight: var(--fw-label); color: var(--muted);
              letter-spacing: var(--ls-label); white-space: nowrap; }
@@ -488,7 +520,6 @@ html[data-theme="dark"] .picker-btn {
 .tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* ─── 骨架:暴增列與明細 ────────────────────────────────────────── */
-tr.surge-row > td { background: var(--warn-bg); }
 .surge-tag { color: var(--warn-ink); font-weight: var(--fw-label); }
 .surge-expand-col { width: 34px; padding-right: 0; text-align: center; }
 .surge-expand { width: 23px; height: 23px; border: 0; border-radius: var(--r-sm); background: transparent;
@@ -527,6 +558,36 @@ tr.surge-row > td { background: var(--warn-bg); }
 .calclog-tip, .surge-tip { display: none; }
 #detailbox.open #tab-calclog.on ~ .calclog-tip,
 #detailbox.open #tab-surges.on ~ .surge-tip { display: inline-flex; }
+
+/* ─── 今日程式排行 / 用量明細(逐分鐘)──────────────────────────── */
+.apps-tip { display: none; }
+#detailbox.open #tab-apps.on ~ .apps-tip { display: inline-flex; }
+/* 用量明細的日期/篩選:放在頁籤列最右,只在用量明細頁籤顯示 */
+.calclog-tools { margin-left: auto; display: inline-flex; align-items: center; gap: var(--sp-sm); }
+.calclog-tools label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+                       color: var(--dim); font-size: var(--fs-hint); font-family: var(--ff-label);
+                       font-weight: var(--fw-label); }
+.calclog-tools input { accent-color: var(--btn); width: 15px; height: 15px; margin: 0; }
+.calclog-tools .picker-btn { padding: 5px 26px 5px 11px; min-width: 0; }
+td.dim { color: var(--muted); }
+/* 今日程式排行:固定欄寬。自動欄寬會照內容撐,名稱長短不一時數字欄被擠得忽寬忽窄;
+   固定後名稱過長就截斷加「…」(滑鼠移上看全名,見 renderApps 的 title)。 */
+.apps-table { table-layout: fixed; }
+.apps-table .c-app { width: 30%; }
+.apps-table .c-exe { width: 20%; }
+.apps-table .c-num { width: 12%; }
+.apps-table .c-pct { width: 14%; }
+.apps-table td:nth-child(-n+2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 窄畫面:占比只留數字、不畫長條,數字欄才不會被擠出格子 */
+@media (max-width: 820px) {
+  .apps-table .c-app { width: 28%; }
+  .apps-table .c-exe { width: 18%; }
+  .apps-table .c-num { width: 14%; }
+  .apps-table .c-pct { width: 12%; }
+  .apps-table .pctbar { display: none; }
+}
+.pctbar { display: inline-block; width: 46px; height: 6px; margin-right: 6px; vertical-align: middle;
+          border-radius: 3px; background: linear-gradient(90deg, var(--btn) var(--p), var(--track) var(--p)); }
 
 /* ─── 骨架:橫幅 ─────────────────────────────────────────────────
    底/框/字三件套完全照原專案:警告 #fff4e0 + #d98e04 + #7a5200,依此類推。
@@ -764,8 +825,8 @@ body { background: var(--bg-soft); background-attachment: fixed; }
 #panel-calc .calc-hero { margin-top: var(--sp-md); }
 /* 檢索進度左欄只有 3 列表格,比右邊圓環矮;置中讓左右視覺高度一致 */
 #panel-calc .calc-hero .col { justify-content: center; }
-/* 爬取統計的「檢索筆數」是該頁主角數字,用主色標出來 */
-#an-q { color: var(--btn-ink); }
+/* 爬取統計的「檢索筆數」是該頁主角數字,用主色標出來(今日與本月兩張卡同樣處理) */
+#an-q, #an-mq { color: var(--btn-ink); }
 /* 控制台的欄位標籤比別處短,輸入框也略緊一些 */
 #panel-control .field label { min-width: 80px; }
 #panel-control input { padding: 8px 12px; }

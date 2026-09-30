@@ -58,7 +58,7 @@ from core.storage import load_config, machine_label
 
 # 系統版本(語意化版本控制)。這是唯一來源:網頁底部的「系統版本」會由
 # render_index() 把 index.html 裡的 <!--#version--> 換成這個值,改版只改這裡。
-VERSION = "7.4.0"
+VERSION = "7.6.0"
 
 
 def _ensure_machines_file():

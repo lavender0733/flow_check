@@ -95,7 +95,7 @@ h2 { margin: 0 0 2px; font-size: var(--fs-h2); font-weight: 600; color: var(--di
 .stat { flex: 1; min-width: 120px; }
 .stat .k { color: var(--dim); font-size: var(--fs-sm); }
 .stat .v { font-size: var(--fs-num); font-weight: 600; margin-top: 2px; }
-#an-q { color: var(--btn); }
+#an-q, #an-mq { color: var(--btn); }
 .mfilter { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: var(--sp-md) 0 0; font-size: var(--fs-sm); color: var(--dim); }
 .mfilter label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--txt); }
 .mfilter input { accent-color: var(--btn); width: 15px; height: 15px; }
@@ -106,8 +106,12 @@ th { color: var(--btn); font-weight: 600; background: #ede7fb; box-shadow: inset
 /* 每日明細:固定高度捲動,頁面不被 31 天撐長;表頭 sticky 固定在區塊頂端 */
 .hist-scroll { max-height: 200px; overflow-y: auto; margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; }
 .hist-scroll table { margin-top: 0; }
-/* 可捲動的表(每日明細、用量明細):表頭固定在區塊頂端,捲動時不消失 */
-.hist-scroll thead th, .nic-scroll thead th { position: sticky; top: 0; z-index: 1; }
+/* 可捲動的表(每日明細、用量明細、暴增紀錄):表頭固定在區塊頂端,捲動時不消失。
+   逐層用 > 只釘「捲動容器直屬表格」的表頭 —— 寫成後代選擇器的話,暴增紀錄那張
+   藏在 td 裡的明細表(.surge-detail-table)表頭也會被釘住,展開後疊在外層表頭上。
+   底色靠上面 th 的 #ede7fb(實色),資料列才不會從表頭底下透出來。 */
+.hist-scroll > table > thead > tr > th,
+.nic-scroll > table > thead > tr > th { position: sticky; top: 0; z-index: 2; }
 th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 td:first-child, th:first-child { max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
 
@@ -170,7 +174,6 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: var(--sp-sm) 0
           border-radius: 8px; cursor: pointer; font-size: var(--fs-sm); font-weight: 600; }
 .subtab:hover { border-color: var(--btn); }
 .subtab.on { color: #fff; background: var(--btn); border-color: var(--btn); }
-tr.surge-row td { background: #fff4e0; }
 .surge-tag { color: #7a5200; font-weight: 700; }
 .empty-row { color: var(--dim); text-align: center; padding: 16px; }
 /* 暴增紀錄:摘要先依「應用程式 + 時間」收合;展開時才載入每筆 IP/PID 明細。 */
@@ -221,6 +224,34 @@ tr.surge-row td { background: #fff4e0; }
 .calclog-tip, .surge-tip { display: none; }
 #detailbox.open #tab-calclog.on ~ .calclog-tip,
 #detailbox.open #tab-surges.on ~ .surge-tip { display: inline-flex; }
+
+/* 今日程式排行 / 用量明細(逐分鐘) */
+.apps-tip { display: none; }
+#detailbox.open #tab-apps.on ~ .apps-tip { display: inline-flex; }
+/* 用量明細的日期/篩選:放在頁籤列最右,只在用量明細頁籤顯示 */
+.calclog-tools { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.calclog-tools label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+                       color: var(--dim); font-size: 12px; font-weight: 600; }
+.calclog-tools input { accent-color: var(--btn); width: 15px; height: 15px; margin: 0; }
+.calclog-tools .picker-btn { padding: 5px 24px 5px 10px; min-width: 0; }
+td.dim { color: var(--dim); }
+/* 今日程式排行:固定欄寬,名稱過長截斷(滑鼠移上看全名) */
+.apps-table { table-layout: fixed; }
+.apps-table .c-app { width: 30%; }
+.apps-table .c-exe { width: 20%; }
+.apps-table .c-num { width: 12%; }
+.apps-table .c-pct { width: 14%; }
+.apps-table td:nth-child(-n+2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 窄畫面:占比只留數字、不畫長條,數字欄才不會被擠出格子 */
+@media (max-width: 820px) {
+  .apps-table .c-app { width: 28%; }
+  .apps-table .c-exe { width: 18%; }
+  .apps-table .c-num { width: 14%; }
+  .apps-table .c-pct { width: 12%; }
+  .apps-table .pctbar { display: none; }
+}
+.pctbar { display: inline-block; width: 46px; height: 6px; margin-right: 6px; vertical-align: middle;
+          border-radius: 3px; background: linear-gradient(90deg, var(--btn) var(--p), var(--line) var(--p)); }
 
 /* 提示橫幅:取代各處重複的 inline 樣式。預設藏起,由 JS 切 display 顯示。
    配色變體 warn / danger / info;可點關閉的加 .banner-x */
@@ -294,6 +325,8 @@ pre.log {
 .apibox:has(.picker.open),
 .goal-chart-head:has(.picker.open),
 .tabbar:has(.picker.open) { position: relative; z-index: 41; }
+/* 用量明細的日期選單在 .detailbox 裡,而 .detailbox 有 overflow:hidden(圓角裁切),展開時放開 */
+.detailbox:has(.picker.open) { overflow: visible; position: relative; z-index: 41; }
 .picker-hd { padding: 5px 12px 6px; font-size: var(--fs-hint); font-weight: 600;
              color: var(--dim); white-space: nowrap; }
 .picker-opt { display: block; width: 100%; text-align: left; white-space: nowrap;

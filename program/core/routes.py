@@ -14,12 +14,12 @@ import hashlib
 import re
 from datetime import datetime
 
-from common.jsonio import read_json
+from common.jsonio import file_sig, read_json
 from common.webapp import HttpError
 from core.health import health_snapshot, needs_restart
 from core.paths import BASE, MACHINE_DATA_DIR, MACHINE_ID, WEB_DIR
 from core.quota import api_case_hourly, api_quota_status
-from core.sampler import run_speedtest
+from core.sampler import run_speedtest, traffic_log_dates
 from core.storage import (_gpss_module, gpss_path, load_prefs, load_run_elapsed,
                           machine_label, save_prefs, scan_output_daily)
 
@@ -154,6 +154,29 @@ def analytics_payload(cfg: dict, monitor, runner=None) -> dict:
     snap = monitor.snapshot()
     t = merge(today)
 
+    # 本月「我們自己跑掉」的檢索:把本月每一天的 merge() 加總(含今天)。
+    # 刻意不從 history 加總 —— 那只留最近 31 天,月初跨月時會漏掉本月前幾天。
+    # 這個數字與「檢索進度」頁的本月累積是兩回事:那邊是後台匯出檔的全站總量
+    # (含民眾使用),這邊只算這套工具實際送出的檢索,兩者不該互相對帳。
+    ym = today[:7]
+    month = {"ym": ym, "queries": 0, "bytes": 0, "elapsed_sec": 0.0, "machines": {}}
+    for d in sorted(set(daily_q) | set(daily_e)):
+        if not d.startswith(ym):
+            continue
+        one = merge(d)
+        month["queries"] += one["queries"]
+        month["bytes"] += one["bytes"]
+        month["elapsed_sec"] += one["elapsed_sec"]
+        for lb, mv in one["machines"].items():
+            acc = month["machines"].setdefault(
+                lb, {"queries": 0, "bytes": 0, "elapsed_sec": 0.0})
+            acc["queries"] += mv["queries"]
+            acc["bytes"] += mv["bytes"]
+            acc["elapsed_sec"] += mv["elapsed_sec"]
+    month["elapsed_sec"] = round(month["elapsed_sec"], 1)
+    for mv in month["machines"].values():
+        mv["elapsed_sec"] = round(mv["elapsed_sec"], 1)
+
     # 本月 API 查詢筆數(依驗證碼分組,名稱遮罩)— 來自後台手動下載的 API 匯出檔。
     api = {"codes": [], "total": 0, "data_date": ""}
     if monthly_progress is not None:
@@ -172,6 +195,7 @@ def analytics_payload(cfg: dict, monitor, runner=None) -> dict:
             "machine_used_bytes": snap["used_bytes"],
             "quota_bytes": snap["quota_bytes"],
         },
+        "month": month,
         "history": history,
         "api": api,
         "quota": api_quota_status(cfg),
@@ -224,7 +248,28 @@ def status_payload(app) -> dict:
     snap["recent_errors"] = h["errors"]
     # 檢索資料的變動簽章:前端只在它變了才刷新爬取統計(避免每 5 秒盲刷)。
     snap["data_sig"] = _data_sig(app.cfg)
+    # 檢索清單的變動簽章,與 data_sig 分開:patents.txt 是「輸入」,summary/run_log 是
+    # 「產出」,兩者變動的時機完全不同 —— 併成一個簽章會讓對方存一次清單就害這台
+    # 重算一輪統計。分開之後,清單變動只觸發清單重讀(見 monitor.js 的 tickStatus)。
+    # 這是兩台共用同一個 Google Drive 資料夾時唯一會「一邊改、另一邊看不到」的資料:
+    # 別的都各機一檔(state_<機器>.json 等),只有清單是兩台共寫同一個檔。
+    snap["patents_sig"] = file_sig(gpss_path(app.cfg, "patents.txt"))
     return snap
+
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def traffic_log(app, date=None) -> dict:
+    """某天的逐分鐘流量明細(舊到新),外加有明細的日期清單供網頁切換。
+    明細由伺服器每次取樣寫檔,網頁有沒有開著都照記。"""
+    today = app.monitor.snapshot()["date"]
+    if not date or not _DATE_RE.match(date):
+        date = today
+    dates = traffic_log_dates()
+    if today not in dates:
+        dates.insert(0, today)
+    return {"date": date, "dates": dates, "rows": app.monitor.traffic_log(date)}
 
 
 def job_status(app) -> dict:
@@ -468,6 +513,7 @@ def build_routes(app: App) -> dict:
     """
     return {
         ("GET",  "/api/status"):          lambda req: status_payload(app),
+        ("GET",  "/api/traffic/log"):     lambda req: traffic_log(app, req.query.get("date")),
         ("GET",  "/api/job"):             lambda req: job_status(app),
         ("GET",  "/api/config"):          lambda req: config_payload(app),
         ("GET",  "/api/analytics"):       lambda req: analytics(app),

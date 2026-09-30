@@ -15,11 +15,14 @@ CSV 併成各機一個 Excel）。
 import collections
 import json
 import os
+import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 
 from core.health import record_error
 from core.paths import BASE, MACHINE_ID, RUN_LOG_PATH
@@ -35,6 +38,25 @@ from core.storage import output_store
 # 轉「完成」並自動停;併檔在背景慢慢做,從不擋使用者。鎖確保同時最多一個併檔在跑
 # (兩次併檔同時 load/save 同一個 Excel 會互相蓋寫/讀到半截)。
 _CONSOLIDATE_LOCK = threading.Lock()
+
+# 按「立即停止」後,先給子程序這麼久自己收尾(在批次邊界停下、關掉瀏覽器、把已跑完的
+# 寫進 CSV 與 run_log)。傳統檢索單筆最長吃 ACTION_TIMEOUT(15s)再加一次重試退避,
+# 90 秒足夠讓在途的那幾筆結束;真的逾時才硬殺。
+STOP_GRACE_SEC = 90
+
+# 硬殺 Playwright 子程序時,它底下的 node driver 會因為管道突然斷掉而寫不進去,往
+# stderr(與 stdout 併在同一條管道)噴一整片 "Error: EPIPE ... at ..." 堆疊。那是
+# 「被我們殺掉」的結果、不是檢索出問題,但使用者在網頁 log 只看得到嚇人的紅字。
+# 停止期間把這類行濾掉,只留真正的檢索訊息。
+_NODE_CRASH_PAT = re.compile(
+    r"^(node:|Node\.js v|Emitted '|Error: EPIPE|\s+at\s|\s*throw er;|\s*\^+\s*$|"
+    r"\s*(errno|syscall|code|erroredSysCall):|\s*[{}]\s*$)"
+)
+
+
+def _is_kill_noise(line: str) -> bool:
+    """這行是不是「子程序被硬殺」附帶噴出的 node 堆疊噪音(不是檢索訊息)。"""
+    return bool(_NODE_CRASH_PAT.match(line))
 
 
 def consolidate_async(out_dir):
@@ -70,6 +92,10 @@ class JobRunner:
         self.proc = None
         self.thread = None
         self.stop_flag = threading.Event()
+        # 停止旗標檔:按「立即停止」時建立,子程序自己看到就在批次邊界收尾退出。
+        # 放系統暫存區而不是 data/machines,免得這個反覆建立/刪除的小檔去擾動
+        # Google Drive 同步。檔名帶機器代號與伺服器 pid,多開也不互相干擾。
+        self.stop_file = Path(tempfile.gettempdir()) / f"gpss_stop_{MACHINE_ID}_{os.getpid()}.flag"
         self.chunk_started_wall = None   # 目前這批 subprocess 的開跑時刻(time.time())
         self._chunk_killed = False       # 本批是否被停止鈕/底線硬殺(決定要不要補記時間)
         self.campaign_started_wall = None  # 整個任務(可能多批)的開跑時刻;供控制台顯示即時執行時間
@@ -133,6 +159,7 @@ class JobRunner:
         self.target = count
 
         self.stop_flag.clear()
+        self._clear_stop_file()     # 清掉上一輪的殘留,否則一開跑就被自己停掉
         self.mode = mode
         self.method = method
         self.gpss_script = self.scripts[method]
@@ -165,6 +192,7 @@ class JobRunner:
             # 任務一結束就立刻轉「完成/停止」並讓子程序退出(上面已 running=False);
             # 把這輪產生的 CSV 併進當月 Excel 丟到背景慢慢做,絕不拖住任務狀態。
             consolidate_async(self.gpss_dir / "output")
+            self._clear_stop_file()
 
     def _run_chunk(self, count: int, offset: int):
         if count <= 0:
@@ -186,6 +214,8 @@ class JobRunner:
         # 否則它印完 summary 還卡在 Google Drive 上慢吞吞的 load/save,任務遲遲不結束、
         # 網頁不會自動停。子程序看到這個旗標就略過自己的 consolidate,印完 summary 即退出。
         env["GPSS_SKIP_CONSOLIDATE"] = "1"
+        # 合作式停止:子程序每筆開跑前/每批結束時看一下這個檔在不在,在就自己收尾退出。
+        env["GPSS_STOP_FILE"] = str(self.stop_file)
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -211,9 +241,17 @@ class JobRunner:
             # 只等使用者按「立即停止」—— 流量多寡不再中斷檢索。
             while proc.poll() is None:
                 if self.stop_flag.is_set():
-                    self._terminate(proc)
+                    # 先讓子程序自己收尾(stop() 已寫好旗標檔):它會在批次邊界停下、
+                    # 關掉瀏覽器、把已跑完的寫進 CSV 與 run_log,再正常退出。硬殺的話
+                    # Playwright 的 node driver 會噴一整片 EPIPE 堆疊,最後一批也全沒了。
+                    deadline = time.time() + STOP_GRACE_SEC
+                    while proc.poll() is None and time.time() < deadline:
+                        time.sleep(1)
+                    if proc.poll() is None:
+                        self._log(f"[warn] 子程序未在 {STOP_GRACE_SEC}s 內自行收尾,改為強制結束。")
+                        self._terminate(proc)
                     return
-                time.sleep(2)
+                time.sleep(1)
 
         sup = threading.Thread(target=supervise, daemon=True)
         sup.start()
@@ -221,6 +259,8 @@ class JobRunner:
         try:
             for line in proc.stdout:
                 s = line.rstrip("\n")
+                if self.stop_flag.is_set() and _is_kill_noise(s):
+                    continue        # 硬殺時附帶噴出的 node 堆疊,不是檢索錯誤,不要嚇使用者
                 if "##WARN##" in s:
                     msg = s.split("##WARN##", 1)[1].strip()
                     with self.lock:
@@ -279,12 +319,27 @@ class JobRunner:
         except Exception:
             pass
 
+    def _clear_stop_file(self):
+        """清掉停止旗標檔(開跑前與任務結束後各一次)。"""
+        try:
+            self.stop_file.unlink()
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            self._log(f"[warn] 無法清除停止旗標檔: {e}")
+
     def stop(self):
         self.stop_flag.set()
         with self.lock:
             p = self.proc
-        if p is not None:
-            self._terminate(p)
+        try:
+            self.stop_file.parent.mkdir(parents=True, exist_ok=True)
+            self.stop_file.write_text(datetime.now().isoformat(), encoding="utf-8")
+        except Exception as e:
+            # 旗標檔寫不出來 → 沒有合作式停止可用,只好退回硬殺(會有 EPIPE 噪音)。
+            self._log(f"[warn] 無法建立停止旗標檔({e}),改為直接結束子程序。")
+            if p is not None:
+                self._terminate(p)
         return True, "停止指令已送出(會在目前批次邊界安全停下)"
 
     def clear_warning(self):

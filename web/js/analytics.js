@@ -23,6 +23,7 @@ function allMachines(d) {
   const s = new Set();
   const add = o => { if (o) for (const k of Object.keys(o)) s.add(k); };
   add(d.today.machines);
+  add(d.month && d.month.machines);
   for (const h of d.history) add(h.machines);
   s.delete("未標記");
   return [...s].sort();
@@ -83,9 +84,21 @@ function renderAnalytics() {
   }
   if (!a.history.length) tb.innerHTML = `<tr><td colspan="4" class="hint">尚無紀錄</td></tr>`;
 
+  renderMonth(a);
   renderApiUsage(a.api, a.quota, a.case_hourly);
   renderToday();    // 今日進度小區塊(定義在 progress.js):今日目標 vs 今日已完成
   checkDailyGoal();
+}
+
+// 本月手動檢索卡:後端已把本月每一天(不只最近 31 天)加總好,這裡只做機器篩選與格式化。
+function renderMonth(a) {
+  const m = a.month;
+  if (!m) return;
+  const [y, mm] = m.ym.split("-");
+  document.getElementById("an-month").textContent = `${y} 年 ${Number(mm)} 月`;
+  document.getElementById("an-mq").textContent = pickVal(m, "queries").toLocaleString();
+  document.getElementById("an-mb").textContent = fmtBytes(pickVal(m, "bytes"));
+  document.getElementById("an-mt").textContent = fmtDur(pickVal(m, "elapsed_sec"));
 }
 
 // 整合卡:每支 userCode 一列。月查詢 / 當前時段輸出總額 / 本小時單筆案號最多次。
