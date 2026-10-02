@@ -1,5 +1,5 @@
-<!-- 這份由 flow_check 的「同步到同事版.bat」複製過去,請勿在 TIPO flow check 直接修改。
-     要改內容請改 flow_check/doc/同事版README.md,再執行同步。 -->
+<!-- 這份由 flow_check 的「同步到TIPO flow check.bat」複製過去,請勿在 TIPO flow check 直接修改。
+     要改內容請改 flow_check/doc/TIPO flow check README.md,再執行同步。 -->
 
 # 流量監控(TIPO flow check)  `v8.0.0`
 
@@ -112,5 +112,5 @@ TIPO flow check/
 - 版號改成跟 flow_check 一致(原本的 3.3.0 之後直接是 8.0.0)。之後由 flow_check 同步產生。
 - **新增「流量報表」頁籤**:每天一根堆疊柱,分出 ssh / Claude Code / VS Code 與其他,可切合計 / 上傳 / 下載與期間;點某一天看那天 8–20 點的逐時折線圖。
 - **新增每日用量統計**(`data/daily_stats_<機器>.json`):每天一筆、長期保存。
-- 拿掉「可用上限偵測」開關(同事版一直沒有用到它)。
+- 拿掉「可用上限偵測」開關(TIPO flow check 一直沒有用到它)。
 - 程式拆成多個模組(`program/core/`、`program/common/`),行為不變;你的 `data/` 與 `config.json` 照常讀取。

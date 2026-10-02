@@ -139,7 +139,7 @@
   <ul>
     <li><strong>新增一個網頁端點</strong> → 在 <code>program/core/routes.py</code> 寫一個函式,在最下方的 <code>build_routes()</code> 加一行註冊。路徑是<strong>精確比對</strong>,註冊順序無關緊要。</li>
     <li><strong>新增一個網頁頁籤</strong> → 丟兩個新檔:<code>web/partials/xxx.html</code>(面板,外層 <code>&lt;div class="panel hidden" id="panel-xxx"&gt;</code>)與 <code>web/js/xxx.js</code>(結尾呼叫 <code>registerTab({id, label, order, onInit?, onFirstShow?, onShow?})</code>)。現有檔案零改動,重整瀏覽器即生效。</li>
-    <li><strong>同事版(TIPO flow check)</strong>由 <code>同步到同事版.bat</code> 從這裡產生。在 <code>program/core/</code> 新增檔案時,要想清楚同事版需不需要(<code>tools/sync_tipo.json</code> 的 <code>copy</code> / <code>exclude</code>)。</li>
+    <li><strong>TIPO flow check</strong> 由 <code>同步到TIPO flow check.bat</code> 從這裡產生。在 <code>program/core/</code> 新增檔案時,要想清楚 TIPO flow check 需不需要(<code>tools/sync_tipo.json</code> 的 <code>copy</code> / <code>exclude</code>)。</li>
   </ul>
 </blockquote>
 
@@ -149,14 +149,14 @@
 │  ├─ README.md            本說明文件的 Markdown 版
 │  ├─ 進階參考.html         設定速查、檔案結構、HTTP API 端點
 │  ├─ 版本紀錄.html         各版更新紀錄
-│  ├─ 同事版README.md       同事版的 README 來源(同步時複製成 TIPO flow check 的 README.md)
+│  ├─ TIPO flow check README.md       TIPO flow check 的 README 來源(同步時複製成 TIPO flow check 的 README.md)
 │  └─ specs/ plans/        設計文件、實作計畫與進度筆記
 ├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉(啟動時自動檢查並安裝 psutil)
 ├─ diag_lan.bat           內網排除診斷(需管理員)
-├─ 同步到同事版.bat        產生同事版(雙擊只預覽;加 --apply 才寫入)
+├─ 同步到TIPO flow check.bat        產生 TIPO flow check(雙擊只預覽;加 --apply 才寫入)
 ├─ requirements.txt       第三方套件(psutil)
 ├─ config.json            主設定:額度、port、取樣間隔、網段等
-├─ tools/                 開發用工具(同步腳本與它的測試;不會同步到同事版)
+├─ tools/                 開發用工具(同步腳本與它的測試;不會同步到 TIPO flow check)
 ├─ web/                   網頁介面(免打包純 HTML/JS)
 │  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
 │  ├─ style.css           樣式:深色 / 淺色共用一份骨架,靠 &lt;html data-theme&gt; 切 token

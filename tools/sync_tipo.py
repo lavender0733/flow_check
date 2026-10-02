@@ -1,5 +1,5 @@
 """
-同步到同事版(TIPO flow check)
+同步到TIPO flow check
 ==============================
 TIPO flow check 不再手動改,一律由這裡產生:依 tools/sync_tipo.json 的清單把流量相關的
 程式複製過去,只覆蓋程式,**對方的 data/ 與 config.json 一律不碰**。
@@ -299,7 +299,7 @@ def _print_plan(p: dict, dst: Path) -> None:
 
 
 def main(argv) -> int:
-    ap = argparse.ArgumentParser(description="把流量監控同步到同事版(TIPO flow check)")
+    ap = argparse.ArgumentParser(description="把流量監控同步到TIPO flow check")
     ap.add_argument("--apply", action="store_true", help="真的寫入 target(預設只預覽)")
     ap.add_argument("--target", help="覆寫 sync_tipo.json 的 target")
     args = ap.parse_args(argv)
@@ -330,7 +330,7 @@ def main(argv) -> int:
         p = plan(staged, dst, spec)
         _print_plan(p, dst)
         if not args.apply:
-            print("\n這是預覽,沒有寫入。要寫入請在命令列執行:同步到同事版.bat --apply")
+            print('\n這是預覽,沒有寫入。要寫入請在命令列執行:"同步到TIPO flow check.bat" --apply')
             return 0
 
         print("\n即將寫入上面的變更。確定嗎?輸入 y 繼續:", end=" ", flush=True)

@@ -137,7 +137,7 @@ class BuildTest(SyncTestCase):
         out = self.tmp / "out"
         sync_tipo.build(REPO, load_spec(), out)
         self.assertEqual((out / "README.md").read_bytes(),
-                         (REPO / "doc" / "同事版README.md").read_bytes())
+                         (REPO / "doc" / "TIPO flow check README.md").read_bytes())
 
 
 class PlanApplyTest(SyncTestCase):

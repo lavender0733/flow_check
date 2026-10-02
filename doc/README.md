@@ -84,7 +84,7 @@
 > - **新增一個 HTTP 端點** → 在 `program/core/routes.py` 寫一個函式,在 `build_routes()` 加一行註冊。路徑是**精確比對**,註冊順序無關緊要。
 > - **新增一個網頁頁籤** → 丟兩個新檔:`web/partials/xxx.html`(面板,外層 `<div class="panel hidden" id="panel-xxx">`)與
 >   `web/js/xxx.js`(結尾呼叫 `registerTab({id, label, order, onInit?, onFirstShow?, onShow?})`)。**現有檔案零改動**,重整即生效。
-> - **同事版(TIPO flow check)**由 `同步到同事版.bat` 從這裡產生。在 `program/core/` 新增檔案時,要想清楚同事版需不需要
+> - **TIPO flow check** 由 `同步到TIPO flow check.bat` 從這裡產生。在 `program/core/` 新增檔案時,要想清楚 TIPO flow check 需不需要
 >   (`tools/sync_tipo.json` 的 `copy` / `exclude`)。
 
 ```
@@ -94,12 +94,12 @@ flow_check/
 │  ├─ README.md            本說明文件的 Markdown 版
 │  ├─ 進階參考.html         設定速查、檔案結構、HTTP API 端點
 │  ├─ 版本紀錄.html         各版更新紀錄
-│  ├─ 同事版README.md       同事版 README 的來源(同步時複製成 TIPO flow check 的 README.md)
+│  ├─ TIPO flow check README.md       TIPO flow check 的 README 來源(同步時複製成 TIPO flow check 的 README.md)
 │  ├─ specs/               設計文件
 │  └─ plans/               實作計畫與進度筆記
 ├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉(啟動時自動檢查並安裝 psutil)
 ├─ diag_lan.bat           內網排除診斷(需管理員)
-├─ 同步到同事版.bat        產生同事版(雙擊只預覽;命令列加 --apply 才寫入)
+├─ 同步到TIPO flow check.bat        產生 TIPO flow check(雙擊只預覽;命令列加 --apply 才寫入)
 ├─ requirements.txt       第三方相依套件(psutil)
 ├─ config.json            主設定:額度、port、取樣間隔、網段
 ├─ tools/                 開發用工具:sync_tipo.py(同步腳本)、sync_tipo.json(清單與路徑對應)、test_sync_tipo.py

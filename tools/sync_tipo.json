@@ -8,7 +8,7 @@
     "start_monitor.bat", "stop_monitor.bat", "diag_lan.bat", "requirements.txt"
   ],
   "exclude": [],
-  "readme": {"from": "doc/同事版README.md", "to": "README.md"},
+  "readme": {"from": "doc/TIPO flow check README.md", "to": "README.md"},
   "protect": ["data", "config.json", "desktop.ini"],
   "rewrite": [
     {"file": "program/core/paths.py",
