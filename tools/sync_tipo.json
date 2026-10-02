@@ -1,0 +1,33 @@
+{
+  "target": "G:/我的雲端硬碟/TIPO flow check",
+  "copy": [
+    "program/common/*.py", "program/core/*.py",
+    "web/index.html", "web/style.css", "web/style-classic.css",
+    "web/js/util.js", "web/js/main.js", "web/js/monitor.js", "web/js/report.js",
+    "web/partials/monitor.html", "web/partials/report.html",
+    "start_monitor.bat", "stop_monitor.bat", "diag_lan.bat", "requirements.txt"
+  ],
+  "exclude": [],
+  "readme": {"from": "doc/同事版README.md", "to": "README.md"},
+  "protect": ["data", "config.json", "desktop.ini"],
+  "rewrite": [
+    {"file": "program/core/paths.py",
+     "old": "MACHINES_PATH = DATA_CONFIG_DIR / \"machines.json\"",
+     "new": "MACHINES_PATH = DATA_DIR / \"machines.json\""},
+    {"file": "program/core/paths.py",
+     "old": "STATE_PATH = MACHINE_DATA_DIR / f\"state_{MACHINE_ID}.json\"",
+     "new": "STATE_PATH = DATA_DIR / f\"state_{MACHINE_ID}.json\""},
+    {"file": "program/core/paths.py",
+     "old": "PREFS_PATH = MACHINE_DATA_DIR / f\"prefs_{MACHINE_ID}.json\"",
+     "new": "PREFS_PATH = DATA_DIR / f\"prefs_{MACHINE_ID}.json\""},
+    {"file": "program/core/paths.py",
+     "old": "DAILY_STATS_PATH = MACHINE_DATA_DIR / f\"daily_stats_{MACHINE_ID}.json\"",
+     "new": "DAILY_STATS_PATH = DATA_DIR / f\"daily_stats_{MACHINE_ID}.json\""},
+    {"file": "program/core/paths.py",
+     "old": "/ \"flow_check\" / \"traffic\"",
+     "new": "/ \"tipo_flow_check\" / \"traffic\""},
+    {"file": "start_monitor.bat",
+     "old": "set \"TASKNAME=FlowCheckTrafficMonitor\"",
+     "new": "set \"TASKNAME=TipoFlowCheckTrafficMonitor\""}
+  ]
+}
