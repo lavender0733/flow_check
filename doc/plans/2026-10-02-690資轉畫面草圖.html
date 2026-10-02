@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>690資轉 畫面草圖</title>
+<style>
+/* 版面:沿用主工具的單欄卡片(最寬 940px)。上方是草圖說明與情境切換,下方是嵌進主工具外殼的「690資轉」頁籤。
+   配色照抄 web/style.css 的淺色 / 深色 token,字型一律系統內建(主工具不抓外部字型),讓草圖就是正式畫面的樣子。 */
+:root {
+  --bg: #ece3fb; --card: rgba(255,255,255,.55); --card-line: rgba(255,255,255,.9);
+  --txt: #1c1230; --dim: #5d5378; --muted: #6b6180; --line: rgba(88,50,160,.14);
+  --btn: #853bf6; --btn-ink: #7326e0; --btn-weak: rgba(133,59,246,.14); --btn-hover: #7430e8;
+  --ok: #3f8f21; --ok-ink: #317219; --danger: #d4176f; --danger-ink: #ad1159;
+  --danger-bg: rgba(212,23,111,.10); --danger-line: rgba(212,23,111,.28);
+  --warn: #d98e04; --warn-ink: #7a5200; --warn-bg: #fff4e0; --warn-line: #d98e04;
+  --track: rgba(88,50,160,.12); --th-bg: rgba(255,255,255,.34); --row-hover: rgba(133,59,246,.06);
+  --surface: rgba(255,255,255,.5); --note-bg: #fffbe8; --note-line: #e7cf74; --note-ink: #5c4a00;
+  --tip-bg: #1c1230; --tip-fg: #ffffff;
+  --sh-card: 0 16px 40px rgba(88,50,160,.14);
+  --ff-ui: "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", system-ui, sans-serif;
+  --ff-mono: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0c0714; --card: rgba(255,255,255,.055); --card-line: rgba(255,255,255,.10);
+  --txt: #ffffff; --dim: #b8b0cc; --muted: #a49db8; --line: rgba(196,170,255,.13);
+  --btn: #8b45f5; --btn-ink: #b18cff; --btn-weak: rgba(139,69,245,.18); --btn-hover: #9d63ff;
+  --ok: #9fe870; --ok-ink: #9fe870; --danger: #ff5fae; --danger-ink: #ff5fae;
+  --danger-bg: rgba(255,95,174,.14); --danger-line: rgba(255,95,174,.36);
+  --warn: #fcc419; --warn-ink: #ffd75e; --warn-bg: rgba(217,142,4,.20); --warn-line: rgba(217,142,4,.55);
+  --track: rgba(255,255,255,.10); --th-bg: rgba(255,255,255,.05); --row-hover: rgba(255,255,255,.04);
+  --surface: rgba(255,255,255,.06); --note-bg: rgba(231,207,116,.10); --note-line: rgba(231,207,116,.45); --note-ink: #f1dc8c;
+  --tip-bg: #2a2140; --tip-fg: #ffffff;
+  --sh-card: 0 16px 40px rgba(0,0,0,.40); color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0c0714; --card: rgba(255,255,255,.055); --card-line: rgba(255,255,255,.10);
+  --txt: #ffffff; --dim: #b8b0cc; --muted: #a49db8; --line: rgba(196,170,255,.13);
+  --btn: #8b45f5; --btn-ink: #b18cff; --btn-weak: rgba(139,69,245,.18); --btn-hover: #9d63ff;
+  --ok: #9fe870; --ok-ink: #9fe870; --danger: #ff5fae; --danger-ink: #ff5fae;
+  --danger-bg: rgba(255,95,174,.14); --danger-line: rgba(255,95,174,.36);
+  --warn: #fcc419; --warn-ink: #ffd75e; --warn-bg: rgba(217,142,4,.20); --warn-line: rgba(217,142,4,.55);
+  --track: rgba(255,255,255,.10); --th-bg: rgba(255,255,255,.05); --row-hover: rgba(255,255,255,.04);
+  --surface: rgba(255,255,255,.06); --note-bg: rgba(231,207,116,.10); --note-line: rgba(231,207,116,.45); --note-ink: #f1dc8c;
+  --tip-bg: #2a2140; --tip-fg: #ffffff;
+  --sh-card: 0 16px 40px rgba(0,0,0,.40); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--txt); font-family: var(--ff-ui); font-size: 14px; line-height: 1.55;
+       padding-inline: 16px; padding-block: 24px 48px; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 940px; margin: 0 auto; display: grid; gap: 22px; }
+.stack { display: grid; gap: 10px; }
+.card { background: var(--card); border: 1px solid var(--card-line); border-radius: 20px; padding: 22px 24px;
+        box-shadow: var(--sh-card); min-width: 0; }
+h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.01em; text-wrap: balance; }
+h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .06em;
+     display: flex; align-items: center; gap: 10px; flex-wrap: wrap; text-wrap: balance; }
+.hint { color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: 0; }
+.mono { font-family: var(--ff-mono); font-variant-numeric: tabular-nums; }
+
+/* ── 草圖說明區 ── */
+.brief { display: grid; gap: 12px; }
+.brief p { margin: 0; max-width: 68ch; color: var(--dim); }
+.scen { display: flex; gap: 6px; flex-wrap: wrap; }
+.scen button { font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+               border: 1px solid var(--line); background: var(--surface); color: var(--dim); }
+.scen button:hover { color: var(--txt); background: var(--btn-weak); }
+.scen button[aria-pressed="true"] { color: #fff; background: var(--btn); border-color: var(--btn); }
+.scen button:focus-visible, .btn:focus-visible, summary:focus-visible, .dotbtn:focus-visible {
+  outline: 2px solid var(--btn); outline-offset: 2px; }
+.scen-note { border-left: 3px solid var(--note-line); background: var(--note-bg); color: var(--note-ink);
+             padding: 9px 13px; border-radius: 0 10px 10px 0; font-size: 13px; }
+
+/* ── 模擬主工具外殼 ── */
+.shell { display: grid; gap: 18px; border: 1px dashed var(--line); border-radius: 24px; padding: 18px; min-width: 0; }
+.shell-cap { font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab { font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 999px;
+       background: var(--surface); color: var(--dim); }
+.tab.on { color: #fff; background: var(--btn); }
+.tab .warnmark { margin-left: 4px; }
+
+.banner { border-radius: 12px; padding: 11px 15px; font-size: 13px; display: grid; gap: 4px; }
+.banner-warn { background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-ink); }
+.banner-danger { background: var(--danger-bg); border: 1px solid var(--danger-line); color: var(--danger-ink); }
+.banner b { font-weight: 600; }
+
+/* ── 摘要列 ── */
+.summary { display: flex; flex-wrap: wrap; margin-top: 14px; }
+.stat { flex: 1 1 120px; padding: 2px 16px; border-left: 1px solid var(--line); min-width: 0; }
+.stat:first-child { padding-left: 0; border-left: 0; }
+.stat .k { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .06em; }
+.stat .v { font-size: 19px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.stat .v.bad { color: var(--danger-ink); }
+.stat .v.good { color: var(--ok-ink); }
+@media (max-width: 560px) {
+  .stat { flex-basis: 50%; margin-top: 10px; }
+  .stat:nth-child(odd) { padding-left: 0; border-left: 0; }
+}
+
+.btn { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 15px; border-radius: 999px; border: 0;
+       background: var(--btn); color: #fff; cursor: pointer; margin-left: auto; letter-spacing: 0; }
+.btn:hover { background: var(--btn-hover); }
+.btn[disabled] { opacity: .45; cursor: wait; }
+
+/* ── 狀態點:形狀 + 顏色雙重編碼,色盲也分得出來 ── */
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; vertical-align: middle; background: var(--muted); }
+.dot.ok { background: var(--ok); }
+.dot.nodata { background: transparent; box-shadow: inset 0 0 0 2px var(--ok); }
+.dot.fail { background: var(--danger); }
+.dot.missing { background: transparent; box-shadow: inset 0 0 0 2px var(--danger); border-radius: 2px; }
+.dot.unknown { background: var(--warn); border-radius: 2px; transform: rotate(45deg) scale(.85); }
+.dot.pending { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
+.dot.none { background: var(--track); width: 6px; height: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); margin-top: 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── 今日卡:每個系統一列 ── */
+.sys { display: grid; grid-template-columns: 14px minmax(7.5em, 9em) minmax(5em, 6.5em) minmax(0, 1fr) auto;
+       gap: 6px 14px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.sys:last-child { border-bottom: 0; }
+.sys .name { font-weight: 600; min-width: 0; }
+.sys .name small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; font-family: var(--ff-mono); }
+.sys .state { font-size: 13px; color: var(--dim); }
+.sys .state.bad { color: var(--danger-ink); font-weight: 600; }
+.sys .when { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.steps { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; min-width: 0; }
+.step { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.step.wiki { color: var(--txt); font-weight: 600; }
+.detail { grid-column: 2 / -1; font-size: 12.5px; border-radius: 10px; padding: 7px 11px;
+          display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; min-width: 0; }
+.detail.bad { background: var(--danger-bg); color: var(--danger-ink); }
+.detail.soft { background: var(--track); color: var(--dim); }
+.detail a { color: inherit; font-weight: 600; }
+.detail code { font-family: var(--ff-mono); font-size: 11.5px; overflow-wrap: anywhere; }
+@media (max-width: 680px) {
+  .sys { grid-template-columns: 14px minmax(0, 1fr) auto; }
+  .sys .state { grid-column: 2; }
+  .sys .when { grid-row: 1; grid-column: 3; }
+  .sys .steps { grid-column: 2 / -1; }
+}
+
+/* ── 近幾天矩陣 ── */
+.mx-wrap { overflow-x: auto; margin-top: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); background: var(--th-bg); font-weight: 600; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+td.c, th.c { text-align: center; }
+tbody tr:hover > td { background: var(--row-hover); }
+tbody tr:last-child > td { border-bottom: 0; }
+.dotbtn { background: none; border: 0; padding: 4px; cursor: help; border-radius: 6px; line-height: 0; color: inherit; }
+
+/* ── 期別列 / Wiki 列(共用一列三欄的版型)── */
+.lines { display: grid; gap: 10px; margin-top: 12px; }
+.line { display: grid; grid-template-columns: minmax(8em, 11em) minmax(0, 1fr) auto; gap: 4px 14px; align-items: center;
+        font-size: 13px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.line:last-child { border-bottom: 0; padding-bottom: 0; }
+.line .pg { font-weight: 600; min-width: 0; }
+.line .pg .hint { display: block; font-weight: 400; }
+.line .what { color: var(--dim); min-width: 0; }
+.volrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.volchip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 10px 1px 3px; border-radius: 999px; border: 1px solid var(--line);
+           font-family: var(--ff-mono); font-size: 12px; color: var(--dim); background: var(--surface); }
+.volchip.stale { opacity: .55; text-decoration: line-through; }
+.tag { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; justify-self: end; }
+.tag.add { background: var(--btn-weak); color: var(--btn-ink); }
+.tag.skip { background: var(--track); color: var(--dim); }
+.tag.conf { background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--warn-line); }
+@media (max-width: 560px) {
+  .line { grid-template-columns: minmax(0, 1fr) auto; }
+  .line .what, .line .volrow { grid-column: 1 / -1; }
+}
+
+details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .06em; }
+.mail { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 5px 12px; font-size: 12.5px; margin-top: 12px; align-items: center; }
+.mail .t { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mail .s { font-family: var(--ff-mono); font-size: 12px; overflow-wrap: anywhere; }
+.mail .s .hint { font-family: var(--ff-ui); }
+.foot { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12px; color: var(--muted); padding: 2px 6px; }
+.foot b { color: var(--dim); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.tip { position: fixed; z-index: 10; max-width: min(300px, calc(100vw - 16px)); background: var(--tip-bg); color: var(--tip-fg);
+       font-size: 12px; line-height: 1.5; padding: 8px 11px; border-radius: 8px; pointer-events: none; white-space: pre-line;
+       box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--track); border-top-color: var(--btn);
+        border-radius: 50%; animation: rot .8s linear infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <section class="card brief" aria-labelledby="brief-h">
+    <h1 id="brief-h">「690資轉」頁籤草圖</h1>
+    <p>這是要加進流量監控工具的新頁籤。內容取自 2026-09-29 到 10-02 實際收到的 284 封 <span class="mono">[s690]</span> 通知信,只有「授權失效」這個情境是假造的。下方用主工具的外殼呈現,配色跟著深色 / 淺色走。</p>
+    <p>切換情境,看畫面在不同狀況下怎麼提示。滑鼠移到任何一個圓點,會顯示那一步的細節。</p>
+    <div class="scen" role="group" aria-label="情境">
+      <button type="button" data-s="now" aria-pressed="true">10-02 上午(現況)</button>
+      <button type="button" data-s="early" aria-pressed="false">10-02 清晨 05:00</button>
+      <button type="button" data-s="oct1" aria-pressed="false">回看 10-01</button>
+      <button type="button" data-s="auth" aria-pressed="false">授權失效</button>
+    </div>
+    <div class="scen-note" id="scen-note"></div>
+  </section>
+
+  <div class="shell">
+    <div class="shell-cap">主工具畫面 · 127.0.0.1:8765</div>
+    <nav class="tabs" aria-label="頁籤">
+      <span class="tab">流量監控</span><span class="tab">檢索控制台</span><span class="tab">爬取統計</span><span class="tab">檢索進度</span>
+      <span class="tab on">690資轉<span class="warnmark" id="tabwarn" hidden>⚠</span></span>
+    </nav>
+
+    <div id="banners" class="stack"></div>
+
+    <section class="card" aria-labelledby="today-h">
+      <h2 id="today-h">今日轉置 <span class="hint" id="today-date"></span>
+        <span class="spin" id="spin" hidden></span>
+        <button type="button" class="btn" id="refresh">立即更新</button></h2>
+      <div class="summary" id="summary"></div>
+      <div id="systems" style="margin-top:8px"></div>
+      <div class="legend" aria-label="圖例">
+        <span><i class="dot ok"></i>成功</span>
+        <span><i class="dot nodata"></i>無資料(當天沒有新檔)</span>
+        <span><i class="dot fail"></i>失敗</span>
+        <span><i class="dot missing"></i>該到沒到</span>
+        <span><i class="dot pending"></i>等待中</span>
+        <span><i class="dot unknown"></i>無法判定</span>
+        <span>粗體步驟 = 會登記到 wiki</span>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="hist-h">
+      <h2 id="hist-h">每日系統 · 近幾天</h2>
+      <div class="mx-wrap"><table id="matrix"></table></div>
+      <h2 style="margin-top:22px">期別系統 · 最近幾期 <span class="hint">依 log 裡的公告期數 VOL;一次手動執行可能連跑好幾期</span></h2>
+      <div class="lines" id="vols"></div>
+    </section>
+
+    <section class="card" aria-labelledby="wiki-h">
+      <h2 id="wiki-h">Wiki 登記 <span class="hint" id="wiki-mode"></span></h2>
+      <div class="lines" id="wiki"></div>
+    </section>
+
+    <section class="card">
+      <details id="maildetails">
+        <summary>最近收到的信(含維運 job)</summary>
+        <div class="mail" id="mail"></div>
+      </details>
+    </section>
+
+    <div class="foot" id="foot"></div>
+  </div>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+// ===== 真實資料(2026-10-02 由 Gmail 唯讀讀取後整理)=====
+// 每一步都有自己的 -check 信;畫面上把「步驟 + check」併成一顆點,check 也成功才算綠。
+const DAILY = [
+  { id: "techreport", label: "技術報告", code: "012000", start: "02:10", due: "03:40",
+    steps: [["RAW", 1], ["L1", 0], ["L3", 1], ["OS", 1]] },
+  { id: "status", label: "案件狀態", code: "011700", start: "06:10", due: "07:40",
+    steps: [["RAW", 1], ["L1", 0], ["L2 分類", 0], ["L3", 1], ["OS", 1], ["L2P TWB", 0], ["L2P TWA", 0]] },
+  { id: "legal", label: "權利異動", code: "011900", start: "06:10", due: "07:40",
+    steps: [["RAW", 1], ["L1", 0], ["L2", 0], ["L2 分類", 0], ["L3", 1], ["OS", 1], ["L2P TWB", 0]] },
+  { id: "circuit", label: "積體電路佈局", code: "011800", start: "06:10", due: "07:40",
+    steps: [["RAW", 1], ["L1", 0], ["L3", 1], ["OS", 1]] },
+  { id: "search", label: "搜尋後續", code: "015100 · 015200", start: "04:00", due: "05:30",
+    steps: [["TWB L3", 0], ["TWB OS", 0], ["TWA L3", 0], ["TWA OS", 0]] },
+  { id: "setup", label: "建資料包", code: "010100", start: "00:01", due: "01:30", steps: [["建表", 0]] },
+];
+const ALL = (st, n) => Array(n).fill(st);
+const n = (id) => DAILY.find(d => d.id === id).steps.length;
+const DAYS = {
+  "2026-09-30": {
+    techreport: { s: ALL("ok", 4), at: "02:10" }, status: { s: ALL("ok", 7), at: "06:10" },
+    legal: { s: ALL("ok", 7), at: "06:11" }, circuit: { s: ALL("ok", 4), at: "06:10" },
+    search: { s: ALL("ok", 4), at: "04:00", note: "15:47 另有手動補跑一次,也成功" }, setup: { s: ALL("ok", 1), at: "00:01" },
+  },
+  "2026-10-01": {
+    techreport: { s: ALL("nodata", 4), at: "02:10", soft: true, exec: 2177,
+                  err: "GCS 資料夾無檔案: gs://s690-patent-data/tw/techreport-pdf/1151001" },
+    status: { s: ALL("ok", 7), at: "06:11" },
+    legal: { s: ["ok", "missing", "missing", "missing", "missing", "missing", "missing"], at: "06:10",
+             err: "只收到 RAW 與 RAW 檢查(寫入 16,556 筆),之後的步驟和母 job 011900 都沒有來信,也沒有失敗信。" },
+    circuit: { s: ALL("ok", 4), at: "06:10" }, search: { s: ALL("ok", 4), at: "04:05" }, setup: { s: ALL("ok", 1), at: "00:01" },
+  },
+  "2026-10-02": {
+    techreport: { s: ALL("ok", 4), at: "02:10" }, status: { s: ALL("ok", 7), at: "06:11" },
+    legal: { s: ALL("ok", 7), at: "06:11" }, circuit: { s: ALL("ok", 4), at: "06:10" },
+    search: { s: ALL("ok", 4), at: "04:00" }, setup: { s: ALL("ok", 1), at: "00:01" },
+  },
+};
+// 10-02 清晨 05:00:技術報告與搜尋已跑完,06:10 那批還沒開始
+const EARLY = Object.assign({}, DAYS["2026-10-02"]);
+for (const k of ["status", "legal", "circuit"]) EARLY[k] = { s: ALL("pending", n(k)), at: null };
+
+// 期別系統:依 log 的 VOL 分段(真實)
+const VOLSYS = [
+  { label: "全文 TWA", code: "011600", wiki: "全文頁 TWA 表", steps: ["RAW", "L1", "L2 Pending"], last: "09-30",
+    runs: [
+      { vol: "2415", of: "2026-08-01", at: "09-29 14:54", st: ["fail", "none", "none"], stale: true,
+        err: "GCS 資料夾無檔案: …/pub-fullimage/1150801A15", after: "隔天重跑已成功,不再列為警示" },
+      { vol: "2415", of: "2026-08-01", at: "09-30 14:24", st: ALL("ok", 3), writes: 2518 },
+      { vol: "2414", of: "2026-07-16", at: "09-30 14:26", st: ALL("ok", 3), writes: 1946 },
+      { vol: "2413", of: "2026-07-01", at: "09-30 14:28", st: ALL("ok", 3), writes: 3175 },
+    ] },
+  { label: "全文 TWB", code: "0115xx", wiki: "全文頁 TWB 表", steps: ["RAW", "L1", "L2 Pending"], last: "—", runs: [] },
+  { label: "書目 TWB", code: "010200", wiki: "書目頁 TWB 表", steps: ["RAW", "L1", "Industry", "L2 Pending"], last: "10-01",
+    runs: [
+      { vol: "5328", of: "2026-10-01", at: "RAW 09-30 14:31 · 其餘 10-01 00:30", st: ALL("ok", 4), writes: 1640 },
+      { vol: "5211", of: "2025-04-11", at: "09-30 15:38", st: ["ok", "none", "none", "none"], writes: 1819, note: "手動補跑舊期,只跑了 RAW" },
+    ] },
+  { label: "書目 TWA", code: "010300", wiki: "書目頁 TWA 表", steps: ["RAW", "L1", "Industry", "L2 Pending"], last: "10-01",
+    runs: [ { vol: "2419", of: "2026-10-01", at: "RAW 09-30 14:32 · 其餘 10-01 00:30", st: ALL("ok", 4), writes: 2384 } ] },
+  { label: "雜項 TWB", code: "011100", wiki: null, steps: ["RAW", "L1", "L3", "OS", "L2 Pending"], last: "10-01",
+    runs: [ { vol: "5328", of: "2026-10-01", at: "10-01 01:30", st: ALL("ok", 5), writes: 3561 } ] },
+  { label: "雜項 TWA", code: "011200", wiki: null, steps: ["RAW", "L1", "L3", "OS", "L2 Pending"], last: "10-01",
+    runs: [ { vol: "2419", of: "2026-10-01", at: "10-01 01:30", st: ALL("ok", 5), writes: 2632 } ] },
+  { label: "英譯 公告 · 公開", code: "011300 · 011400", wiki: null, steps: ["RAW"], last: "09-30",
+    runs: [ { vol: "5325–5327", of: null, at: "09-30 01:00", st: ["nodata"], err: "GCS 資料夾無檔案(公告英譯)" },
+            { vol: "2417–2418", of: null, at: "09-30 01:00", st: ["nodata"], err: "GCS 資料夾無檔案(公開英譯)" } ] },
+];
+
+// 最近的信(真實主旨,節錄)
+const MAIL = [
+  ["10-02 06:30", "ok", "990107-pg-restore-point", "維運"], ["10-02 06:30", "ok", "990607-citus-restore-point", "維運"],
+  ["10-02 06:11", "ok", "011900-posted-legal-auto", "權利異動"], ["10-02 06:11", "ok", "011700-posted-status-auto", "案件狀態"],
+  ["10-02 06:10", "ok", "011800-posted-circuit-auto", "積體電路佈局"], ["10-02 05:01", "ok", "990606-citus-backup-incr", "維運"],
+  ["10-02 05:00", "ok", "990106-pg-backup-incr", "維運"], ["10-02 05:00", "ok", "990704-os-snapshot", "維運"],
+  ["10-02 04:00", "ok", "015200-search-twa-auto", "搜尋後續"], ["10-02 04:00", "ok", "015100-search-twb-auto", "搜尋後續"],
+  ["10-02 03:00", "ok", "990201-mailer-files-clean", "維運"], ["10-02 02:10", "ok", "012000-techreport-pdf-auto", "技術報告"],
+  ["10-01 06:11", "ok", "011700-posted-status-auto", "案件狀態"], ["10-01 06:10", "ok", "011800-posted-circuit-auto", "積體電路佈局"],
+  ["10-01 06:10", "ok", "011902-posted-legal-step1-raw-check", "權利異動(之後就沒有信了)"],
+  ["10-01 02:10", "fail", "012000-techreport-pdf-auto", "技術報告"], ["10-01 02:10", "fail", "012001-techreport-pdf-step1-raw", "技術報告"],
+  ["10-01 01:30", "ok", "011100-gazette-sud-auto", "雜項 TWB"], ["10-01 00:30", "ok", "010200-gazette-biblio-auto", "書目 TWB"],
+];
+
+// Wiki 預計改動(以 2026-10-01 讀到的頁面內容推算)
+const WIKI = [
+  { pg: "每日執行項目", what: "新增 2026/10/02 一列:技術報告、案件狀態、權利異動、積體電路的 RAW / L3 / OS 共 12 格打 v", kind: "add", tag: "新增 1 列" },
+  { pg: "每日執行項目", what: "新增 2026/10/01 一列:技術報告 3 格打 v(無資料也算完成)、案件狀態 3 格、積體電路 3 格;權利異動只打 RAW,L3 / OS 留空等人處理", kind: "add", tag: "新增 1 列", oct1: true },
+  { pg: "每日執行項目", what: "新增 2026/09/30 一列:四個系統 12 格打 v", kind: "add", tag: "新增 1 列" },
+  { pg: "TW全文 · TWA", what: "公告期數 2415:表格沒有這一列,新增(資料日期 20260801、日期 08/01),RAW / L1 / L2 Pending 打 v、TAG 20260930", kind: "add", tag: "新增 1 列" },
+  { pg: "TW全文 · TWA", what: "公告期數 2414、2413:RAW / L1 / L2 Pending 打 v,TAG 由 2026xxxx 改成 20260930", kind: "add", tag: "填 8 格" },
+  { pg: "TW書目 · TWB", what: "公告期數 5328:TAG 20261001、Biblio 1640 跟頁面上的值一樣", kind: "skip", tag: "不用改" },
+  { pg: "TW書目 · TWB", what: "公告期數 5211(2025-04-11 那期)比表格最舊的 5315 還舊,不插入", kind: "skip", tag: "略過" },
+  { pg: "TW書目 · TWA", what: "公告期數 2419:TAG 20261001、Biblio 2384 跟頁面上的值一樣", kind: "skip", tag: "不用改" },
+];
+
+// ===== 畫面 =====
+const $ = (id) => document.getElementById(id);
+const LABEL = { ok: "成功", nodata: "無資料", fail: "失敗", missing: "該到沒到", pending: "等待中", unknown: "無法判定", none: "沒有執行" };
+const RANK = ["fail", "missing", "unknown", "pending", "nodata", "ok"];
+const worst = (arr) => RANK.find(r => arr.includes(r)) || "none";
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function dot(state, tip) {
+  const b = el("button", "dotbtn");
+  b.type = "button";
+  b.setAttribute("aria-label", tip.replace(/\n/g, ","));
+  b.dataset.tip = tip;
+  b.appendChild(el("i", "dot " + state));
+  return b;
+}
+
+const SCEN = {
+  now:   { today: "2026-10-02", clock: "09:12", data: DAYS["2026-10-02"], mb: "1.3 MB",
+           note: "10-02 上午:六個每日系統都跑完了,畫面一片綠,頁籤上沒有警示。這是平常最常看到的樣子。" },
+  early: { today: "2026-10-02", clock: "05:00", data: EARLY, mb: "0.4 MB",
+           note: "10-02 清晨 05:00:技術報告與搜尋已經跑完;案件狀態、權利異動、積體電路 06:10 才開始,顯示「等待中」,不算警示。過了 07:40 還沒收到信,才會變成「該到沒到」。" },
+  oct1:  { today: "2026-10-01", clock: "09:12", data: DAYS["2026-10-01"], mb: "1.1 MB",
+           note: "10-01 的真實狀況。技術報告當天沒有新檔,顯示「無資料」並視為完成。權利異動跑完 RAW 之後就沒有下文,也沒有任何失敗信,所以畫面要靠「該到沒到」把它抓出來。" },
+  auth:  { today: "2026-10-02", clock: "09:12", data: DAYS["2026-10-02"], mb: "—", auth: true,
+           note: "假造的情境:Gmail 授權過期或被收回。畫面保留最後一次抓到的資料,用紅色橫幅說明資料已經過時、要怎麼修好。" },
+};
+let cur = "now";
+
+function renderBanners(sc, alerts) {
+  const box = $("banners");
+  box.replaceChildren();
+  if (sc.auth) {
+    const b = el("div", "banner banner-danger");
+    b.append(el("b", null, "Gmail 授權已失效,下面是 10-02 08:40 最後抓到的資料。"),
+             el("span", null, "到 flow_check 資料夾雙擊「690授權.bat」,用 alicia.huang@innovue.ltd 重新登入,完成後按「立即更新」。"));
+    box.append(b);
+  }
+  if (alerts.length) {
+    const b = el("div", "banner banner-warn");
+    b.append(el("b", null, `有 ${alerts.length} 件需要處理`));
+    for (const a of alerts) b.append(el("span", null, "・" + a));
+    box.append(b);
+  }
+}
+
+function renderToday() {
+  const sc = SCEN[cur];
+  $("today-date").textContent = `${sc.today} · 現在 ${sc.clock}`;
+  const box = $("systems");
+  box.replaceChildren();
+  const alerts = [];
+  const counts = { ok: 0, nodata: 0, fail: 0, missing: 0, pending: 0, unknown: 0 };
+  for (const d of DAILY) {
+    const r = sc.data[d.id];
+    const overall = worst(r.s);
+    counts[overall]++;
+    const row = el("div", "sys");
+    row.append(el("i", "dot " + overall));
+    const nm = el("div", "name", d.label);
+    nm.append(el("small", null, d.code));
+    row.append(nm);
+    row.append(el("div", "state" + (["fail", "missing", "unknown"].includes(overall) ? " bad" : ""), LABEL[overall]));
+    const steps = el("div", "steps");
+    d.steps.forEach(([name, wiki], i) => {
+      const s = el("span", "step" + (wiki ? " wiki" : ""));
+      const when = r.at && !["pending", "missing"].includes(r.s[i]) ? `,${r.at} 收到` : "";
+      s.append(dot(r.s[i], `${d.label} · ${name}\n${LABEL[r.s[i]]}${when}${wiki ? "\n會登記到 wiki" : ""}`),
+               document.createTextNode(name));
+      steps.append(s);
+    });
+    row.append(steps);
+    row.append(el("div", "when", r.at ? `收信 ${r.at}` : `${d.start} 開始`));
+    if (r.err) {
+      const de = el("div", "detail " + (r.soft ? "soft" : "bad"));
+      de.append(el("code", null, r.err));
+      if (r.exec) {
+        const a = el("a", null, `Rundeck 執行 #${r.exec}`);
+        a.href = `http://s690-twipfinder.tipo.gov.tw/s690/rundeck/project/s690/execution/show/${r.exec}`;
+        a.target = "_blank"; a.rel = "noopener";
+        de.append(a);
+      }
+      if (r.soft) de.append(el("span", null, "當天沒有新檔,視為完成,wiki 照樣打 v"));
+      row.append(de);
+    }
+    if (["fail", "missing", "unknown"].includes(overall)) {
+      alerts.push(r.err ? `${d.label}:${r.err}` : `${d.label}:過了 ${d.due} 還沒收到信`);
+    }
+    box.append(row);
+  }
+  const done = counts.ok + counts.nodata;
+  const bad = counts.fail + counts.missing + counts.unknown;
+  const sm = $("summary");
+  sm.replaceChildren();
+  for (const [k, v, c] of [
+    ["每日系統完成", `${done} / ${DAILY.length}`, done === DAILY.length ? "good" : ""],
+    ["需要處理", String(bad), bad ? "bad" : "good"],
+    ["等待中", String(counts.pending), ""],
+    ["今日抓信流量", sc.mb, ""],
+  ]) {
+    const s = el("div", "stat");
+    s.append(el("div", "k", k), el("div", "v " + c, v));
+    sm.append(s);
+  }
+  renderBanners(sc, alerts);
+  $("tabwarn").hidden = !(alerts.length || sc.auth);
+}
+
+function renderMatrix() {
+  const sc = SCEN[cur];
+  const days = Object.keys(DAYS).filter(d => d <= sc.today);
+  const t = $("matrix");
+  t.replaceChildren();
+  const thead = el("thead"), hr = el("tr");
+  hr.append(el("th", null, "系統"), el("th", "c", "09/29"));
+  for (const dd of days) hr.append(el("th", "c", dd.slice(5).replace("-", "/")));
+  thead.append(hr);
+  t.append(thead);
+  const tb = el("tbody");
+  for (const d of DAILY) {
+    const tr = el("tr");
+    tr.append(el("td", null, d.label));
+    const first = el("td", "c");
+    first.append(dot("none", `${d.label} · 09-29\n通知信從 09-29 下午才開始寄,這天沒有資料`));
+    tr.append(first);
+    for (const dd of days) {
+      const r = (cur === "early" && dd === "2026-10-02") ? EARLY[d.id] : DAYS[dd][d.id];
+      const s = worst(r.s);
+      const td = el("td", "c");
+      td.append(dot(s, `${d.label} · ${dd}\n${LABEL[s]}${r.at ? `,${r.at} 收到` : ""}${r.err ? "\n" + r.err : ""}${r.note ? "\n" + r.note : ""}`));
+      tr.append(td);
+    }
+    tb.append(tr);
+  }
+  t.append(tb);
+
+  const vb = $("vols");
+  vb.replaceChildren();
+  for (const v of VOLSYS) {
+    const row = el("div", "line");
+    const nm = el("div", "pg", v.label);
+    nm.append(el("span", "hint", v.wiki ? `${v.code} → ${v.wiki}` : `${v.code} · 只顯示,不寫 wiki`));
+    row.append(nm);
+    const chips = el("div", "volrow");
+    if (!v.runs.length) chips.append(el("span", "hint", "還沒收到過這個系統的信"));
+    for (const r of v.runs) {
+      const s = worst(r.st.filter(x => x !== "none"));
+      const c = el("span", "volchip" + (r.stale ? " stale" : ""));
+      const lines = [`${v.label} · VOL ${r.vol}${r.of ? `(${r.of} 那期)` : ""}`, r.at,
+        v.steps.map((k, i) => `${k}:${LABEL[r.st[i]]}`).join("、")];
+      if (r.writes) lines.push(`寫入 ${r.writes.toLocaleString()} 筆`);
+      if (r.err) lines.push(r.err);
+      if (r.after) lines.push(r.after);
+      if (r.note) lines.push(r.note);
+      c.append(dot(s, lines.join("\n")), document.createTextNode(`VOL ${r.vol}`));
+      chips.append(c);
+    }
+    row.append(chips);
+    row.append(el("div", "hint", v.last === "—" ? "" : `最近 ${v.last}`));
+    vb.append(row);
+  }
+}
+
+function renderWiki() {
+  const sc = SCEN[cur];
+  $("wiki-mode").textContent = "乾跑模式:只列出會改什麼,還沒真的寫入。正式寫入前會先請妳確認";
+  const box = $("wiki");
+  box.replaceChildren();
+  for (const w of WIKI) {
+    if (cur === "oct1" && w.pg === "每日執行項目" && w.what.includes("10/02")) continue;
+    const r = el("div", "line");
+    r.append(el("div", "pg", w.pg), el("div", "what", w.what), el("span", "tag " + w.kind, w.tag));
+    box.append(r);
+  }
+}
+
+function renderMail() {
+  const m = $("mail");
+  m.replaceChildren();
+  const upto = SCEN[cur].today.slice(5);
+  for (const [t, s, subj, sys] of MAIL.filter(m => m[0].slice(0, 5) <= upto).slice(0, 12)) {
+    const d = el("span");
+    d.append(el("i", "dot " + s));
+    const sub = el("span", "s", subj + " ");
+    sub.append(el("span", "hint", sys));
+    m.append(el("span", "t", t), d, sub);
+  }
+}
+
+function renderFoot() {
+  const sc = SCEN[cur];
+  const f = $("foot");
+  f.replaceChildren();
+  const add = (k, v) => { const s = el("span", null, k + " "); s.append(el("b", null, v)); f.append(s); };
+  add("最後抓信", sc.auth ? "10-02 08:40(已過時)" : `${sc.today.slice(5)} ${sc.clock}`);
+  add("自動抓信", "每 10 分鐘");
+  add("抓信方式", "只讀主旨;失敗信與每段期別的第一封才下載全文");
+  add("Wiki", "乾跑模式");
+}
+
+function render() {
+  renderToday(); renderMatrix(); renderWiki(); renderMail(); renderFoot();
+  $("scen-note").textContent = SCEN[cur].note;
+}
+
+document.querySelectorAll(".scen button").forEach(b => b.addEventListener("click", () => {
+  cur = b.dataset.s;
+  document.querySelectorAll(".scen button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  render();
+}));
+$("refresh").addEventListener("click", () => {
+  const b = $("refresh");
+  b.disabled = true; $("spin").hidden = false; b.textContent = "抓信中…";
+  setTimeout(() => { b.disabled = false; $("spin").hidden = true; b.textContent = "立即更新"; }, 900);
+});
+
+// 圓點提示(滑鼠移入或鍵盤 focus)
+const tip = $("tip");
+function showTip(e) {
+  const t = e.target.closest && e.target.closest("[data-tip]");
+  if (!t) return;
+  tip.textContent = t.dataset.tip;
+  tip.hidden = false;
+  const r = t.getBoundingClientRect();
+  const x = Math.min(window.innerWidth - tip.offsetWidth - 8, Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2));
+  const y = r.top - tip.offsetHeight - 8 < 8 ? r.bottom + 8 : r.top - tip.offsetHeight - 8;
+  tip.style.left = x + "px";
+  tip.style.top = y + "px";
+}
+const hideTip = (e) => { if (e.target.closest && e.target.closest("[data-tip]")) tip.hidden = true; };
+document.addEventListener("mouseover", showTip);
+document.addEventListener("focusin", showTip);
+document.addEventListener("mouseout", hideTip);
+document.addEventListener("focusout", hideTip);
+window.addEventListener("scroll", () => { tip.hidden = true; }, { passive: true });
+render();
+</script>
+
+</body>
+</html>
