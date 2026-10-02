@@ -153,9 +153,11 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: var(--sp-sm) 0
 .switch.on .knob { left: 23px; }
 .switchrow { display: flex; align-items: center; gap: 12px; margin-top: 16px; font-size: var(--fs-body); }
 /* 流量監控的開關群:兩欄排列,省掉一長串直排;窄畫面自動退回單欄 */
-.toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; margin-top: var(--sp-md); align-items: start;
+.toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; margin-top: var(--sp-md); align-items: center;
            padding: 14px 18px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; }
 .toggles .switchrow { margin-top: 0; font-size: var(--fs-body); }
+/* 開關數是奇數時,最後一個佔滿整列,不留半格空位(現在是 3 個:2 + 1) */
+.toggles .switchrow:last-child:nth-child(odd) { grid-column: 1 / -1; }
 @media (max-width: 620px) { .toggles { grid-template-columns: 1fr; } }
 
 /* 用量明細:可收合面板(計費明細 + 流量暴增合併在同一張時間軸表) */

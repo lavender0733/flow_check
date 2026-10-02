@@ -420,8 +420,10 @@ hr.sep { border: none; border-top: var(--row-bd); margin: var(--sp-lg) 0; }
 .switchrow { display: flex; align-items: center; gap: var(--sp-sm); margin-top: var(--sp-md);
              font-size: var(--fs-body); }
 .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-md) var(--sp-xl);
-           margin-top: var(--sp-lg); align-items: start; }
+           margin-top: var(--sp-lg); align-items: stretch; }
 .toggles .switchrow { margin-top: 0; }
+/* 開關數是奇數時,最後一個佔滿整列,不留半格空位(現在是 3 個:2 + 1) */
+.toggles .switchrow:last-child:nth-child(odd) { grid-column: 1 / -1; }
 @media (max-width: 620px) { .toggles { grid-template-columns: 1fr; } }
 
 /* ─── 骨架:可收合面板 + 子頁籤 ─────────────────────────────────── */
