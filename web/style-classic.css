@@ -220,14 +220,8 @@ hr.sep { border: none; border-top: 1px solid var(--line); margin: var(--sp-sm) 0
 /* 靠左變體:icon 偏容器左側時,提示框改成從 icon 左緣向右展開,
    避免置中的提示框左半溢出而被容器(如 .detailbox overflow:hidden)裁掉 */
 .info.left::after { left: 0; right: auto; transform: none; }
-/* 用量明細／暴增頁籤旁的說明 icon:只在面板展開且對應頁籤(.on)時才顯示;面板收合即隱藏 */
-.calclog-tip, .surge-tip { display: none; }
-#detailbox.open #tab-calclog.on ~ .calclog-tip,
-#detailbox.open #tab-surges.on ~ .surge-tip { display: inline-flex; }
 
 /* 今日程式排行 / 用量明細(逐分鐘) */
-.apps-tip { display: none; }
-#detailbox.open #tab-apps.on ~ .apps-tip { display: inline-flex; }
 /* 用量明細的日期/篩選:放在頁籤列最右,只在用量明細頁籤顯示 */
 .calclog-tools { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
 .calclog-tools label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
@@ -420,3 +414,68 @@ pre.log {
 .goal-legend i.api { background: var(--accent); }
 .goal-legend i.target { background: repeating-linear-gradient(90deg, var(--gold) 0 7px, transparent 7px 12px); }
 @media (max-width: 620px) { .goal-chart { min-height: 190px; } .goal-chart-head { align-items: flex-start; } }
+
+:root {
+  /* 流量報表系列色,取自原版色票:ssh = 主色紫、Claude Code = 強調橘、VS Code = 深藍
+     (原版的淺藍 --blue 跟主色紫太接近,分不開,改用同色系較深的 --blue-ink)、其他 = 進度條底色 */
+  --rp-ssh: var(--btn); --rp-claude: var(--accent); --rp-vscode: var(--blue-ink); --rp-other: var(--track);
+  --rp-axis: var(--line); --rp-hover: var(--accent-soft); --rp-ring: #faf8ff;
+  --rp-font: "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
+}
+/* ─── 流量報表(每日堆疊柱狀圖,js/report.js)────────────────────── */
+/* 系列色依「ssh → Claude Code → VS Code」固定順序取色(藍、橘、青綠),深淺兩組都跑過
+   色盲分離度檢查;「其他」是剩餘量,刻意用中性灰,不搶前三項的目光。 */
+/* 逐時畫面標題前的「← 每日」返回鈕 */
+.rp-back { font: inherit; font-size: var(--fs-sm); margin-right: 8px; padding: 2px 10px; cursor: pointer;
+           border: 1px solid var(--line); border-radius: 999px; background: transparent; color: inherit; }
+.rp-back:hover { border-color: var(--btn); }
+/* 窄螢幕不讓圖縮到字看不清,改成外框橫向捲動 */
+.rp-chart-wrap { overflow-x: auto; contain: inline-size; }   /* contain:不讓圖的最小寬度把整張卡片撐寬 */
+.rp-chart { min-height: 240px; min-width: 600px; }
+.rp-chart .rp-s-ssh { fill: var(--rp-ssh); }
+.rp-chart .rp-s-claude { fill: var(--rp-claude); }
+.rp-chart .rp-s-vscode { fill: var(--rp-vscode); }
+.rp-chart .rp-s-other { fill: var(--rp-other); }
+.rp-chart .rp-base { stroke: var(--rp-axis); stroke-width: 1; }
+.rp-chart .rp-val { fill: var(--txt); font: 600 11px var(--rp-font); }
+.rp-chart .rp-hit { fill: transparent; cursor: default; outline: none; }
+.rp-chart .rp-hit.on { fill: var(--rp-hover); }
+.rp-chart .rp-hit.pick { cursor: pointer; }
+.rp-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
+/* 帶 i 前綴:要蓋過 .goal-legend i 的預設紫色線條 */
+i.rp-key { width: 10px; height: 10px; border-radius: 2px; }
+i.rp-k-ssh { background: var(--rp-ssh); }
+i.rp-k-claude { background: var(--rp-claude); }
+i.rp-k-vscode { background: var(--rp-vscode); }
+i.rp-k-other { background: var(--rp-other); }
+i.rp-k-total { background: transparent; }
+/* 逐時折線:2px 線、端點圓點,滑到某個鐘點時那一刻的點放大、出現垂直十字線 */
+.rp-chart .rp-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.rp-chart .rp-l-ssh { stroke: var(--rp-ssh); }
+.rp-chart .rp-l-claude { stroke: var(--rp-claude); }
+.rp-chart .rp-l-vscode { stroke: var(--rp-vscode); }
+.rp-chart .rp-dot { stroke: var(--rp-ring); stroke-width: 2; pointer-events: none; }
+.rp-chart .rp-dot.on { r: 5.5; }
+.rp-chart .rp-d-ssh { fill: var(--rp-ssh); }
+.rp-chart .rp-d-claude { fill: var(--rp-claude); }
+.rp-chart .rp-d-vscode { fill: var(--rp-vscode); }
+.rp-chart .rp-cross { stroke: var(--rp-axis); stroke-width: 1; pointer-events: none; }
+/* 圖例:折線用短線、柱狀用色塊 */
+i.rp-key.line { height: 3px; width: 16px; border-radius: 2px; }
+.rp-tooltip { max-width: none; min-width: 170px; }
+.rp-tip-hd { font-weight: 600; margin-bottom: 4px; }
+.rp-tip-row { display: grid; grid-template-columns: 10px auto 1fr; align-items: center; gap: 7px;
+              white-space: nowrap; }
+.rp-tip-row b { text-align: right; font-variant-numeric: tabular-nums; }
+.rp-tip-row span { opacity: .8; }
+.rp-tip-row.total { margin-top: 3px; padding-top: 3px; border-top: 1px solid currentColor; border-color: rgba(127,127,127,.4); }
+.rp-details { margin-top: var(--sp-sm); }
+.rp-details summary { cursor: pointer; }
+/* 今日程式排行 / 暴增紀錄:「未歸因」名稱後的說明 icon。提示框是 body 上的浮層(見 monitor.js),
+   不會被表格捲動區塊裁掉;外觀與一般 .info 提示框相同。 */
+.info-float::after { display: none; }
+.info-pop { display: none; position: fixed; z-index: 1000; pointer-events: none;
+  background: var(--txt); color: #fff; padding: 8px 12px; border-radius: 8px;
+  font: 400 var(--fs-sm)/1.5 "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
+  width: max-content; max-width: 260px; white-space: normal; text-align: left;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2); }

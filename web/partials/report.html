@@ -1,0 +1,38 @@
+<!-- 流量報表分頁。搭配 js/report.js。資料來自 /api/traffic/daily(每日統計,見 core/daily_stats.py)。
+     同一個圖表區塊兩種畫面:每日(預設)→ 點某一天就換成那天的逐時,按「← 每日」回來。 -->
+  <div class="panel hidden" id="panel-report">
+    <div class="card">
+      <div class="goal-chart-head">
+        <h2><button class="rp-back" id="rp-back" type="button" onclick="showReportDays()" style="display:none;">← 每日</button><span id="rp-title">每日流量</span> <span class="hint" id="rp-machine"></span></h2>
+        <label class="goal-month-label" id="rp-range-wrap">期間
+          <select id="rp-range" data-picker aria-label="期間" onchange="setReportRange(Number(this.value))">
+            <option value="14">最近 14 天</option>
+            <option value="31">最近 31 天</option>
+            <option value="0">全部</option>
+          </select>
+        </label>
+      </div>
+      <div class="goal-mode-tabs" role="group" aria-label="方向">
+        <button class="goal-mode on" data-rp-dir="sum" onclick="setReportDir('sum')">合計</button>
+        <button class="goal-mode" data-rp-dir="up" onclick="setReportDir('up')">上傳</button>
+        <button class="goal-mode" data-rp-dir="down" onclick="setReportDir('down')">下載</button>
+      </div>
+      <div class="goal-chart-wrap rp-chart-wrap">
+        <svg id="rp-chart" class="goal-chart rp-chart" viewBox="0 0 760 300" role="img"></svg>
+        <div class="goal-tooltip rp-tooltip" id="rp-tooltip" style="display:none;"></div>
+      </div>
+      <div class="goal-legend" id="rp-legend"></div>
+      <details class="rp-details">
+        <summary class="hint">看每日數字</summary>
+        <div class="hist-scroll" style="max-height:320px;">
+          <table>
+            <thead><tr>
+              <th>日期</th><th class="num">ssh</th><th class="num">VS Code</th>
+              <th class="num">Claude Code</th><th class="num">總量</th>
+            </tr></thead>
+            <tbody id="rp-rows"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </div>

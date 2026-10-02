@@ -35,5 +35,7 @@ PREFS_PATH = MACHINE_DATA_DIR / f"prefs_{MACHINE_ID}.json"
 # 幾百 KB、一天重傳上千次,監控工具自己就成了吃流量的元兇。它是各機自己的診斷紀錄,本來就不必同步。
 TRAFFIC_LOG_DIR = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "flow_check" / "traffic"
 RUN_LOG_PATH = MACHINE_DATA_DIR / f"run_log_{MACHINE_ID}.jsonl"
+# 每日用量統計(長期保存,供流量報表)。一天只寫一次,放在同步夾裡沒關係。
+DAILY_STATS_PATH = MACHINE_DATA_DIR / f"daily_stats_{MACHINE_ID}.json"
 HISTORY_PATH = MACHINE_DATA_DIR / f"monthly_progress_history_{MACHINE_ID}.json"
 

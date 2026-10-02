@@ -272,6 +272,11 @@ def traffic_log(app, date=None) -> dict:
     return {"date": date, "dates": dates, "rows": app.monitor.traffic_log(date)}
 
 
+def traffic_daily(app) -> dict:
+    """每日用量統計(總量與 ssh / VS Code / Claude Code),供流量報表。"""
+    return app.monitor.daily_stats()
+
+
 def job_status(app) -> dict:
     """檢索任務的即時狀態(前端輪詢用)。"""
     return app.runner.status()
@@ -514,6 +519,7 @@ def build_routes(app: App) -> dict:
     return {
         ("GET",  "/api/status"):          lambda req: status_payload(app),
         ("GET",  "/api/traffic/log"):     lambda req: traffic_log(app, req.query.get("date")),
+        ("GET",  "/api/traffic/daily"):   lambda req: traffic_daily(app),
         ("GET",  "/api/job"):             lambda req: job_status(app),
         ("GET",  "/api/config"):          lambda req: config_payload(app),
         ("GET",  "/api/analytics"):       lambda req: analytics(app),

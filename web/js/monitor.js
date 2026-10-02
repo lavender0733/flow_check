@@ -408,6 +408,46 @@ let calcLogLoading = false;
 
 const APP_LABELS = { __unattributed__: "未歸因(UDP/QUIC・標頭)", __offline__: "監控未執行期間" };
 function appLabel(name) { return APP_LABELS[name] || name || "未知程式"; }
+// 「未歸因」不是一支程式,名稱後面接一個 ⓘ 說明它是什麼(今日程式排行、暴增紀錄共用)。
+const UNATTR_TIP = "網卡確實計到、但對不到任何 TCP 連線的量,多半是 UDP/QUIC(Chrome、YouTube、視訊會議)與封包標頭;"
+  + "監控沒以系統管理員身分啟動時,所有流量都會落在這裡。";
+// 這顆 ⓘ 在可捲動的表格裡,一般 .info 的提示框(CSS ::after)會被捲動區塊裁掉;
+// 改成 .info-float:提示框是掛在 body 上的一個浮層,用 position:fixed 定位在 icon 下方。
+function unattrInfo(name) {
+  return name === "__unattributed__"
+    ? `<i class="info info-float" tabindex="0" data-tip="${UNATTR_TIP}"></i>` : "";
+}
+(function () {
+  let pop = null;
+  const show = el => {
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.className = "info-pop";
+      document.body.appendChild(pop);
+    }
+    pop.textContent = el.dataset.tip;
+    pop.style.display = "block";
+    const r = el.getBoundingClientRect();
+    const w = pop.offsetWidth, h = pop.offsetHeight;
+    let left = Math.min(r.left, window.innerWidth - w - 8);
+    let top = r.bottom + 8;
+    if (top + h > window.innerHeight - 8) top = r.top - h - 8;   // 下方放不下就改放上方
+    pop.style.left = Math.max(8, left) + "px";
+    pop.style.top = Math.max(8, top) + "px";
+  };
+  const hide = () => { if (pop) pop.style.display = "none"; };
+  // 表格每 5 秒重畫,icon 會換新的;用事件委派,不必每次重新綁。
+  document.addEventListener("mouseover", e => {
+    const el = e.target.closest && e.target.closest(".info-float");
+    if (el) show(el);
+  });
+  document.addEventListener("mouseout", e => {
+    if (e.target.closest && e.target.closest(".info-float")) hide();
+  });
+  document.addEventListener("focusin", e => { if (e.target.matches(".info-float")) show(e.target); });
+  document.addEventListener("focusout", e => { if (e.target.matches(".info-float")) hide(); });
+  window.addEventListener("scroll", hide, true);
+})();
 // 程序名稱欄(exe 檔名,可對照工作管理員)。「未歸因」「監控未執行期間」不是程式,沒有檔名。
 function exeCell(exe) {
   return exe ? escHtml(exe) : "—";
@@ -498,7 +538,8 @@ function renderApps(s) {
     const pct = total > 0 ? (sum / total * 100) : 0;
     const special = APP_LABELS[a.name] ? " dim" : "";
     const label = escHtml(appLabel(a.name));
-    html.push(`<tr><td class="${special}" title="${label}">${label}</td>`
+    const tip = unattrInfo(a.name);
+    html.push(`<tr><td class="${special}" title="${tip ? "" : label}">${label}${tip}</td>`
       + `<td class="${special}" title="${escHtml(a.exe || "")}">${exeCell(a.exe)}</td>`
       + `<td class="num">${fmtBytes(a.recv)}</td><td class="num">${fmtBytes(a.sent)}</td>`
       + `<td class="num"><b>${fmtBytes(sum)}</b></td>`
@@ -547,11 +588,12 @@ function renderSurgeLog(s) {
       ? ev.top
       : [{ ip: "—", name: "未能歸因", pid: null, bytes: ev.bytes || 0 }];
     for (const source of top) {
-      const name = appLabel(String(source.name || ""));
+      const raw = String(source.name || "");
+      const name = appLabel(raw);
       const key = surgeGroupKey(name, time);
       let group = groups.get(key);
       if (!group) {
-        group = { key, name, exe: String(source.exe || ""), time, bytes: 0, details: [] };
+        group = { key, name, raw, exe: String(source.exe || ""), time, bytes: 0, details: [] };
         groups.set(key, group);
       }
       const bytes = Math.max(0, Number(source.bytes) || 0);
@@ -583,7 +625,7 @@ function renderSurgeLog(s) {
     tr.className = "surge-group-row" + (expanded ? " open" : "");
     tr.innerHTML = `<td class="surge-expand-col"><button type="button" class="surge-expand" `
       + `aria-expanded="${expanded}" title="${expanded ? "收合" : "展開"}明細">▸</button></td>`
-      + `<td>${escHtml(group.name)}</td>`
+      + `<td>${escHtml(group.name)}${unattrInfo(group.raw)}</td>`
       + `<td>${exeCell(group.exe)}</td>`
       + `<td>${escHtml(group.time)}</td>`
       + `<td class="num">${group.details.length}</td>`

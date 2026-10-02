@@ -22,10 +22,11 @@ from datetime import datetime
 import psutil
 
 from common.jsonio import read_json, write_json_atomic
+from core import daily_stats
 from core.estats import process_is_elevated, estats_probe
 from core.health import record_error
 from core.procinfo import describe as describe_process, describe_exe_name
-from core.paths import DATA_DIR, STATE_PATH, TRAFFIC_LOG_DIR
+from core.paths import DATA_DIR, MACHINE_ID, STATE_PATH, TRAFFIC_LOG_DIR
 from core.storage import load_prefs
 
 
@@ -232,8 +233,33 @@ class Monitor:
         self._name_cache = {}         # pid -> (軟體名, 檔名, 查詢時刻);避免每輪都查
         # 今日程式排行各軟體名對應的程序檔名(顯示在名稱旁,方便對照工作管理員)。
         self.day_app_exes = {}
+        # 今日逐時用量(總量與報表那幾支程式),供流量報表展開到小時。格式見 core/daily_stats.py。
+        self.day_hours = {}
+
+        # 每日統計要分開記的程式(ssh / VS Code / Claude Code),見 core/daily_stats.py。
+        self.report_apps = daily_stats.report_apps(cfg)
 
         self._load_state()
+
+    def _record_day(self, date, day_recv, day_sent, lan_excluded, day_apps, day_app_exes, day_hours):
+        """把某天的累計結算進每日統計。寫檔失敗只記錯誤,不影響取樣。"""
+        try:
+            daily_stats.record_day(date, daily_stats.from_day_state(
+                self.report_apps, day_recv, day_sent, lan_excluded, day_apps, day_app_exes, day_hours))
+        except OSError as e:
+            record_error("daily_stats", e)
+
+    def daily_stats(self) -> dict:
+        """每日統計(舊到新),今天那筆用目前的累計即時算。"""
+        days = daily_stats.load()
+        with self.lock:
+            days[self.date] = dict(daily_stats.from_day_state(
+                self.report_apps, self.day_recv, self.day_sent, self.day_lan_excluded,
+                self.day_apps, self.day_app_exes,
+                {h: {k: list(v) for k, v in b.items()} for h, b in self.day_hours.items()}),
+                source="live")
+        return {"machine": MACHINE_ID, "apps": list(self.report_apps),
+                "days": dict(sorted(days.items()))}
 
     @staticmethod
     def _today() -> str:
@@ -270,6 +296,12 @@ class Monitor:
         if saved and saved.get("date") == today and not same_machine:
             print("[info] 偵測到網卡與存檔不符(可能換了電腦),當日流量改從 0 起算。")
 
+        # 存檔是前幾天的(監控跨日沒在跑):那天的累計還在存檔裡,先結算進每日統計再歸零。
+        if saved and same_machine and saved.get("date") and saved.get("date") != today:
+            self._record_day(saved["date"], saved.get("day_recv", 0), saved.get("day_sent", 0),
+                             saved.get("day_lan_excluded", 0), saved.get("day_apps", {}),
+                             saved.get("day_app_exes", {}), saved.get("day_hours"))
+
         if saved and saved.get("date") == today and same_machine:
             # Resume today's tally across a restart.
             self.date = today
@@ -283,6 +315,9 @@ class Monitor:
             exes = saved.get("day_app_exes", {})
             if isinstance(exes, dict):
                 self.day_app_exes = {str(k): str(v) for k, v in exes.items()}
+            hours = saved.get("day_hours")
+            if isinstance(hours, dict):
+                self.day_hours = hours
             self._resume_gap_from = saved.get("saved_at") or "?"
             # 舊版 state 沒有 surges 時自然從空白開始;新版本保存當日完整來源紀錄供頁面展開。
             saved_surges = saved.get("surges", [])
@@ -304,6 +339,7 @@ class Monitor:
             self.day_lan_excluded = 0
             self.day_apps = {}
             self.day_app_exes = {}
+            self.day_hours = {}
             self.surges.clear()
             self._surge_seq = 0
             self.per_nic = {}
@@ -322,6 +358,7 @@ class Monitor:
             "day_lan_excluded": self.day_lan_excluded,
             "day_apps": self.day_apps,
             "day_app_exes": self.day_app_exes,
+            "day_hours": self.day_hours,
             "saved_at": datetime.now().strftime("%H:%M:%S"),
             "surges": list(self.surges),
             "per_nic": self.per_nic,
@@ -334,8 +371,12 @@ class Monitor:
         now = time.monotonic()
         today = self._today()
 
+        ended = None
         with self.lock:
             if today != self.date:
+                # 換日:昨天的累計先留一份,出鎖後結算進每日統計。
+                ended = (self.date, self.day_recv, self.day_sent, self.day_lan_excluded,
+                         self.day_apps, self.day_app_exes, self.day_hours)
                 # Day rollover: zero the day's accumulators, keep last_per_nic
                 # continuous so the rollover moment doesn't dump a huge delta.
                 self.date = today
@@ -344,6 +385,7 @@ class Monitor:
                 self.day_lan_excluded = 0
                 self.day_apps = {}
                 self.day_app_exes = {}
+                self.day_hours = {}
                 self.sample_log.clear()
                 self.surges.clear()
                 self._surge_seq = 0
@@ -432,6 +474,12 @@ class Monitor:
                 acc = self.day_apps.setdefault(name, [0, 0])
                 acc[0] += int(r)
                 acc[1] += int(sd)
+            # 逐時:重啟補進來的那筆不知道是哪個小時用的,不放進任何一小時。
+            if not gap_from:
+                daily_stats.add_hour(
+                    self.day_hours, datetime.now().strftime("%H"), self.report_apps,
+                    counted_recv, counted_sent,
+                    [(self.day_app_exes.get(n, ""), r, sd) for n, (r, sd) in app_step.items()])
 
             top_sources = sorted(
                 ({"name": name, "exe": exe, "pid": pid, "ip": raddr, "recv": int(r), "sent": int(sd)}
@@ -476,6 +524,8 @@ class Monitor:
             date = self.date
 
         # 以下不佔鎖:查 UDP 持有者、寫明細檔都是磁碟/系統呼叫,不該卡住 probe 與網頁輪詢。
+        if ended:
+            self._record_day(*ended)
         if unattr_recv + unattr_sent >= UDP_HINT_BYTES:
             entry["udp"] = _udp_owner_names()
         with self.lock:

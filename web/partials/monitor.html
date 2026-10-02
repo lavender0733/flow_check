@@ -14,7 +14,7 @@
           <div class="stat"><div class="k">剩餘</div><div class="v" id="remain">—</div></div>
           <div class="stat"><div class="k">即時下載</div><div class="v" id="down">—</div></div>
           <div class="stat"><div class="k">即時上傳</div><div class="v" id="up">—</div></div>
-          <div class="stat" title="今日已從額度扣除的內網(私有 IP)流量估計值;GPSS 檢索 10.65.x 不在此列"><div class="k">已排除(內網)</div><div class="v" id="lanexcl">—</div></div>
+          <div class="stat"><div class="k">已排除(內網)</div><div class="v" id="lanexcl">—</div></div>
         </div>
       </div>
       <div class="donutarea" style="flex:0 0 auto;">
@@ -30,17 +30,17 @@
       </div>
     </div>
     <div class="toggles">
-      <div class="switchrow" title="走內網(NAS/區網 FTP 等)的傳輸不計入對外額度。每秒逐條讀取 TCP 連線(IPv4 與 IPv6)的收發位元組,對方位址落在內網網段(10.x/172.16/192.168/169.254)的連線,其流量從當日額度扣除;同一支程式連外網的部分照算。GPSS 檢索連 10.65.x 在白名單內,不受影響。需以系統管理員身分啟動。">
+      <div class="switchrow">
         <span class="switch on" id="lanswitch" role="switch" onclick="toggleExcludeLan()"><span class="knob"></span></span>
         <span>排除內網流量</span>
       </div>
 
-      <div class="switchrow" title="檢索被降速或連續失敗時,在最上方跳警告橫幅(只提示、不自動停)">
+      <div class="switchrow">
         <span class="switch on" id="limitdetect" role="switch" onclick="toggleDetect()"><span class="knob"></span></span>
         <span>可用上限偵測</span>
       </div>
 
-      <div class="switchrow" title="今日用量達設定比例時跳頁內提醒視窗;桌面通知若已授權會一併發出">
+      <div class="switchrow">
         <span class="switch" id="notifyswitch" role="switch" onclick="toggleNotify()"><span class="knob"></span></span>
         <span>用量通知 ・ 達
           <input type="number" id="notifythreshold" min="1" max="100" value="80"
@@ -48,7 +48,7 @@
           <span class="hint" id="notifyhint"></span></span>
       </div>
 
-      <div class="switchrow" title="某分鐘流量突然暴增(超過門檻且達近期中位數數倍)時提醒,並列出當下耗流量最多的程式">
+      <div class="switchrow">
         <span class="switch" id="surgeswitch" role="switch" onclick="toggleSurge()"><span class="knob"></span></span>
         <span>流量暴增預警 ・ 單分鐘
           <input type="number" id="surgethreshold" min="1" value="50"
@@ -66,9 +66,6 @@
           <button class="subtab" id="tab-apps" onclick="switchMonitorTab('apps', true)">今日程式排行</button>
           <button class="subtab" id="tab-calclog" onclick="switchMonitorTab('calclog', true)">用量明細</button>
           <button class="subtab" id="tab-surges" onclick="switchMonitorTab('surges', true)">暴增紀錄<span class="hint" id="surgecount"></span></button>
-          <i class="info down left apps-tip" tabindex="0" data-tip="今天從早到現在,各程式累計吃掉多少額度(已扣內網)。暴增預警只抓「某一分鐘突然變大」,抓不到整天細水長流的背景流量(雲端同步、備份、更新),看這裡才知道誰累積最多。「未歸因」= 網卡確實計到、但對不到任何 TCP 連線的量,多半是 UDP/QUIC(Chrome、YouTube、視訊會議)與封包標頭。"></i>
-          <i class="info down left calclog-tip" tabindex="0" data-tip="「下載計算/上傳計算」為真正算進今日額度的量。網頁沒開也照記,保留 31 天,可切換日期查看。"></i>
-          <i class="info down left surge-tip" tabindex="0" data-tip="依應用程式與時間收合當日暴增紀錄;展開後可查看各 IP、PID 與流量。「未歸因」為對不到連線的量(多半是 UDP/QUIC)。"></i>
         </span>
         <!-- 用量明細專用:日期 + 只看有量的分鐘。只在「用量明細」頁籤顯示(switchMonitorTab 切換)。 -->
         <span class="calclog-tools" id="calclog-tools" style="display:none;">
@@ -77,12 +74,14 @@
         </span>
       </div>
       <div class="detailbody">
-        <!-- 網卡分頁:各網卡即時收發加總 -->
+        <!-- 網卡分頁:各網卡即時收發加總(網卡多時捲動,表頭固定) -->
         <div class="tabpane" id="pane-nics">
+          <div class="nic-scroll">
           <table>
             <thead><tr><th>網卡</th><th class="num">下載</th><th class="num">上傳</th><th class="num">小計</th></tr></thead>
             <tbody id="nics"></tbody>
           </table>
+          </div>
         </div>
         <!-- 今日程式排行分頁:各程式整天累計(計入額度的量),含「未歸因」與「監控未執行期間」。 -->
         <div class="tabpane" id="pane-apps" style="display:none;">
@@ -145,8 +144,7 @@
         <span class="hint" id="peakverdict">—</span>
       </span>
       <span style="display:inline-flex; align-items:center; gap:8px;">
-        <button class="btn btn-go btn-sm" id="spbtn" onclick="runSpeedTest()"
-                title="抓一小段量實際速率(每次約 8MB),最準的限速判斷">測速</button>
+        <button class="btn btn-go btn-sm" id="spbtn" onclick="runSpeedTest()">測速</button>
         <span class="hint" style="display:inline-flex; align-items:center; gap:5px;">下限
           <input type="number" id="spfloor" min="0" step="0.1" value="5"
                  onchange="saveSpeedFloor()">M</span>
