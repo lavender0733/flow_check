@@ -73,36 +73,6 @@ if errorlevel 1 (
   )
 )
 
-REM Ensure openpyxl is installed (used to merge query results into one Excel per machine).
-python -c "import openpyxl" >nul 2>&1
-if errorlevel 1 (
-  echo Package openpyxl is missing - installing...
-  python -m pip install openpyxl
-  if errorlevel 1 echo [WARN] openpyxl install failed; queries still work, but output won't be merged into Excel.
-)
-
-REM === Traditional (front-end) retrieval needs playwright + chromium ===
-REM Packages must go to the interpreter named in config.json gpss_python (default py -3.13);
-REM probe whether py -3.13 is usable, fall back to python (matches traffic_monitor).
-REM Note: uses goto flow rather than nested parentheses to avoid cmd parsing issues.
-set "GPSSPY=py -3.13"
-%GPSSPY% --version >nul 2>&1
-if errorlevel 1 set "GPSSPY=python"
-
-%GPSSPY% -c "import playwright" >nul 2>&1
-if not errorlevel 1 goto pw_ok
-echo playwright (for traditional retrieval) is not installed - installing now (incl. chromium; first time takes a few minutes)...
-%GPSSPY% -m pip install playwright
-if errorlevel 1 goto pw_fail
-%GPSSPY% -m playwright install chromium
-if errorlevel 1 goto pw_fail
-goto pw_ok
-:pw_fail
-echo [WARN] playwright/chromium install failed; API retrieval still works, traditional retrieval will not.
-echo         Install later manually: %GPSSPY% -m pip install playwright
-echo         Then: %GPSSPY% -m playwright install chromium
-:pw_ok
-
 echo Starting traffic monitor... the browser opens once the server is ready. Press Ctrl+C here to stop.
 REM The browser is opened by traffic_monitor.py after the port binds (see its main()).
 REM We do NOT "start" the browser here, otherwise it opens before the server is ready and
