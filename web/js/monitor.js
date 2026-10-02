@@ -1,14 +1,11 @@
 // ===== 流量監控(可獨立抽出的分頁) =====
-// 內容:今日流量錶 + 網卡明細(tickStatus)、用量通知、動態 favicon、可用上限偵測、
+// 內容:今日流量錶 + 網卡明細(tickStatus)、用量通知、動態 favicon、
 //       測速/限速判定、伺服器健康橫幅。
 //
-// 對外相依(若要把這頁單獨抽成一個小網頁,需注意):
-//   - /api/status:流量、網卡、健康、資料變動簽章 都來自這支。
+// 對外相依:
+//   - /api/status:流量、網卡、健康 都來自這支。
+//   - /api/config:速率下限預設值與本機偏好(loadMonitorConfig,開頁讀一次)。
 //   - /api/speedtest:測速。
-//   - quota_gb / speed_floor_mbps 這兩個顯示用預設值目前由 control.js 的 loadConfig 帶入;
-//     單獨抽出時可改成自己讀一次 /api/config,或沿用 localStorage 與內建預設值(下方 speedFloor=5)。
-//   - tickStatus 偵測到「檢索資料變動」時會呼叫 onDataChanged()(定義在 analytics.js);
-//     已用 typeof 包起來,沒有那支也不會出錯。
 
 // ----- 狀態 -----
 let notifyEnabled = false;    // 用量通知開關
@@ -19,8 +16,6 @@ let speedFloor = 5;           // 正常速率下限(Mbps);低於判定疑似被�
 let speedFloorUserSet = false;// 使用者是否已自訂下限(優先於 config 預設)
 let lastPeakBps = 0;          // 最近一次 status 的近 N 分最高下載速率(bytes/s)
 let lastPeakWinMin = 0;       // 被動觀測視窗(分鐘)
-let lastDataSig = null;       // 上次看到的「檢索資料變動簽章」;變了才刷新爬取統計(不再每 5 秒盲刷)
-let lastPatentsSig = null;    // 上次看到的「檢索清單變動簽章」;變了才重讀清單(見下方 tickStatus)
 let surgeEnabled = false;     // 流量暴增預警開關
 let surgeThreshold = 50;      // 單分鐘用量達幾 MB 起偵測
 let surgeHintTimer = 0;       // 門檻變更確認小字的還原計時器
@@ -32,7 +27,7 @@ let lastStatus = null;        // 最近一次 /api/status;供暴增紀錄立即�
 // ===== 排除內網流量 =====
 // 走內網(內網 IP)的傳輸不計入對外額度。開關以「伺服器本機偏好檔」為準(各機獨立、
 // 跨重開留得住);localStorage 只當即時預填。實際扣除在後端取樣時完成,這裡只管開關與顯示。
-// ★ GPSS 檢索連 10.65.x(在後端 count_ranges 白名單)不受影響,仍完整計入。
+// ★ 落在後端 count_ranges 白名單的網段不受影響,仍完整計入。
 let excludeLan = false;
 
 function applyExcludeLan(on) {
@@ -55,7 +50,7 @@ function toggleExcludeLan() {
   saveExcludeLanPrefs();   // 後端即時套用到執行中的 Monitor,不必重啟
 }
 
-// 由 loadConfig(/api/config)帶入伺服器本機偏好(權威);首次未存過就用目前狀態種一次。
+// 由 loadMonitorConfig(/api/config)帶入伺服器本機偏好(權威);首次未存過就用目前狀態種一次。
 function applyExcludeLanFromServer(enabled) {
   if (enabled == null) {
     saveExcludeLanPrefs();
@@ -70,25 +65,6 @@ function restoreExcludeLan() {
   // 預設開(與後端 cfg.exclude_lan=True 一致):沒設過就視為開,首次會把「開」種回伺服器。
   // 伺服器回應後再以 applyExcludeLanFromServer 校正。
   applyExcludeLan(on !== "0");
-}
-
-// ===== 可用上限偵測 =====
-function applyDetect(on) {
-  const s = document.getElementById("limitdetect");
-  s.classList.toggle("on", on);
-}
-
-function toggleDetect() {
-  const on = !document.getElementById("limitdetect").classList.contains("on");
-  applyDetect(on);
-  try { localStorage.setItem("limitDetect", on ? "1" : "0"); } catch (e) {}
-}
-
-// 還原使用者上次的開關狀態(預設開)
-function restoreDetect() {
-  let saved;
-  try { saved = localStorage.getItem("limitDetect"); } catch (e) {}
-  applyDetect(saved !== "0");
 }
 
 // ===== 用量通知 =====
@@ -165,7 +141,7 @@ function saveNotifyThreshold() {
   notifyHintTimer = setTimeout(baselineNotifyHint, 4000);
 }
 
-// 由 loadConfig(/api/config)帶入伺服器本機偏好,覆寫 localStorage 預填值(伺服器為準)。
+// 由 loadMonitorConfig(/api/config)帶入伺服器本機偏好,覆寫 localStorage 預填值(伺服器為準)。
 // 伺服器尚未存過(回 null)時:沿用目前狀態並回寫一次,把舊的 localStorage 設定遷移上去。
 function applyNotifyFromServer(enabled, threshold) {
   if (threshold != null) {
@@ -285,7 +261,7 @@ function saveSurgeThreshold() {
   surgeHintTimer = setTimeout(() => setSurgeHint(""), 4000);
 }
 
-// 由 loadConfig(/api/config)帶入伺服器本機偏好(權威);首次未存過就用目前狀態種一次。
+// 由 loadMonitorConfig(/api/config)帶入伺服器本機偏好(權威);首次未存過就用目前狀態種一次。
 function applySurgeFromServer(enabled, threshold) {
   if (threshold != null) {
     surgeThreshold = Math.max(1, parseInt(threshold, 10) || 50);
@@ -894,33 +870,35 @@ async function tickStatus() {
         + `<td class="num">${fmtBytes(v.sent + v.recv)}</td>`;
       tb.appendChild(tr);
     }
-
-    // 只在「檢索資料真的變了」時才刷新爬取統計(本機剛跑完、對方資料同步進來、或跨時段/整點)。
-    // 簽章沒變就完全不動 —— 不再每 5 秒盲刷,避免無意義的更新。首次只記下簽章、不觸發。
-    if (s.data_sig !== undefined && s.data_sig !== lastDataSig) {
-      const firstSig = lastDataSig === null;
-      lastDataSig = s.data_sig;
-      // onDataChanged 定義在 analytics.js;單獨抽出本頁、沒有那支時自動略過。
-      if (!firstSig && typeof onDataChanged === "function") onDataChanged();
-    }
-
-    // 檢索清單同理:patents.txt 是兩台共寫的同一個檔(別的資料都各機一檔),
-    // 對方存了新清單、Google Drive 同步過來之後,這台的筆數原本要等重整才會更新
-    //(loadPatents 只在開頁時跑一次)。簽章變了就重讀一次,兩台的清單自然對得上。
-    // 編輯視窗開著時不重讀 —— 那會把使用者正在打的字直接蓋掉(存檔時才以伺服器為準)。
-    const patModal = document.getElementById("patmodal");
-    const patEditing = patModal && patModal.classList.contains("show");
-    if (s.patents_sig !== undefined && s.patents_sig !== lastPatentsSig && !patEditing) {
-      const firstPat = lastPatentsSig === null;
-      lastPatentsSig = s.patents_sig;   // 只在真的處理掉時才記下,編輯中不記 ——
-      // 記了就等於「這個版本看過了」,關掉視窗後就永遠補不回那次變動。
-      if (!firstPat && typeof loadPatents === "function") loadPatents();
-    }
   } catch (e) {
     // 拿不到 /api/status:後端關閉、連線中斷、或電腦剛睡眠喚醒使 socket 失效。
     // 以前這裡靜默吞掉,頁面就無聲凍住 —— 改成連續失敗超過門檻就跳「無法連線」橫幅。
     if (Date.now() - lastStatusOkAt > CONN_LOST_AFTER_MS) showConnLost();
   }
+}
+
+// ===== 讀設定(/api/config)=====
+// 開頁讀一次:速率下限預設值 + 伺服器本機偏好(通知、暴增、內網排除、外觀)。
+// 偏好以伺服器為準(prefs_<機器>.json,換瀏覽器/清快取後仍在);各開關在 onInit 先用
+// localStorage 預填,這裡覆寫。#quota 不在這裡填 —— tickStatus 每 5 秒會用 s.quota_gb 寫入。
+async function loadMonitorConfig() {
+  try {
+    const cfg = await (await fetch("/api/config")).json();
+    // 使用者沒自訂過速率下限才採用 config 的值
+    if (!speedFloorUserSet && cfg.speed_floor_mbps != null) {
+      speedFloor = cfg.speed_floor_mbps;
+      const el = document.getElementById("spfloor");
+      if (el) el.value = speedFloor;
+      renderPeak();
+    }
+    applyNotifyFromServer(cfg.notify_enabled, cfg.notify_threshold);
+    applySurgeFromServer(cfg.surge_enabled, cfg.surge_min_mb);
+    applyExcludeLanFromServer(cfg.exclude_lan);
+    // 外觀(applyTheme 在 index.html)。save=false:讀回來的既有值不必再寫回去;
+    // 伺服器沒存過(null)時把目前套用中的那個種上去。
+    if (cfg.theme) applyTheme(cfg.theme, false);
+    else applyTheme(currentTheme());
+  } catch (e) {}
 }
 
 // ===== 伺服器健康橫幅 =====
@@ -957,18 +935,17 @@ function dismissHealth() {
 }
 
 // ===== 頁籤註冊 =====
-// onInit 收下的七行原本在 main.js 開頭 —— 它們全是流量監控頁的事(偵測開關、
-// 通知門檻、暴增預警、內網排除、測速下限、面板收合、面板內頁籤),放在這裡
+// onInit 收下的幾行原本在 main.js 開頭 —— 它們全是流量監控頁的事(通知門檻、
+// 暴增預警、內網排除、測速下限、面板收合、面板內頁籤),放在這裡
 // 才跟實作在同一個檔。updateFavicon 也是本檔的,一併搬過來。
 registerTab({
   id: "monitor",
   label: "流量監控",
   order: 10,
   onInit() {
-    restoreDetect();          // 可用上限偵測開關
     restoreNotify();          // 用量通知
     restoreSurge();           // 流量暴增預警
-    restoreExcludeLan();      // 排除內網流量(稍後由 loadConfig 以伺服器為準覆寫)
+    restoreExcludeLan();      // 排除內網流量(稍後由 loadMonitorConfig 以伺服器為準覆寫)
     restoreSpeedFloor();      // 測速下限
     restoreCalcLogCollapse(); // 整合面板(網卡+用量明細)的收合/展開狀態(預設展開)
     restoreMonitorTab();      // 整合面板停在哪個頁籤(預設網卡)

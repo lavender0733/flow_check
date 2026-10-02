@@ -195,7 +195,7 @@ class Monitor:
                 self.lan_nets.append(ipaddress.ip_network(c, strict=False))
             except ValueError:
                 pass
-        # 強制計入白名單(優先於 lan_ranges):保護對外/額度流量(如 GPSS 10.65.x.x)。
+        # 強制計入白名單(優先於 lan_ranges):保護落在內網網段、但實際走對外線路的流量。
         self.count_nets = []
         for c in cfg.get("count_ranges", []):
             try:
@@ -226,7 +226,7 @@ class Monitor:
         # 比舊的「payload 封頂」更準 —— 內網占滿時可扣掉近 100% NIC,不再漏那 ~4% 標頭。
         self._pending_lan_sent = 0    # 內網連線『上傳』payload
         self._pending_lan_recv = 0    # 內網連線『下載』payload
-        self._pending_ext_sent = 0    # 外網連線『上傳』payload(含 GPSS 10.65)
+        self._pending_ext_sent = 0    # 外網連線『上傳』payload(含 count_ranges)
         self._pending_ext_recv = 0    # 外網連線『下載』payload
         # (pid, 對方 IP) -> [軟體名, recv, sent, 檔名]:自上次 NIC 取樣以來的外網來源增量,供歸因與明細。
         self._pending_source_net = {}
@@ -425,7 +425,7 @@ class Monitor:
             # ESTATS 給的是應用層 payload(不含 TCP/IP 標頭、重傳),直接拿來扣會漏掉線路上
             # 那 ~4% 標頭;改成「內網占比 × NIC 增量」就能連標頭一起按比例扣掉。內網占滿時
             # 幾乎扣光整個 NIC 增量;沒抓到任何連線(payload 全 0)時不扣(寧可算到、不漏算)。
-            # 即時速率仍反映實際 NIC(供限速判斷);GPSS 連 10.65.x 判為外網、照計。
+            # 即時速率仍反映實際 NIC(供限速判斷);count_ranges 判為外網、照計。
             lan_sent = lan_recv = 0
             if self.exclude_lan_enabled:
                 tot_recv = self._pending_lan_recv + self._pending_ext_recv
@@ -620,8 +620,8 @@ class Monitor:
 
     def _classify_ip(self, ip) -> str:
         """對方位址分三類:"local"(本機 loopback,不經網卡)/ "lan"(內網,要排除)/ "ext"(計入額度)。
-        判斷順序:本機 → count_ranges(強制計入,優先於 lan_ranges,確保 GPSS 10.65.x.x 等
-        對外/額度流量永不被排除)→ lan_ranges → 其餘一律計入。"""
+        判斷順序:本機 → count_ranges(強制計入,優先於 lan_ranges,確保走對外線路的
+        網段永不被排除)→ lan_ranges → 其餘一律計入。"""
         try:
             addr = ipaddress.ip_address(ip)
         except ValueError:

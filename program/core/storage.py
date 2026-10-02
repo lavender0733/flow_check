@@ -1,25 +1,15 @@
 """
-資料層:設定 / 偏好 / 機器標籤 / output 統計掃描 / run_log 執行時間
-====================================================================
-從 traffic_monitor.py 抽出。相依:paths(路徑常數)與 program/gpss/output_store(統計來源)。
+資料層:設定 / 偏好 / 機器標籤
+==============================
+從 traffic_monitor.py 抽出。相依:paths(路徑常數)。
 不呼叫 traffic_monitor 內的任何東西,維持單向相依(traffic_monitor → storage),避免循環匯入。
 """
 
-import sys
-import csv
 import json
-import re
 import threading
-from pathlib import Path
 
-from common.jsonio import file_sig as _file_sig, read_json, write_json_atomic
-from core.paths import BASE, MACHINE_DATA_DIR, CONFIG_PATH, MACHINES_PATH, PREFS_PATH
-
-# output 彙整模組(在 program/gpss/ 下):把零散 CSV 併成各機一個 Excel,統計也讀它。
-try:
-    from gpss import output_store
-except Exception:
-    output_store = None
+from common.jsonio import read_json, write_json_atomic
+from core.paths import CONFIG_PATH, MACHINES_PATH, PREFS_PATH
 
 
 # ── 網頁 UI 偏好(各機獨立檔)──────────────────────────────────────
@@ -71,9 +61,6 @@ def machine_label(mid: str) -> str:
 
 
 # ── 設定檔 ────────────────────────────────────────────────────────
-# summary_<日期>_<時間>[_<機器>].csv;舊檔沒有機器後綴也照樣比對得到。
-SUMMARY_RE = re.compile(r"summary_(\d{8})_\d{6}(?:_(.+))?\.csv$")
-
 DEFAULT_CONFIG = {
     "quota_gb": 2.0,
     "port": 8765,
@@ -89,33 +76,17 @@ DEFAULT_CONFIG = {
     # lan_ranges 的連線其增量從當日額度扣除(各方向再 clamp 到實際 NIC 增量)。逐連線計量,
     # 同支程式的內、外網連線會各自分開計。需以管理員身分啟動(ESTATS 啟用收集是特權操作);
     # 非管理員時此功能停用、總流量照常計。
-    # ★ 本環境拓樸:對外走 10.65.x.x(含 GPSS 檢索主機 10.65.1.120~123,要計入),
-    # 內網有 10.75.x.x 等多個 10.x 網段。lan_ranges 與 count_ranges 必須一起看:
-    # 6.0.0 時 lan_ranges 只排除 10.75/16,結果其他 10.x 內網(FileZilla/SFTP)漏排除、
-    # 單日額度一度衝到 ~6GB/303%。7.0.2 改成用 10.0.0.0/8 涵蓋所有 10.x,
-    # 再靠 count_ranges(強制計入白名單,優先於 lan_ranges)把 10.65 釘死成永不被排除。
-    # 所以這裡寫 10.0.0.0/8 是刻意的,不是漏改 —— 縮回 10.75/16 會讓那個 bug 復發。
+    # ★ 內網有 10.75.x.x 等多個 10.x 網段。6.0.0 時 lan_ranges 只排除 10.75/16,結果其他
+    # 10.x 內網(FileZilla/SFTP)漏排除、單日額度一度衝到 ~6GB/303%。7.0.2 起用 10.0.0.0/8
+    # 涵蓋所有 10.x —— 這裡寫 10.0.0.0/8 是刻意的,不是漏改,縮回 10.75/16 會讓那個 bug 復發。
+    # count_ranges 是強制計入白名單(優先於 lan_ranges):落在 lan_ranges 內、但實際走對外
+    # 線路要算進額度的網段寫在這裡。預設空清單,需要時在 config.json 加。
     "exclude_lan": True,             # 預設開(此為預設;實際以本機 prefs 為準,可在頁面切換)
     "lan_ranges": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"],
-    "count_ranges": ["10.65.0.0/16"],
+    "count_ranges": [],
     # 本機(loopback):程式連同一台電腦上的另一支程式(如瀏覽器連本工具),不經網卡、不吃額度。
     # 落在這裡的連線既不算內網也不算外網,整筆不列入計算與歸因。
     "local_ranges": ["127.0.0.0/8", "::1/128"],
-
-    "max_count_per_run": 2000,
-    "gpss_dir": "program/gpss",
-    "gpss_script": "gpss_api_query.py",          # API 檢索(預設)
-    "gpss_script_web": "gpss_web_query.py",      # 傳統(前端)檢索
-    "gpss_python": "py -3.13",
-
-    # ── API 額度顯示(官方前台公告值)──
-    # 時段輸出總筆數:於 08:00/18:00(時段邊界)重置;單筆案號每小時:每整點重置。
-    "dl_cap_busy": 10000,        # 上班時段「時段輸出總筆數」上限
-    "dl_cap_offpeak": 30000,     # 下班時段「時段輸出總筆數」上限
-    "case_cap_busy": 300,        # 上班「單筆案號每小時輸出筆數」上限
-    "case_cap_offpeak": 1000,    # 下班「單筆案號每小時輸出筆數」上限
-    "busy_start_hour": 8,
-    "busy_end_hour": 18,
 
     # ── 限速偵測(網速)──
     # 超過每日額度後局網會「降速」(連得到但很慢);用網速來判斷現在有沒有被限速、
@@ -154,151 +125,3 @@ def load_config() -> dict:
         )
     return cfg
 
-
-def gpss_path(cfg: dict, name: str) -> Path:
-    return (BASE / cfg["gpss_dir"]) / name
-
-
-def _gpss_module():
-    """延遲載入 gpss_api_query(program/gpss 套件),
-    重用它的驗證碼池函式(load_keys / resolve_current_key / write_active_key /
-    _mask_code);載入失敗回 None。"""
-    try:
-        from gpss import gpss_api_query
-        return gpss_api_query
-    except Exception:
-        return None
-
-
-# ============================================================
-# 爬取統計 / 進度計算(資料來源:output 的 summary CSV + run_log.jsonl)
-# ============================================================
-def scan_output_daily(cfg: dict) -> dict:
-    """彙整每日總筆數/流量,並拆出各機明細。
-
-    資料來源:各機 output/summary_<機器>_<月>.xlsx(一天一張工作表)+ 尚未併入的
-    summary_*.csv —— 都交給 output_store.daily_counts 處理(依表頭對齊欄位,任何
-    舊格式都算得對;Excel 與殘留 CSV 不重複)。筆數只計「成功檢索(OK / 查無)」;
-    失敗列不算筆數,但耗用位元組仍計入流量。
-
-    回傳 {date: {"queries":int, "bytes":int,
-                 "machines": {label: {"queries":int, "bytes":int}}}}。
-    """
-    out_dir = BASE / cfg["gpss_dir"] / "output"
-    daily = {}
-    if not out_dir.exists():
-        return daily
-    if output_store is None:
-        return _scan_output_csv_only(out_dir)   # 沒有 output_store 就退回純 CSV 掃描
-    for (date, mid), v in output_store.daily_counts(out_dir).items():
-        label = machine_label(mid) if mid else "未標記"
-        acc = daily.setdefault(date, {"queries": 0, "bytes": 0, "machines": {}})
-        acc["queries"] += v["queries"]
-        acc["bytes"] += v["bytes"]
-        macc = acc["machines"].setdefault(label, {"queries": 0, "bytes": 0})
-        macc["queries"] += v["queries"]
-        macc["bytes"] += v["bytes"]
-    return daily
-
-
-def _scan_output_csv_only(out_dir) -> dict:
-    """退路:openpyxl/output_store 不可用時,只掃 summary_*.csv(舊行為)。"""
-    daily = {}
-    for p in out_dir.glob("summary_*.csv"):
-        m = SUMMARY_RE.search(p.name)
-        if not m:
-            continue
-        if m.group(2) and not MID_RE.match(m.group(2)):
-            continue                     # 衝突複本 CSV(機器代號帶空白/括號),跳過
-        d = m.group(1)
-        date = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
-        label = machine_label(m.group(2)) if m.group(2) else "未標記"
-        q, b = 0, 0
-        try:
-            with p.open("r", encoding="utf-8-sig", newline="") as f:
-                rdr = csv.reader(f)
-                next(rdr, None)
-                for row in rdr:
-                    if len(row) < 5:
-                        continue
-                    if row[2].startswith("OK") or row[2] == "NO_RESULT":
-                        q += 1
-                    try:
-                        b += int(row[4])
-                    except (ValueError, IndexError):
-                        pass
-        except Exception:
-            continue
-        acc = daily.setdefault(date, {"queries": 0, "bytes": 0, "machines": {}})
-        acc["queries"] += q
-        acc["bytes"] += b
-        macc = acc["machines"].setdefault(label, {"queries": 0, "bytes": 0})
-        macc["queries"] += q
-        macc["bytes"] += b
-    return daily
-
-
-RUNLOG_FILE_RE = re.compile(r"run_log_(.+)\.jsonl$")
-# 機器代號只會是 [A-Za-z0-9-];帶空白/括號的(如 run_log_<機器> (1).jsonl)是
-# Google Drive 同步衝突複本,整份跳過,否則執行時間會被重複計入(假機器/灌水)。
-MID_RE = re.compile(r"^[A-Za-z0-9-]+$")
-
-
-# run_log 解析的行內記憶體快取(依檔案 mtime+size 命中):run_log 只會在尾端追加、不重寫,
-# 但每次統計請求原本都把整份重讀並逐行 json.loads,且檔案隨月份無限長大。改為依簽章快取
-# 「每日每機原始秒數」:簽章沒變就直接重用,簽章變了才重解析整份(讀取仍每次重算機器標籤,
-# 因為 machines.json 的友善名稱對應可能在程序執行中被改)。程序常駐,跨請求重用。
-_RUNLOG_CACHE = {}
-
-
-def _run_elapsed_for_file(p, file_mid) -> dict:
-    """解析單一 run_log 檔 → {date: {raw_mid: 秒數}}(raw_mid 為紀錄/檔名推出的機器代號,
-    空字串代表未標記)。依簽章快取;讀不到檔時沿用舊快取(若有)。"""
-    sig = _file_sig(p)
-    ent = _RUNLOG_CACHE.get(p.name)
-    if ent and ent.get("sig") == sig:
-        return ent["by_date"]
-    try:
-        lines = p.read_text(encoding="utf-8").splitlines()
-    except Exception:
-        return ent["by_date"] if ent else {}
-    by_date = {}
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            rec = json.loads(line)
-        except Exception:
-            continue
-        date = rec.get("date")
-        if not date:
-            continue
-        secs = float(rec.get("elapsed_sec", 0) or 0)
-        mid = rec.get("machine") or file_mid or ""
-        per = by_date.setdefault(date, {})
-        per[mid] = per.get(mid, 0.0) + secs
-    _RUNLOG_CACHE[p.name] = {"sig": sig, "by_date": by_date}
-    return by_date
-
-
-def load_run_elapsed() -> dict:
-    """掃 data/run_log*.jsonl(各機一份,舊的單一 run_log.jsonl 也涵蓋),
-    彙整每日執行秒數:總計 + 各機。機器標籤優先取紀錄的 machine 欄,
-    其次從檔名 run_log_<機器>.jsonl 推出,都沒有則歸『未標記』。
-
-    回傳 {date: {"total": float, "machines": {label: float}}}。
-    """
-    daily = {}
-    for p in MACHINE_DATA_DIR.glob("run_log*.jsonl"):
-        m = RUNLOG_FILE_RE.search(p.name)
-        file_mid = m.group(1) if m else None
-        if file_mid and not MID_RE.match(file_mid):
-            continue                     # 衝突複本 run_log,跳過(避免執行時間重複計入)
-        for date, per_mid in _run_elapsed_for_file(p, file_mid).items():
-            d = daily.setdefault(date, {"total": 0.0, "machines": {}})
-            for mid, secs in per_mid.items():
-                label = machine_label(mid) if mid else "未標記"
-                d["total"] += secs
-                d["machines"][label] = d["machines"].get(label, 0.0) + secs
-    return daily

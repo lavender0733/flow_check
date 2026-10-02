@@ -2,9 +2,8 @@
 路徑與機器身分常數
 ==================
 從 traffic_monitor.py 抽出的葉模組(只相依 common.ident)。所有使用者資料放在專案根目錄
-flow_check/data/，並依用途分成 config(共用設定)、machines(各機執行期資料)與
-exports(手動下載匯出檔)。各機存檔/偏好檔名帶上機器代號,Google Drive 同步時才不會
-互相覆蓋。
+flow_check/data/，並依用途分成 config(共用設定)與 machines(各機執行期資料)。
+各機存檔/偏好檔名帶上機器代號,Google Drive 同步時才不會互相覆蓋。
 """
 
 import os
@@ -17,12 +16,8 @@ BASE = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE / "data"
 DATA_CONFIG_DIR = DATA_DIR / "config"
 MACHINE_DATA_DIR = DATA_DIR / "machines"
-EXPORTS_DIR = DATA_DIR / "exports"
 CONFIG_PATH = BASE / "config.json"
 MACHINES_PATH = DATA_CONFIG_DIR / "machines.json"
-HOLIDAYS_PATH = DATA_CONFIG_DIR / "holidays.json"
-TARGETS_PATH = DATA_CONFIG_DIR / "targets.json"
-API_QUOTA_BASELINE_PATH = DATA_CONFIG_DIR / "api_quota_baseline.json"
 WEB_DIR = BASE / "web"
 
 MACHINE_ID = machine_id()
@@ -34,8 +29,6 @@ PREFS_PATH = MACHINE_DATA_DIR / f"prefs_{MACHINE_ID}.json"
 # 這個檔每分鐘都在長,放在 Google Drive 同步夾裡會讓 Drive 每分鐘重傳整個檔 —— 到傍晚一個檔
 # 幾百 KB、一天重傳上千次,監控工具自己就成了吃流量的元兇。它是各機自己的診斷紀錄,本來就不必同步。
 TRAFFIC_LOG_DIR = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "flow_check" / "traffic"
-RUN_LOG_PATH = MACHINE_DATA_DIR / f"run_log_{MACHINE_ID}.jsonl"
 # 每日用量統計(長期保存,供流量報表)。一天只寫一次,放在同步夾裡沒關係。
 DAILY_STATS_PATH = MACHINE_DATA_DIR / f"daily_stats_{MACHINE_ID}.json"
-HISTORY_PATH = MACHINE_DATA_DIR / f"monthly_progress_history_{MACHINE_ID}.json"
 

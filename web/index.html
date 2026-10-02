@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>流量監控 + GPSS 控制台</title>
+<title>流量監控</title>
 <!-- 外觀切換。這段必須在 <head> 內同步執行(不能搬進 js/,也不能加 defer):
      頁面一開始畫之前就要把正確的 CSS 掛上,晚一步會先閃一下預設色再跳成使用者選的。
      另外 core/routes.py 只載入「有配對 partials/xxx.html」的 js,單獨一支 theme.js
@@ -18,7 +18,7 @@ var THEMES = [
   { id: "light",   label: "淺色",  css: "style.css",         attr: "light" },
   { id: "classic", label: "原版",  css: "style-classic.css", attr: ""      },
 ];
-// 目前套用中的外觀 id。給 loadConfig 判斷「伺服器沒存過時要種哪個值」用。
+// 目前套用中的外觀 id。給 loadMonitorConfig 判斷「伺服器沒存過時要種哪個值」用。
 function currentTheme() {
   var attr = document.documentElement.getAttribute("data-theme");
   var css = document.getElementById("themecss").getAttribute("href");
@@ -65,7 +65,7 @@ function applyTheme(id, save) {
   }
 }
 // 開頁時先用 localStorage 的值把 CSS 掛上(同步,趕在第一次繪製之前,不閃色)。
-// 伺服器的偏好稍後由 loadConfig 帶回來覆寫 —— 伺服器為準,localStorage 只是預填。
+// 伺服器的偏好稍後由 loadMonitorConfig 帶回來覆寫 —— 伺服器為準,localStorage 只是預填。
 // 兩者一致時 applyTheme 會發現 href 沒變,不會重新載入 CSS。
 (function () {
   var saved = null;
@@ -80,12 +80,7 @@ function applyTheme(id, save) {
 <!-- 這個檔是外殼。各分頁(panel)拆成 partials/*.html,由伺服器送頁時掃目錄注入,
      對應的 js 也一併產生 script 標籤(見 core/routes.py 的 render_index)。
      加一個頁籤 = 丟 partials/xxx.html + js/xxx.js 兩個新檔,這個檔不用改。 -->
-<div id="goalfx"></div>
-<div id="goaltoast">🎉 今日檢索達標!</div>
 <div class="wrap">
-
-  <div id="warnbanner" class="banner banner-warn banner-x" onclick="dismissWarn()"
-       title="點此關閉(同一則警告不再跳;警告解除或換新內容會再顯示)" style="display:none;"></div>
 
   <div id="restartbanner" class="banner banner-info" style="display:none;">
     🔄 偵測到程式碼已更新,但目前執行中的還是舊版本 —— 請到執行視窗按 Ctrl+C 關掉再重新啟動,變更才會生效。
@@ -97,9 +92,8 @@ function applyTheme(id, save) {
   <!-- 頁籤按鈕列由 main.js 依 util.js 的 TABS 註冊表生成;外觀選單靠右擺同一排。 -->
   <div class="tabbar">
     <div class="tabs" id="tabs"></div>
-    <!-- 外觀選單。和控制台的驗證碼下拉共用同一套自繪選單(見 util.js 的
-         enhanceSelect 與 style.css 的 .picker)—— 原生 select 的展開面板由系統畫,
-         樣式對不起來。這裡放原生 select 當骨架,選項由下方 script 填。 -->
+    <!-- 外觀選單。用 util.js 的自繪選單(見 enhanceSelect 與 style.css 的 .picker)——
+         原生 select 的展開面板由系統畫,樣式對不起來。這裡放原生 select 當骨架,選項由下方 script 填。 -->
     <div class="picker themepick" id="themepick">
       <select id="themesel" data-picker data-picker-head="外觀" aria-label="外觀"
               onchange="applyTheme(this.value)"></select>

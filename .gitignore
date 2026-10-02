@@ -1,29 +1,18 @@
 # 注意:.gitignore 不支援「行尾註解」—— # 只有在行首才是註解。
 # 所有說明一律獨立成行，不可寫在模式後面。
 
-# ── 機密:TIPO GPSS 的 userCode 絕對不可進版控 ──────────────────
-# 驗證碼池(明碼 userCode)
-program/gpss/api_keys.json
-# 各機設定,含該機選用的 userCode
-program/gpss/api_config_*.json
-# 額度校正基準,以 userCode 為鍵
-data/config/api_quota_baseline.json
+# ── 舊版 GPSS 檢索留在磁碟上的檔案(8.0.0 已移除檢索)──────────────
+# 裡面有明碼驗證碼(api_keys.json),絕對不可進版控。整個資料夾排除,
+# 刪掉資料夾之後這條也可以拿掉。
+program/gpss/
 
 # ── 執行期資料與累積歷史(不是原始碼)──────────────────────────
 # data/ 預設全部排除,只放行手動維護的設定檔(見下方 ! 例外)。
 data/*
 !data/config/
 data/config/*
-# 國定假日清單(手動維護,歷史有意義)
-!data/config/holidays.json
-# 檢索目標值
-!data/config/targets.json
 # 機器代號 → 友善名稱對照
 !data/config/machines.json
-
-# ── 檢索結果與檢索清單 ────────────────────────────────────────
-program/gpss/output/
-program/gpss/patents.txt
 
 # ── Python ────────────────────────────────────────────────────
 __pycache__/

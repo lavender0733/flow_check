@@ -3,7 +3,7 @@
 零專案內相依的葉模組：不 import 專案內任何其他模組，任何地方都能安全使用。
 
 取代原本散在各處的重複實作：
-- 原子寫入 6 處（traffic_monitor / storage / monthly_progress / output_store ×2 / yearly_server）
+- 原子寫入 6 處（traffic_monitor / storage 等；檢索相關的呼叫端已於 8.0.0 移除）
 - 容錯讀 JSON 18 處
 - 檔案簽章 3 處（格式原本不一致，見下方 file_sig 的說明）
 """

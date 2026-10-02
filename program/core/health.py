@@ -25,14 +25,12 @@ def _watched_sources() -> list:
     """在這個程序內載入、改了需要重啟才生效的原始碼檔。
 
     掃 core/*.py 而非硬編清單：拆檔或新增模組時會自動納入，不會漏掉。
-    另含 gpss/output_store.py（統計與額度都在這個程序內用它）與 common/*.py。
+    另含 common/*.py。
 
-    不列入：web/index.html 與 partials（每次請求即時讀檔）、
-    gpss_*_query.py（每次檢索開新行程），改完重整或下次執行就生效。
+    不列入：web/index.html 與 partials（每次請求即時讀檔），改完重整就生效。
     """
     files = sorted(_CORE_DIR.glob("*.py"))
     files += sorted((_CORE_DIR.parent / "common").glob("*.py"))
-    files.append(_CORE_DIR.parent / "gpss" / "output_store.py")
     return files
 
 

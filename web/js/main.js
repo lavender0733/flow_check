@@ -48,11 +48,6 @@ for (const t of tabs) if (t.onInit) t.onInit();   // 各頁自己的初始化(�
 // 那一頁的初次載入不會因為「剛好排在第一個」就被跳過。
 if (tabs.length) showTab(tabs[0].id);
 
-loadConfig().then(loadKeys);   // 先讀設定,再讀驗證碼池(讓「目前驗證碼」那行勝出顯示)
-loadPatents();
-tickStatus(); tickJob();
+loadMonitorConfig();   // 讀設定帶入速率下限預設 + 伺服器本機偏好(monitor.js)
+tickStatus();
 setInterval(tickStatus, 5000);
-setInterval(tickJob, 2000);
-setInterval(updateJobElapsed, 1000);   // 執行中時讓「執行時間」每秒往上加
-// 爬取統計不再每 5 秒盲刷:改由 tickStatus(每 5 秒輪詢一次,本來就為流量錶在跑)比對
-// 伺服器的「資料變動簽章」,只有真的有新檢索紀錄(或跨時段/整點)時才刷新統計 → 見 onDataChanged。

@@ -12,30 +12,6 @@ function fmtBytes(n) {
 }
 function fmtRate(bps) { return fmtBytes(bps) + "/s"; }
 
-function fmtDur(sec) {
-  sec = Math.round(sec || 0);
-  if (!sec) return "0s";
-  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-  if (h) return `${h}h${String(m).padStart(2, "0")}m`;
-  if (m) return `${m}m${String(s).padStart(2, "0")}s`;
-  return `${s}s`;
-}
-
-function fmtMD(s) {
-  s = String(s || "");
-  if (s.length === 8) return s.slice(4, 6) + "/" + s.slice(6, 8);   // YYYYMMDD
-  if (s.length === 6) return s.slice(4, 6) + "月";                   // YYYYMM
-  return s || "—";
-}
-
-const STATUS_MAP = {
-  idle:    ["閒置", "idle"],
-  running: ["執行中", "run"],
-  done:    ["完成", "done"],
-  stopped: ["已停止", "stop"],
-};
-const METHOD_MAP = { api: "API 檢索", web: "傳統檢索" };
-
 // ===== 頁籤註冊表 =====
 // 每個頁籤模組在自己的檔尾呼叫 registerTab 把自己登記進來,main.js 再依 order
 // 生出按鈕列、處理切換。util.js 固定最先載入,所以各模組執行時這個函式一定在。
@@ -121,7 +97,7 @@ function enhanceSelect(sel) {
   function onOutside(e) { if (!box.contains(e.target)) close(); }
   function onKey(e) { if (e.key === "Escape") { close(); btn.focus(); } }
 
-  // 依 select 目前的 option 重建面板。選項是動態產生的(驗證碼池、月份清單),
+  // 依 select 目前的 option 重建面板。選項可能是動態產生的,
   // 所以每次內容變動都要重來一次。
   function rebuild() {
     menu.innerHTML = "";
