@@ -59,19 +59,24 @@ class RewriteError(Exception):
 # ============================================================
 # 清單
 # ============================================================
+# 路徑比對一律不分大小寫:Windows 與 Google Drive 的檔案系統不分大小寫,
+# Data/ 就是 data/、Paths.py 就是 paths.py。
 def _is_protected(rel: str, spec: dict) -> bool:
     """protect 的每一項:等於該路徑、在該資料夾底下,或檔名相同(desktop.ini 每一層都有)。"""
+    rel = rel.casefold()
     name = rel.rsplit("/", 1)[-1]
     for p in spec.get("protect", []):
+        p = p.casefold()
         if rel == p or rel.startswith(p + "/") or name == p:
             return True
     return False
 
 
 def _in_scope(rel: str) -> bool:
+    rel = rel.casefold()
     if "/" in rel:
         return rel.split("/", 1)[0] in _SCOPE_DIRS
-    return any(fnmatch(rel, g) for g in _SCOPE_ROOT_GLOBS)
+    return any(fnmatch(rel, g.casefold()) for g in _SCOPE_ROOT_GLOBS)
 
 
 def _copy_list(src: Path, spec: dict) -> list:
@@ -128,18 +133,21 @@ def plan(src: Path, dst: Path, spec: dict) -> dict:
     """比對 build 結果(src)與 dst。protect 裡的路徑永遠不會出現在任何清單。"""
     src, dst = Path(src), Path(dst)
     staged = [r for r in _files(src) if not _is_protected(r, spec)]
-    existing = set(_files(dst))
+    # 以不分大小寫的鍵對應 dst 實際的檔名:dst 的 Paths.py 就是 staged 的 paths.py,
+    # 不能一邊寫進去、一邊又當成過時檔刪掉。
+    existing = {r.casefold(): r for r in _files(dst)}
     out = {"add": [], "update": [], "remove": [], "same": []}
     for rel in staged:
-        if rel not in existing:
+        cur = existing.get(rel.casefold())
+        if cur is None:
             out["add"].append(rel)
-        elif (src / rel).read_bytes() == (dst / rel).read_bytes():
+        elif (src / rel).read_bytes() == (dst / cur).read_bytes():
             out["same"].append(rel)
         else:
             out["update"].append(rel)
-    staged_set = set(staged)
-    out["remove"] = sorted(r for r in existing
-                           if r not in staged_set and _in_scope(r) and not _is_protected(r, spec))
+    staged_keys = {r.casefold() for r in staged}
+    out["remove"] = sorted(r for k, r in existing.items()
+                           if k not in staged_keys and _in_scope(r) and not _is_protected(r, spec))
     return out
 
 

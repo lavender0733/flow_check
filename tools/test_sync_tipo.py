@@ -182,6 +182,22 @@ class PlanApplyTest(SyncTestCase):
         self.assertTrue((dst / "data" / "notes.txt").exists())
         self.assertTrue((dst / "my_notes.txt").exists())
 
+    def test_case_variant_names_are_not_deleted(self):
+        # Windows / Google Drive 不分大小寫:dst 的 Paths.py 就是 staged 的 paths.py,
+        # 不能先寫進去再當成過時檔刪掉;Desktop.ini 也要受保護。
+        staged = self._staged()
+        dst = self.tmp / "dst"
+        for rel in ("program/core/Paths.py", "web/Desktop.ini"):
+            (dst / rel).parent.mkdir(parents=True, exist_ok=True)
+            (dst / rel).write_text("old", encoding="utf-8")
+        p = sync_tipo.plan(staged, dst, load_spec())
+        self.assertEqual(p["remove"], [])
+        self.assertNotIn("web/Desktop.ini", {f for k in p for f in p[k]})
+        sync_tipo.apply(staged, dst, p)
+        self.assertEqual((dst / "program" / "core" / "paths.py").read_bytes(),
+                         (staged / "program" / "core" / "paths.py").read_bytes())
+        self.assertEqual((dst / "web" / "Desktop.ini").read_text(encoding="utf-8"), "old")
+
 
 class StartupTest(SyncTestCase):
     """build 出來的版本實際啟動。埠 8799,逐分鐘明細導到暫存資料夾。"""
