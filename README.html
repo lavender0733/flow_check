@@ -96,42 +96,29 @@
 </head>
 <body>
 
-<h1>Flow Check — 局網流量監控 + GPSS 批次檢索 <code class="ver">v7.6.0</code></h1>
+<h1>Flow Check — 流量監控 + 690 資轉監控 <code class="ver">v8.0.0</code></h1>
 
-<p class="lead">一個放在自己電腦上的小工具,做兩件事:</p>
-<ul class="lead">
-  <li><strong>看今天用掉多少網路流量</strong>(對著每日 2GB 的額度)</li>
-  <li><strong>在同一個網頁裡批次檢索 TIPO GPSS 專利</strong></li>
-</ul>
-<p class="lead">平時在背景執行,要看時打開瀏覽器就好。</p>
+<p class="lead">一個放在自己電腦上的小工具,量測每天用掉多少網路流量(對著每日 2GB 的額度),並提供<strong>流量報表</strong>,拿來跟公司反映連線問題。平時在背景執行,要看時打開瀏覽器就好。</p>
 
-<p>檢索有兩種方式:<strong>官方 API</strong>(快、省流量,需要一組驗證碼)或<strong>傳統前端</strong>(直接操作網頁、不用驗證碼,但較慢、較耗流量)。</p>
-
-<p>也<strong>支援多台電腦一起跑</strong>:把資料夾放在 Google Drive 共用,各台資料自動分流、統計自動合計(設定見下方「啟動 / 關閉」)。</p>
+<p><strong>690 資轉監控</strong>預定在 8.1.0 加入。</p>
 
 <h3>使用的技術</h3>
 <ul>
   <li>Python 3.13</li>
   <li>psutil 7.2.2 —— 讀網卡累積流量</li>
-  <li>openpyxl 3.1.5 —— 讀寫 .xlsx(檢索結果彙整、620/680 統計)</li>
-  <li>xlrd 2.0.2 —— 讀 630 的舊式 .xls</li>
-  <li>Playwright 1.60.0 —— 傳統檢索用(只跑 API 檢索的話用不到)</li>
+  <li>Windows ESTATS —— 逐條 TCP 連線的收發量(內網排除、程式歸因用)</li>
   <li>HTML / CSS / JavaScript(免打包、無框架)</li>
 </ul>
 
 <hr>
 
 <h2>安裝說明</h2>
-
-<h3>A. 單機</h3>
-<p>把整個 <code>flow_check</code> 資料夾下載到那台電腦即可(API驗證碼、設定、檢索清單一起帶走)。</p>
-
-<h3>B. 多機(採Google Drive 同步)</h3>
 <ol class="steps">
-  <li>安裝<strong>Google Drive 電腦版</strong>,登入自己的Google的帳號。</li>
-  <li>在自己的雲端硬碟建立捷徑。</li>
+  <li>電腦要有 <strong>Python</strong>(安裝時勾「Add Python to PATH」)。</li>
+  <li>把整個 <code>flow_check</code> 資料夾放到那台電腦(或放在 Google Drive 同步夾裡)。</li>
+  <li>第一次啟動時會自動安裝 <code>psutil</code>,不用另外裝。</li>
 </ol>
-<p><strong>僅同步檢索數據、驗證碼池</strong>(各台筆數自動加總、可分台看)，流量監控數據各機獨立計算。</p>
+<p>多台電腦共用同一個 Google Drive 資料夾也可以:每台的流量資料以<strong>主機名稱</strong>分檔,各自獨立計算,不會互相覆蓋。</p>
 
 <hr>
 
@@ -142,92 +129,58 @@
     <tr><th>動作</th><th>做法</th></tr>
   </thead>
   <tbody>
-    <tr><td>啟動主工具</td><td>雙擊 <strong><code>start_monitor.bat</code></strong>,會自動打開瀏覽器到 <code>http://127.0.0.1:8765</code></td></tr>
-    <tr><td>關閉主工具</td><td>雙擊 <strong><code>stop_monitor.bat</code></strong>(只關這個工具,不影響其他程式)</td></tr>
-    <tr><td>年度檢索統計</td><td>雙擊 <strong><code>年度統計.bat</code></strong>，開啟獨立頁面 <code>http://127.0.0.1:8766</code>；關閉其命令視窗即可停止。</td></tr>
+    <tr><td>啟動</td><td>雙擊 <strong><code>start_monitor.bat</code></strong>,會自動打開瀏覽器到 <code>http://127.0.0.1:8765</code></td></tr>
+    <tr><td>關閉</td><td>雙擊 <strong><code>stop_monitor.bat</code></strong>(只關這個工具,不影響其他程式)</td></tr>
     <tr><td>內網排除診斷</td><td>雙擊 <strong><code>diag_lan.bat</code></strong>(需管理員)。每 10 秒逐連線列出對方 IP、內外網分類與收發量,並和執行中主工具的實扣量對照。平常不必開,內網排除算得怪怪的時候再用。</td></tr>
   </tbody>
 </table>
 
 <blockquote>
-  <p><strong>第一次啟動</strong>會自動安裝所需套件(<code>psutil</code>;傳統檢索另需 <code>playwright</code> / <code>chromium</code>),需網路、約數分鐘;之後啟動就不會再裝。</p>
+  <p><strong>為什麼會跳 UAC(管理員)</strong>:內網排除與程式歸因要讀 Windows ESTATS(每條 TCP 連線的收發量),這需要管理員身分。第一次啟動會跳一次 UAC 並建立排程工作,之後啟動不再詢問。按「取消」也能跑,只是內網排除與程式歸因停用,總流量照常計算。</p>
 </blockquote>
 
 <hr>
 
 <h2>主要功能</h2>
 
-<h3>外觀(全站共通)</h3>
-<ul>
-  <li>頁籤列最右邊的<strong>「外觀」選單</strong>可切換<strong>深色(預設)/ 淺色 / 原版</strong>;<strong>數字與功能完全不變</strong>,只換視覺。</li>
-  <li>「原版」即 7.4.0 改版前的設計,完整保留、日後不隨新樣式變動。</li>
-  <li>選擇<strong>記在這台電腦上</strong>(不是瀏覽器),換瀏覽器、重開機、重啟工具都還在;多台電腦各自獨立。</li>
-</ul>
-
 <h3>流量監控</h3>
 <ul>
-  <li><strong>今日用量</strong>:今天用掉 / 還剩多少流量。</li>
+  <li><strong>今日用量</strong>:今天用掉 / 還剩多少流量,以及即時下載、上傳速率。</li>
+  <li><strong>排除內網流量</strong>:走內網(NAS、區網 FTP 等)的傳輸不算進對外額度,依對方 IP 逐條連線判斷。</li>
   <li><strong>用量通知</strong>:達設定比例以頁內視窗 + 紅幅 + 分頁紅點提醒。</li>
-  <li><strong>限速偵測(網速)</strong>:雙重確認是否超過流量限制，可被動看近期最高下載速率,或按「測速」實量(每次約 8MB)。</li>
+  <li><strong>流量暴增預警</strong>:某一分鐘突然用很多時跳提醒,並列出當下耗流量最多的程式。</li>
+  <li><strong>限速偵測(網速)</strong>:被動看近期最高下載速率,或按「測速」實量(每次約 8MB)。</li>
   <li><strong>今日程式排行</strong>:今天每支程式累計吃掉多少額度(含「未歸因」的 UDP/QUIC 與「監控未執行期間」)。額度莫名用完時先看這裡。</li>
   <li><strong>用量明細</strong>:每分鐘一筆,由伺服器記錄 —— 網頁沒開也照記,保留 31 天、可切換日期回頭查。</li>
+  <li><strong>暴增紀錄</strong>:當天的暴增事件,依程式與時間收合,展開看 IP、PID 與流量。</li>
 </ul>
 
-<h3>檢索控制台</h3>
+<h3>流量報表</h3>
 <ul>
-  <li><strong>兩種檢索方式</strong>:
-    <ul>
-      <li><strong>API 檢索</strong>:走官方 API,快、省流量,需驗證碼。
-        <ul>
-          <li><strong>驗證碼設定</strong>:
-            <ul>
-              <li>到 <a href="https://www.tipo.gov.tw/gpss/api">GPSS API頁面</a> 線上申請驗證碼</li>
-              <li>按「新增驗證碼」，填入新申請的驗證碼</li>
-            </ul>
-          </li>
-        </ul>
-      </li>
-      <li><strong>傳統檢索(前端)</strong>:操作 GPSS 網頁、不需驗證碼。</li>
-    </ul>
-  </li>
-  <li><strong>執行檢索</strong>:填入要檢索的筆數後按「▶ 開始」;跑完該筆數,或按「■ 立即停止」就結束。</li>
+  <li><strong>每日流量</strong>:每天一根堆疊柱,分出 <strong>ssh</strong>、<strong>Claude Code</strong>、<strong>VS Code</strong> 與其他;可切「合計 / 上傳 / 下載」、期間「最近 14 天 / 31 天 / 全部」。</li>
+  <li><strong>逐時</strong>:點某一天,換成那天 8–20 點的逐時折線圖,看幾支程式是不是同時段一起升降。按「← 每日」回來。</li>
+  <li><strong>看每日數字</strong>:展開表格看每天的數字,方便截圖或抄給公司。</li>
+  <li>每日統計長期保存(不像用量明細只留 31 天),一天只寫一次。要分開統計的程式可在 <code>config.json</code> 的 <code>report_apps</code> 調整。</li>
 </ul>
 
-<h3>爬取統計</h3>
+<h3>外觀</h3>
 <ul>
-  <li><strong>今日進度</strong>:今天爬取筆數、和目標的差距，以及相關數據。</li>
-  <li><strong>本月手動檢索</strong>:本月用這套工具實際跑掉多少筆(另附流量與執行時間)。<strong>只算本工具送出的檢索</strong>,和「檢索進度」頁的本月累積(後台全站總量、含民眾使用)不是同一件事,兩者不必對帳。</li>
-  <li><strong>本月 API 查詢筆數</strong>:本月使用各組驗證碼執行多少次檢索。</li>
-</ul>
-
-<h3>檢索進度</h3>
-<ul>
-  <li><strong>本月進度</strong>:離目標(預設 45 萬筆)還差多少,進而自動計算每日目標。</li>
-  <li><strong>資料來源</strong>:GPSS 後台匯出檔,採取手動更新。</li>
-</ul>
-
-<h3>年度檢索統計（獨立工具）</h3>
-<ul>
-  <li>雙擊 <strong><code>年度統計.bat</code></strong> 開啟 <code>http://127.0.0.1:8766</code>；不依賴主工具，可獨立啟動與關閉。</li>
-  <li><strong>顯示內容</strong>:年度目標完成率、年度累積／年度目標／尚差，以及 620、630、680 三個系統的累積檢索次數與更新月份;<strong>按「更新統計」才重查資料</strong>。</li>
-  <li><strong>統計來源</strong>:620 讀最新月統計檔的「月份追蹤」歷史表；630 加總各月營運表「全部」工作表的合計列；680 讀最新統計總表的累計／總計列。</li>
+  <li>頁籤列最右邊的<strong>「外觀」選單</strong>可切換<strong>深色(預設)/ 淺色 / 原版</strong>;數字與功能完全不變,只換視覺。</li>
+  <li>選擇<strong>記在這台電腦上</strong>(不是瀏覽器),換瀏覽器、重開機都還在;多台電腦各自獨立。</li>
 </ul>
 
 <hr>
 
 <h2>進階參考</h2>
-<p>設定速查(<code>config.json</code> / <code>api_keys.json</code> / <code>api_config.json</code>)與檔案結構見:</p>
 <ul>
-  <li>📑 <a href="doc/進階參考.html"><strong>進階參考</strong></a> —— 設定速查、檔案結構</li>
+  <li>📑 <a href="doc/進階參考.html"><strong>進階參考</strong></a> —— 設定速查、檔案結構、HTTP API 端點</li>
+  <li>🗒️ <a href="doc/版本紀錄.html"><strong>版本紀錄</strong></a></li>
 </ul>
 
 <hr>
 
-<h2>版本紀錄</h2>
-<p>各版更新內容見:</p>
-<ul>
-  <li>🗒️ <a href="doc/版本紀錄.html"><strong>版本紀錄</strong></a> —— 從 1.0.0 到 7.6.0 的完整更新紀錄</li>
-</ul>
+<h2>舊版</h2>
+<p>1.0.0 – 7.6.0 是 GPSS 批次檢索時代,已封存於 <code>G:\我的雲端硬碟\flow_check_v7.6.0_GPSS最終版_2026-10-02.zip</code>,git 標籤 <code>v7.6.0-gpss-final</code>。</p>
 
 </body>
 </html>

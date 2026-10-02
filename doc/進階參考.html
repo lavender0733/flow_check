@@ -113,54 +113,23 @@
     <tr><td><code>lan_probe_interval_sec</code></td><td>內網 ESTATS 高頻探測間隔秒數(預設 1;越短越接得住短命內網連線)</td></tr>
     <tr><td><code>exclude_nics</code></td><td>計流量時要略過的網卡關鍵字(預設 <code>["Loopback","isatap","Teredo"]</code>,排除回環/隧道介面)</td></tr>
     <tr><td><code>exclude_lan</code></td><td>是否排除內網流量、不計入對外額度(預設 <code>true</code>;前端開關以 <code>prefs_&lt;機器&gt;.json</code> 為準)</td></tr>
-    <tr><td><code>lan_ranges</code></td><td>★ 視為內網、要排除的網段(預設 <code>10.0.0.0/8</code> / <code>172.16.0.0/12</code> / <code>192.168.0.0/16</code> / <code>169.254.0.0/16</code>。<code>10.0.0.0/8</code> 涵蓋所有 <code>10.x</code> 內網,GPSS 的 <code>10.65.x.x</code> 靠下面的 <code>count_ranges</code> 保住計入 —— 兩者要一起看,見 7.0.2)</td></tr>
-    <tr><td><code>count_ranges</code></td><td>★ 強制計入白名單,優先於 <code>lan_ranges</code>(預設 <code>["10.65.0.0/16"]</code>,釘死 GPSS 對外流量永不被排除)</td></tr>
-    <tr><td><code>max_count_per_run</code></td><td>單次檢索筆數上限(預設 2000)</td></tr>
-    <tr><td><code>gpss_dir</code></td><td>檢索程式所在目錄(預設 <code>program/gpss</code>)</td></tr>
-    <tr><td><code>gpss_script</code> / <code>gpss_script_web</code></td><td>API / 傳統檢索程式檔名(預設 <code>gpss_api_query.py</code> / <code>gpss_web_query.py</code>)</td></tr>
-    <tr><td><code>gpss_python</code></td><td>跑檢索程式的直譯器(預設 <code>py -3.13</code>,不可用則退回 <code>python</code>)</td></tr>
-    <tr><td><code>dl_cap_busy</code> / <code>dl_cap_offpeak</code></td><td>儀表板顯示:上班 / 下班「時段輸出總筆數」上限(官方值 10000 / 30000)</td></tr>
-    <tr><td><code>case_cap_busy</code> / <code>case_cap_offpeak</code></td><td>儀表板顯示:上班 / 下班「單筆案號每小時輸出」上限(官方值 300 / 1000)</td></tr>
+    <tr><td><code>lan_ranges</code></td><td>★ 視為內網、要排除的網段(預設 <code>10.0.0.0/8</code> / <code>172.16.0.0/12</code> / <code>192.168.0.0/16</code> / <code>169.254.0.0/16</code>。<code>10.0.0.0/8</code> 是刻意涵蓋所有 <code>10.x</code> 內網,見 7.0.2 的修正)</td></tr>
+    <tr><td><code>count_ranges</code></td><td>強制計入白名單,優先於 <code>lan_ranges</code>(預設空清單)。落在 <code>lan_ranges</code> 內、但實際走對外線路要算進額度的網段寫在這裡</td></tr>
+    <tr><td><code>local_ranges</code></td><td>本機(loopback)網段(預設 <code>127.0.0.0/8</code>、<code>::1/128</code>):不經網卡、不吃額度,整筆不列入計算與歸因</td></tr>
     <tr><td><code>speed_floor_mbps</code></td><td>限速偵測:低於此(Mbps)判定「疑似被限速」(預設 5,可在頁面臨時覆蓋)</td></tr>
     <tr><td><code>peak_window_min</code></td><td>被動「最高下載速率」的觀測視窗分鐘數(預設 10)</td></tr>
     <tr><td><code>speedtest_url</code></td><td>主動測速來源(預設 Cloudflare;被擋可換)</td></tr>
     <tr><td><code>speedtest_bytes</code> / <code>speedtest_timeout</code></td><td>主動測速最多抓的位元組(預設 8MB)/ 最長秒數(預設 6)</td></tr>
+    <tr><td><code>report_apps</code></td><td>流量報表要分開統計的程式(選填)。格式 <code>{"類別": ["程序檔名.exe", …]}</code>,預設 <code>ssh</code> → <code>ssh.exe</code>、<code>vscode</code> → <code>code.exe</code>、<code>claude</code> → <code>claude.exe</code></td></tr>
   </tbody>
 </table>
 
 <blockquote>
-  <p><strong>流量暴增預警 / 用量通知的設定不放這裡</strong>:<code>surge_enabled</code> / <code>surge_min_mb</code> / <code>surge_factor</code> / <code>surge_window_min</code> / <code>surge_cooldown_sec</code> 與 <code>notify_enabled</code> / <code>notify_threshold</code> 雖在版本紀錄寫過「config.json 新增」,實際開關與門檻以本機偏好 <code>data/machines/prefs_&lt;機器&gt;.json</code> 為權威來源(各台獨立、頁面即時切換),<code>config.json</code> 未設時走程式內建預設(暴增 50MB、4×、冷卻 300 秒;通知門檻 80%)。<strong>外觀</strong>(<code>theme</code>,值為 <code>dark</code> / <code>light</code> / <code>classic</code>,預設 <code>dark</code>)同樣只存在這份本機偏好,<code>config.json</code> 沒有這個欄位。</p>
+  <p><strong>流量暴增預警 / 用量通知 / 外觀的設定不放這裡</strong>:<code>surge_enabled</code> / <code>surge_min_mb</code> / <code>surge_factor</code> / <code>surge_window_min</code> / <code>surge_cooldown_sec</code>、<code>notify_enabled</code> / <code>notify_threshold</code> 與 <code>theme</code> 以本機偏好 <code>data/machines/prefs_&lt;機器&gt;.json</code> 為權威來源(各台獨立、頁面即時切換),<code>config.json</code> 未設時走程式內建預設(暴增 50MB、4×、視窗 30 分、冷卻 300 秒;通知門檻 80%;外觀深色)。另有 <code>debug_lan</code>(預設 <code>false</code>):開啟後每次取樣把內網扣除明細印到主控台。</p>
 </blockquote>
 
-<p><strong><code>program/gpss/api_keys.json</code>(驗證碼池;集中放多組 <code>userCode</code>)</strong></p>
-<table>
-  <thead><tr><th>鍵</th><th>意義</th></tr></thead>
-  <tbody>
-    <tr><td><code>keys</code></td><td>★ 驗證碼陣列,每組 <code>{id, label, userCode}</code>。新增驗證碼改這裡(或用網頁「新增驗證碼」/ CLI);各機 <code>api_config_&lt;機器&gt;.json</code> 的 <code>active_key</code> 指向其中一組的 <code>id</code></td></tr>
-  </tbody>
-</table>
-
-<p><strong><code>program/gpss/api_config.json</code>(檢索的共用設定;<code>userCode</code> 已改放上面的驗證碼池)</strong></p>
-<table>
-  <thead><tr><th>鍵</th><th>意義</th></tr></thead>
-  <tbody>
-    <tr><td><code>aps</code></td><td>可用的 AP 伺服器清單(目前預設 <code>[1,2]</code>;gpss3/4 長期回 <code>no ini</code> 錯誤頁故先跳過,TIPO 修好可加回 <code>[1,2,3,4]</code>)</td></tr>
-    <tr><td><code>probe_fastest_ap</code></td><td>開跑前測各 AP 回應速度、選最快的起跑(預設 <code>true</code>)</td></tr>
-    <tr><td><code>patDB</code></td><td>檢索的資料庫代碼</td></tr>
-    <tr><td><code>queryField</code></td><td>第一段檢索欄位(預設 <code>PN</code> 公開公告號;沒命中的會自動再用 <code>AN</code> 申請號補查)</td></tr>
-    <tr><td><code>expFld</code></td><td>匯出欄位(預設 <code>PN,AN,ID,AD,TI</code>)</td></tr>
-    <tr><td><code>expFmt</code></td><td>回應格式(預設 <code>json</code>)</td></tr>
-    <tr><td><code>timeout_seconds</code></td><td>單一請求逾時秒數(預設 40;逾時會自動換台)</td></tr>
-    <tr><td><code>batch_size</code></td><td>★ 一個請求一次查幾筆(預設 30;設 <code>1</code> = 等同舊版一筆一請求)</td></tr>
-    <tr><td><code>stop_on_quota</code></td><td>★ 撞 <code>Over download quantity</code> 時立即停止本輪、不暫停重試(預設 <code>true</code>)</td></tr>
-    <tr><td><code>quota_per_hour_busy</code> / <code>quota_per_hour_offpeak</code></td><td>上班 / 非上班時段的每小時額度(預設 300 / 1000),依此自動控速</td></tr>
-    <tr><td><code>retries</code></td><td>每個請求(及探測每台)的重試次數(預設 2)</td></tr>
-    <tr><td><code>give_up_after_failed_batches</code></td><td>連續幾批整批失敗就停止本輪(預設 3;避免空燒清單)</td></tr>
-  </tbody>
-</table>
-
 <blockquote>
-  <p>改完 <code>config.json</code> 或 <code>program/core/</code>、<code>program/common/</code> 下的任何 <code>.py</code> 後需<strong>重新啟動</strong>才生效(網頁上方會自動跳「需重啟」橫幅提醒);改 <code>web/</code> 下的網頁檔重整即可,改 <code>program/gpss/</code> 下的檢索設定則每次開跑會自動重讀,兩者都不必重啟。</p>
+  <p>改完 <code>config.json</code> 或 <code>program/core/</code>、<code>program/common/</code> 下的任何 <code>.py</code> 後需<strong>重新啟動</strong>才生效(網頁上方會自動跳「需重啟」橫幅提醒);改 <code>web/</code> 下的網頁檔重整即可。</p>
 </blockquote>
 
 <h2>檔案結構</h2>
@@ -169,71 +138,71 @@
   <p><strong>要加新功能時:</strong></p>
   <ul>
     <li><strong>新增一個網頁端點</strong> → 在 <code>program/core/routes.py</code> 寫一個函式,在最下方的 <code>build_routes()</code> 加一行註冊。路徑是<strong>精確比對</strong>,註冊順序無關緊要。</li>
-    <li><strong>新增一個獨立小工具</strong> → 寫一張路由表交給 <code>program/common/webapp.py</code> 的 <code>serve()</code>,不必重抄伺服器管線(年度統計就是這樣接的)。</li>
-    <li><strong>新增一個網頁頁籤</strong> → 要改 5 個地方:<code>index.html</code> 的頁籤鈕、include 標記、script 標籤,加上 <code>main.js</code> 的頁籤陣列與切換 hook。</li>
+    <li><strong>新增一個網頁頁籤</strong> → 丟兩個新檔:<code>web/partials/xxx.html</code>(面板,外層 <code>&lt;div class="panel hidden" id="panel-xxx"&gt;</code>)與 <code>web/js/xxx.js</code>(結尾呼叫 <code>registerTab({id, label, order, onInit?, onFirstShow?, onShow?})</code>)。現有檔案零改動,重整瀏覽器即生效。</li>
+    <li><strong>同事版(TIPO flow check)</strong>由 <code>同步到同事版.bat</code> 從這裡產生。在 <code>program/core/</code> 新增檔案時,要想清楚同事版需不需要(<code>tools/sync_tipo.json</code> 的 <code>copy</code> / <code>exclude</code>)。</li>
   </ul>
 </blockquote>
 
 <pre><code>flow_check/                根目錄只放使用者平常會碰的東西
 ├─ README.html            本說明文件(首頁)
-├─ doc/                   衍生說明文件(從 README 連結過去;新文件也放這)
-│  ├─ README.md            本說明文件的 Markdown 版(內容最完整)
-│  ├─ 進階參考.html         設定速查、檔案結構
+├─ doc/                   衍生說明文件
+│  ├─ README.md            本說明文件的 Markdown 版
+│  ├─ 進階參考.html         設定速查、檔案結構、HTTP API 端點
 │  ├─ 版本紀錄.html         各版更新紀錄
-│  ├─ specs/ plans/        設計文件、實作計畫與進度筆記
-│  └─ diagrams/            架構圖
-├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉
-├─ 月進度.bat             雙擊即印本月進度純文字報告
-├─ 年度統計.bat           啟動獨立的年度檢索統計頁(127.0.0.1:8766)
-├─ requirements.txt       第三方套件(psutil / openpyxl / xlrd)
-├─ config.json            主設定:額度、port、取樣間隔、網段護欄等
-├─ web/                   網頁介面(免打包純 HTML/JS;四個頁籤)
+│  ├─ 同事版README.md       同事版的 README 來源(同步時複製成 TIPO flow check 的 README.md)
+│  └─ specs/ plans/        設計文件、實作計畫與進度筆記
+├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉(啟動時自動檢查並安裝 psutil)
+├─ diag_lan.bat           內網排除診斷(需管理員)
+├─ 同步到同事版.bat        產生同事版(雙擊只預覽;加 --apply 才寫入)
+├─ requirements.txt       第三方套件(psutil)
+├─ config.json            主設定:額度、port、取樣間隔、網段等
+├─ tools/                 開發用工具(同步腳本與它的測試;不會同步到同事版)
+├─ web/                   網頁介面(免打包純 HTML/JS)
 │  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
 │  ├─ style.css           樣式:深色 / 淺色共用一份骨架,靠 &lt;html data-theme&gt; 切 token
 │  ├─ style-classic.css   「原版」外觀(7.4.0 改版前的設計,獨立保存)
-│  ├─ partials/           各分頁 HTML(monitor / control / analytics / progress)
-│  └─ js/                 依功能切分的程式(util / monitor / control / analytics / progress / main)
-├─ data/                  設定與資料
-│  ├─ config/             共用設定: targets.json / holidays.json / machines.json / api_quota_baseline.json
-│  ├─ machines/           各機執行期資料: state / prefs(含外觀偏好)/ run_log / 月進度快照(檔名含機器代號)
-│  ├─ exports/            ★ 手動從後台下載的簡易版*.xls / API*.xls(可直接覆蓋舊檔)
-│  ├─ 620/ 630/ 680/      ★ 年度統計的來源檔(各系統的月統計 Excel)
-│  └─ 年度統計快取.json    年度統計的解析快取(檔案沒變就不重讀 Excel)
-└─ program/               所有程式碼與輔助檔(使用者平常不需進來)
-   ├─ core/               主工具的核心(由 start_monitor.bat 啟動)
+│  ├─ partials/           各分頁 HTML(monitor 流量監控 / report 流量報表)
+│  └─ js/                 util(共用)/ monitor / report / main(啟動)
+├─ data/                  設定與資料(不在版控內)
+│  ├─ config/machines.json 機器代號 → 友善名稱對照(如「桌機」;空值則顯示代號)
+│  └─ machines/           各機執行期資料(檔名含機器代號,同步不互相覆蓋)
+│     ├─ state_&lt;機器&gt;.json        當日用量(跨重啟保留、跨日歸零)
+│     ├─ prefs_&lt;機器&gt;.json        本機偏好:通知 / 暴增預警 / 排除內網開關與門檻、外觀
+│     └─ daily_stats_&lt;機器&gt;.json  每日用量統計(流量報表的資料,長期保存)
+└─ program/               所有程式碼(使用者平常不需進來)
+   ├─ core/
    │  ├─ traffic_monitor.py    進入點:組裝與啟動(版號唯一來源)
-   │  ├─ routes.py             16 個網頁端點,各一個函式 + 一張註冊表
+   │  ├─ routes.py             網頁端點,各一個函式 + 一張註冊表
    │  ├─ sampler.py            流量取樣與計費、ESTATS 探測迴圈、主動測速
-   │  ├─ jobs.py               檢索任務調度:起子程序、進度、停止、結束後背景併檔
-   │  ├─ health.py             錯誤收集與「程式碼已更新、需重啟」偵測
-   │  ├─ monthly_progress.py   本月進度計算(網頁與 月進度.bat 共用)
+   │  ├─ daily_stats.py        每日用量統計(流量報表)
    │  ├─ estats.py             Windows ESTATS 逐 TCP 連線收/發位元組(內網排除底層)
+   │  ├─ procinfo.py           程序 → 軟體名稱 / Windows 服務名稱
+   │  ├─ health.py             錯誤收集與「程式碼已更新、需重啟」偵測
+   │  ├─ lan_diag.py           內網排除診斷工具(由 diag_lan.bat 啟動)
    │  ├─ paths.py              路徑常數與機器身分
-   │  ├─ storage.py            資料層:設定 / 偏好 / 機器標籤 / 統計掃描 / 執行時間
-   │  └─ quota.py              API 額度 / 驗證碼歸戶
-   ├─ common/             兩支伺服器共用的底層
-   │  ├─ webapp.py             網頁伺服器底座:路由分派、靜態檔、路徑穿越防護、serve()
-   │  ├─ jsonio.py             JSON 原子寫入 / 容錯讀取 / 檔案簽章與快取
-   │  └─ ident.py              機器代號、驗證碼遮罩
-   ├─ gpss/               檢索引擎
-   │  ├─ gpss_api_query.py     API 檢索(官方 API 批次查詢)
-   │  ├─ gpss_web_query.py     傳統檢索(Playwright 操作前端網頁)
-   │  ├─ output_store.py       把零散 CSV 併成各機一個 Excel
-   │  ├─ api_config.json       共用設定(patDB / 速率 / AP 等;不放 userCode)
-   │  ├─ api_keys.json         ★ 驗證碼池(集中放多組 userCode)
-   │  ├─ api_config_&lt;機器&gt;.json  ★ 各機設定:active_key = 目前選用哪一組(首次執行自動產生)
-   │  ├─ patents.txt           檢索清單(也可在網頁編輯)
-   │  └─ output/               檢索結果:每台每月一個 summary_&lt;機器&gt;_&lt;YYYY-MM&gt;.xlsx(一天一張工作表);
-   │                           另有除錯傾印 _fail_response.json / _sample_response.json
-   └─ yearly_stats/       年度檢索統計(獨立小工具,由 年度統計.bat 啟動)
-      ├─ yearly_server.py      :8766 伺服器 + 620/630/680 統計與快取
-      └─ web/                  它自己的頁面(index.html / app.js / style.css)</code></pre>
+   │  └─ storage.py            資料層:設定 / 偏好 / 機器標籤
+   └─ common/
+      ├─ webapp.py             網頁伺服器底座:路由分派、靜態檔、路徑穿越防護、serve()
+      ├─ jsonio.py             JSON 原子寫入 / 容錯讀取 / 檔案簽章
+      └─ ident.py              機器代號</code></pre>
 
 <blockquote>
-  <p><strong>三個含驗證碼明碼的檔案不進版本控制</strong>(已寫進 <code>.gitignore</code>):
-  <code>program/gpss/api_keys.json</code>、<code>program/gpss/api_config_&lt;機器&gt;.json</code>、
-  <code>data/config/api_quota_baseline.json</code>。你的資料夾 <code>data/</code> 也不在版控內。</p>
+  <p>逐分鐘用量明細放在本機 <code>%LOCALAPPDATA%\flow_check\traffic\</code>,刻意<strong>不放進 Google Drive 同步夾</strong>:那個檔每分鐘都在長,放在同步夾會讓 Drive 每分鐘重傳一次。</p>
 </blockquote>
+
+<h2>HTTP API 端點</h2>
+<p>常駐伺服器(預設 <code>http://127.0.0.1:8765</code>)的全部端點,定義在 <code>program/core/routes.py</code> 的 <code>build_routes()</code>。對不到的路徑一律回 404。</p>
+<table>
+  <thead><tr><th>方法</th><th>路徑</th><th>用途</th></tr></thead>
+  <tbody>
+    <tr><td>GET</td><td><code>/api/status</code></td><td>當日流量 / 即時速率 / 各網卡明細 / 健康狀態 / 暴增事件 / 今日程式排行(前端 5 秒輪詢)</td></tr>
+    <tr><td>GET</td><td><code>/api/traffic/log?date=YYYY-MM-DD</code></td><td>某天的逐分鐘用量明細,外加有明細的日期清單</td></tr>
+    <tr><td>GET</td><td><code>/api/traffic/daily</code></td><td>每日用量統計(流量報表),今天那筆即時計算</td></tr>
+    <tr><td>GET</td><td><code>/api/config</code></td><td>額度、速率下限、本機偏好(通知 / 暴增 / 排除內網 / 外觀)</td></tr>
+    <tr><td>POST</td><td><code>/api/prefs</code></td><td>寫回本機偏好,即時套用到執行中的監控</td></tr>
+    <tr><td>POST</td><td><code>/api/speedtest</code></td><td>主動測速:抓一小段量實際 Mbps、判斷有無被限速(每次約耗 8MB)</td></tr>
+  </tbody>
+</table>
 
 <p class="backlink"><a href="../README.html">← 回說明首頁</a></p>
 
