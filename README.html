@@ -96,17 +96,19 @@
 </head>
 <body>
 
-<h1>Flow Check — 流量監控 + 690 資轉監控 <code class="ver">v8.0.0</code></h1>
+<h1>Flow Check — 流量監控 + 690 資轉監控 <code class="ver">v8.1.0</code></h1>
 
 <p class="lead">一個放在自己電腦上的小工具,量測每天用掉多少網路流量(對著每日 2GB 的額度),並提供<strong>流量報表</strong>,拿來跟公司反映連線問題。平時在背景執行,要看時打開瀏覽器就好。</p>
 
-<p><strong>690 資轉監控</strong>預定在 8.1.0 加入。</p>
+<p><strong>690 資轉監控</strong>讀 s690 Rundeck 的通知信,顯示每個轉置系統每天、每一期是成功、失敗、無資料還是沒來,並在 Wiki 的「資料轉置登記」表格裡登記。</p>
 
 <h3>使用的技術</h3>
 <ul>
   <li>Python 3.13</li>
   <li>psutil 7.2.2 —— 讀網卡累積流量</li>
   <li>Windows ESTATS —— 逐條 TCP 連線的收發量(內網排除、程式歸因用)</li>
+  <li>google-auth-oauthlib —— 690:以唯讀權限讀 Gmail</li>
+  <li>Wiki.js GraphQL —— 690:寫入資料轉置登記表</li>
   <li>HTML / CSS / JavaScript(免打包、無框架)</li>
 </ul>
 
@@ -132,6 +134,7 @@
     <tr><td>啟動</td><td>雙擊 <strong><code>start_monitor.bat</code></strong>,會自動打開瀏覽器到 <code>http://127.0.0.1:8765</code></td></tr>
     <tr><td>關閉</td><td>雙擊 <strong><code>stop_monitor.bat</code></strong>(只關這個工具,不影響其他程式)</td></tr>
     <tr><td>內網排除診斷</td><td>雙擊 <strong><code>diag_lan.bat</code></strong>(需管理員)。每 10 秒逐連線列出對方 IP、內外網分類與收發量,並和執行中主工具的實扣量對照。平常不必開,內網排除算得怪怪的時候再用。</td></tr>
+    <tr><td>690 Gmail 授權</td><td>雙擊 <strong><code>690授權.bat</code></strong>(每台電腦一次,或授權失效時)。瀏覽器跳出 Google 登入,同意唯讀權限即可。</td></tr>
   </tbody>
 </table>
 
@@ -168,6 +171,31 @@
   <li>頁籤列最右邊的<strong>「外觀」選單</strong>可切換<strong>深色(預設)/ 淺色 / 原版</strong>;數字與功能完全不變,只換視覺。</li>
   <li>選擇<strong>記在這台電腦上</strong>(不是瀏覽器),換瀏覽器、重開機都還在;多台電腦各自獨立。</li>
 </ul>
+
+<h3>690 資轉監控</h3>
+<p>伺服器每 10 分鐘讀一次 <code>[s690]</code> 通知信(也可以按「立即更新」)。兩個頁籤:</p>
+<ul>
+  <li><strong>690資轉</strong>:
+    <ul>
+      <li><strong>每日資轉</strong>:今天每個每日系統一列,每個步驟一顆點。</li>
+      <li><strong>TWA 公開 / TWB 公告</strong>:全文、書目、雜項、英譯 × 公告期數,只追蹤最近一個月;補跑的舊期列在「更早的期」。點一格看那期的細節。</li>
+      <li><strong>其他作業</strong>:不在系統清單上的手動作業,以及維運 99xxxx。</li>
+      <li><strong>Wiki 登記</strong>:登入 Wiki 後顯示填好的表格預覽,按「寫入 Wiki」才寫。點任一格可以手動修改。</li>
+    </ul>
+  </li>
+  <li><strong>信件與連線</strong>:Gmail 授權、Wiki 登入(在這裡按「登入 Wiki」)、最近收到的信。</li>
+  <li>失敗項目的「失敗」兩個字就是連結,點了直接看那封信附的 log。分類上的紅色數字是要處理的件數,頁籤上的 ⚠ 表示有狀況。</li>
+  <li>寫 Wiki 時<strong>只填空格</strong>,不覆寫人填的值(你在畫面上明確改過的格除外)。</li>
+</ul>
+
+<p><strong>第一次設定</strong>(每台電腦一次):</p>
+<ol class="steps">
+  <li>確認 <code>data/config/gmail_credentials.json</code> 在(GCP 的 OAuth 用戶端)。</li>
+  <li>雙擊 <code>690授權.bat</code>,用 <code>alicia.huang@innovue.ltd</code> 同意唯讀權限。</li>
+  <li>要寫 Wiki 的話,新增 <code>data/config/xfer690_secrets.json</code>,內容 <code>{"wiki_user": "帳號", "wiki_password": "密碼"}</code>,並把 <code>data/config/xfer690.json</code> 的 <code>wiki.enabled</code> 改成 <code>true</code>。</li>
+  <li>重開 <code>start_monitor.bat</code>(第一次會自動安裝 690 需要的套件;裝不起來只停用 690,流量監控照常)。</li>
+</ol>
+<p>規則與設定的細節見<a href="doc/進階參考.html">進階參考</a>與 <code>doc/README.md</code> 的「690 資轉監控」一節。</p>
 
 <hr>
 

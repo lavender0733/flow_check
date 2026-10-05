@@ -128,8 +128,26 @@
   <p><strong>流量暴增預警 / 用量通知 / 外觀的設定不放這裡</strong>:<code>surge_enabled</code> / <code>surge_min_mb</code> / <code>surge_factor</code> / <code>surge_window_min</code> / <code>surge_cooldown_sec</code>、<code>notify_enabled</code> / <code>notify_threshold</code> 與 <code>theme</code> 以本機偏好 <code>data/machines/prefs_&lt;機器&gt;.json</code> 為權威來源(各台獨立、頁面即時切換),<code>config.json</code> 未設時走程式內建預設(暴增 50MB、4×、視窗 30 分、冷卻 300 秒;通知門檻 80%;外觀深色)。另有 <code>debug_lan</code>(預設 <code>false</code>):開啟後每次取樣把內網扣除明細印到主控台。</p>
 </blockquote>
 
+<p><strong><code>data/config/xfer690.json</code>(690 資轉監控,進版控)</strong></p>
+<table>
+  <thead><tr><th>鍵</th><th>意義</th></tr></thead>
+  <tbody>
+    <tr><td><code>enabled</code></td><td>690 監控開關</td></tr>
+    <tr><td><code>poll_interval_min</code></td><td>抓信間隔(分,預設 10)</td></tr>
+    <tr><td><code>retain_days</code> / <code>history_days</code></td><td>快取保留天數(45)/ 每日系統往回看幾天(14)</td></tr>
+    <tr><td><code>gmail_query</code></td><td>Gmail 搜尋條件</td></tr>
+    <tr><td><code>status_map</code> / <code>nodata_re</code></td><td>主旨狀態字 → 狀態 / 判定「無資料」的錯誤訊息</td></tr>
+    <tr><td><code>max_raw_kb</code></td><td>單封超過這個大小就不下載全文(預設 512)</td></tr>
+    <tr><td><code>systems[]</code></td><td>系統清單:<code>id</code>、<code>label</code>、<code>view</code>(daily / twa / twb)、<code>type</code>(full / biblio / sud / eng)、<code>auto</code>(母 job)、<code>steps</code>(步驟代碼,<code>-check</code> 是下一號)、<code>schedule</code>(daily / <code>{"monthdays": [...]}</code> / manual)、<code>period</code>(date / vol_twa / vol_twb / vol / none)、<code>expect_by</code></td></tr>
+    <tr><td><code>wiki.enabled</code> / <code>wiki.dry_run</code></td><td>開放登入 Wiki / 按「寫入」時只算不寫</td></tr>
+    <tr><td><code>wiki.tables[]</code></td><td>每張表的每個系統一筆:<code>page</code>、<code>table</code>、<code>after</code>、<code>header_has</code>、<code>label_row</code>、<code>key_col</code>、<code>key</code>、<code>new_row</code>、<code>cols</code>(<code>{欄號: {label, value: v / tag / writes, step, check}}</code>)。表格改結構時改這裡;欄名對不上時程式整張表不寫</td></tr>
+  </tbody>
+</table>
+
+<p><strong>690 的機密檔</strong>(都不在版控內、不同步到 TIPO flow check):<code>data/config/gmail_credentials.json</code>(GCP OAuth 用戶端)、<code>data/machines/gmail_token_&lt;機器&gt;.json</code>(由 <code>690授權.bat</code> 產生)、<code>data/config/xfer690_secrets.json</code>(<code>wiki_user</code>、<code>wiki_password</code>,選填 <code>wiki_strategy</code>)。Wiki 帳號密碼只存在最後這個檔,不經過網頁;登入換到的憑證只放伺服器記憶體。</p>
+
 <blockquote>
-  <p>改完 <code>config.json</code> 或 <code>program/core/</code>、<code>program/common/</code> 下的任何 <code>.py</code> 後需<strong>重新啟動</strong>才生效(網頁上方會自動跳「需重啟」橫幅提醒);改 <code>web/</code> 下的網頁檔重整即可。</p>
+  <p>改完 <code>config.json</code> 或 <code>program/core/</code>、<code>program/common/</code>、<code>program/xfer690/</code> 下的任何 <code>.py</code> 後需<strong>重新啟動</strong>才生效(網頁上方會自動跳「需重啟」橫幅提醒);改 <code>web/</code> 下的網頁檔重整即可。<code>xfer690.json</code> 每輪抓信都會重讀。</p>
 </blockquote>
 
 <h2>檔案結構</h2>
@@ -151,24 +169,31 @@
 │  ├─ 版本紀錄.html         各版更新紀錄
 │  ├─ TIPO flow check README.md       TIPO flow check 的 README 來源(同步時複製成 TIPO flow check 的 README.md)
 │  └─ specs/ plans/        設計文件、實作計畫與進度筆記
-├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉(啟動時自動檢查並安裝 psutil)
+├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉(啟動時自動檢查並安裝 psutil 與 690 的套件)
 ├─ diag_lan.bat           內網排除診斷(需管理員)
+├─ 690授權.bat            690:Gmail 唯讀授權 + 近 30 天信箱統計(每台電腦一次)
 ├─ 同步到TIPO flow check.bat        產生 TIPO flow check(雙擊只預覽;加 --apply 才寫入)
-├─ requirements.txt       第三方套件(psutil)
+├─ requirements.txt       第三方套件(psutil;會同步到 TIPO flow check)
+├─ requirements-690.txt   690 的套件(google-auth-oauthlib;只在這裡)
 ├─ config.json            主設定:額度、port、取樣間隔、網段等
+├─ tests/                 690 的單元測試與 fixtures(真實的 wiki 頁面原文與 log)
 ├─ tools/                 開發用工具(同步腳本與它的測試;不會同步到 TIPO flow check)
 ├─ web/                   網頁介面(免打包純 HTML/JS)
 │  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
 │  ├─ style.css           樣式:深色 / 淺色共用一份骨架,靠 &lt;html data-theme&gt; 切 token
 │  ├─ style-classic.css   「原版」外觀(7.4.0 改版前的設計,獨立保存)
-│  ├─ partials/           各分頁 HTML(monitor 流量監控 / report 流量報表)
-│  └─ js/                 util(共用)/ monitor / report / main(啟動)
-├─ data/                  設定與資料(不在版控內)
+│  ├─ partials/           各分頁 HTML(monitor 流量監控 / report 流量報表 / xfer690 690資轉與信件與連線)
+│  └─ js/                 util(共用)/ monitor / report / xfer690 / main(啟動)
+├─ data/                  設定與資料(不在版控內,xfer690.json 除外)
 │  ├─ config/machines.json 機器代號 → 友善名稱對照(如「桌機」;空值則顯示代號)
+│  ├─ config/xfer690.json  690 的系統清單與 wiki 表格設定(版控)
+│  ├─ config/gmail_credentials.json / xfer690_secrets.json   ★機密
 │  └─ machines/           各機執行期資料(檔名含機器代號,同步不互相覆蓋)
 │     ├─ state_&lt;機器&gt;.json        當日用量(跨重啟保留、跨日歸零)
 │     ├─ prefs_&lt;機器&gt;.json        本機偏好:通知 / 暴增預警 / 排除內網開關與門檻、外觀
-│     └─ daily_stats_&lt;機器&gt;.json  每日用量統計(流量報表的資料,長期保存)
+│     ├─ daily_stats_&lt;機器&gt;.json  每日用量統計(流量報表的資料,長期保存)
+│     ├─ gmail_token_&lt;機器&gt;.json  ★機密:690 的 Gmail 授權
+│     └─ xfer690_&lt;機器&gt;.json      690 抓過的信(主旨、時間、log 摘要;不存整份 log)
 └─ program/               所有程式碼(使用者平常不需進來)
    ├─ core/
    │  ├─ traffic_monitor.py    進入點:組裝與啟動(版號唯一來源)
@@ -181,10 +206,19 @@
    │  ├─ lan_diag.py           內網排除診斷工具(由 diag_lan.bat 啟動)
    │  ├─ paths.py              路徑常數與機器身分
    │  └─ storage.py            資料層:設定 / 偏好 / 機器標籤
-   └─ common/
-      ├─ webapp.py             網頁伺服器底座:路由分派、靜態檔、路徑穿越防護、serve()
-      ├─ jsonio.py             JSON 原子寫入 / 容錯讀取 / 檔案簽章
-      └─ ident.py              機器代號</code></pre>
+   ├─ common/
+   │  ├─ webapp.py             網頁伺服器底座:路由分派、靜態檔、路徑穿越防護、serve()
+   │  ├─ jsonio.py             JSON 原子寫入 / 容錯讀取 / 檔案簽章
+   │  └─ ident.py              機器代號
+   └─ xfer690/                 690 資轉監控(不同步到 TIPO flow check;不存在時主程式照常啟動)
+      ├─ periods.py            期數 ↔ 日期、民國日期
+      ├─ parser.py             通知信 → 事件、log 摘要
+      ├─ status.py             事件 → 各系統各期各步驟的狀態
+      ├─ wikitable.py          markdown 表格:找表、只填空格、插列、手動修改
+      ├─ wiki.py               填格規劃、Wiki.js 用戶端、整頁同步與預覽
+      ├─ gmail_client.py       Gmail 唯讀用戶端
+      ├─ service.py            組裝:抓信、快取、背景迴圈、Wiki 登入與寫入
+      └─ authorize.py          Gmail 授權與信箱統計(690授權.bat)</code></pre>
 
 <blockquote>
   <p>逐分鐘用量明細放在本機 <code>%LOCALAPPDATA%\flow_check\traffic\</code>,刻意<strong>不放進 Google Drive 同步夾</strong>:那個檔每分鐘都在長,放在同步夾會讓 Drive 每分鐘重傳一次。</p>
@@ -201,6 +235,11 @@
     <tr><td>GET</td><td><code>/api/config</code></td><td>額度、速率下限、本機偏好(通知 / 暴增 / 排除內網 / 外觀)</td></tr>
     <tr><td>POST</td><td><code>/api/prefs</code></td><td>寫回本機偏好,即時套用到執行中的監控</td></tr>
     <tr><td>POST</td><td><code>/api/speedtest</code></td><td>主動測速:抓一小段量實際 Mbps、判斷有無被限速(每次約耗 8MB)</td></tr>
+    <tr><td>GET</td><td><code>/api/xfer690</code></td><td>690 快照:各系統狀態、最近 20 封信、Gmail 與 Wiki 狀態、Wiki 預覽(前端 60 秒讀一次)</td></tr>
+    <tr><td>POST</td><td><code>/api/xfer690/refresh</code></td><td>690「立即更新」:前景抓一次信</td></tr>
+    <tr><td>GET</td><td><code>/api/xfer690/log?id=&lt;信件 id&gt;</code></td><td>那封通知信附的 <code>.log</code>(當下從 Gmail 抓,不存檔)</td></tr>
+    <tr><td>POST</td><td><code>/api/xfer690/wiki/login</code></td><td>用 <code>xfer690_secrets.json</code> 登入 Wiki,憑證只放伺服器記憶體</td></tr>
+    <tr><td>POST</td><td><code>/api/xfer690/wiki/write</code></td><td>寫入 Wiki(body <code>{"edits": [...]}</code> 是手改的格);沒登入回 409</td></tr>
   </tbody>
 </table>
 

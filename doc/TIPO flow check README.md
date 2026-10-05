@@ -1,7 +1,7 @@
 <!-- 這份由 flow_check 的「同步到TIPO flow check.bat」複製過去,請勿在 TIPO flow check 直接修改。
      要改內容請改 flow_check/doc/TIPO flow check README.md,再執行同步。 -->
 
-# 流量監控(TIPO flow check)  `v8.0.0`
+# 流量監控(TIPO flow check)  `v8.1.0`
 
 一個本機小工具:**量測當日網路用量**(對每日 2GB 額度),並提供**流量報表**(每天 ssh / Claude Code / VS Code 各用多少),拿來跟公司反映連線問題。背景常駐、開瀏覽器即看。只需 Python + psutil。
 
@@ -107,6 +107,9 @@ TIPO flow check/
 ---
 
 ## 版本紀錄
+
+### 8.1.0 — 2026-10-05
+- 流量監控本身沒有變動。版號跟著 flow_check(那邊這版加了 690 資轉監控,不會同步到這裡)。
 
 ### 8.0.0 — 2026-10-02
 - 版號改成跟 flow_check 一致(原本的 3.3.0 之後直接是 8.0.0)。之後由 flow_check 同步產生。

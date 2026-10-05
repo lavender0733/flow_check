@@ -1,12 +1,14 @@
-# Flow Check — 流量監控 + 690 資轉監控  `v8.0.0`
+# Flow Check — 流量監控 + 690 資轉監控  `v8.1.0`
 
-一個本機小工具:**量測當日網路用量**(對每日 2GB 額度),並提供**流量報表**,拿來跟公司反映連線問題。背景常駐、開瀏覽器即看。**690 資轉監控**預定在 8.1.0 加入。
+一個本機小工具:**量測當日網路用量**(對每日 2GB 額度),並提供**流量報表**,拿來跟公司反映連線問題。背景常駐、開瀏覽器即看。
+**690 資轉監控**讀 s690 Rundeck 的通知信,顯示每個轉置系統每天 / 每期的狀態,並在 Wiki 的「資料轉置登記」表格裡登記。
 
 ## 使用的技術
 
 - Python 3.13
 - psutil 7.2.2(讀網卡累積位元組)
 - Windows ESTATS(逐條 TCP 連線的收/發位元組;內網排除與程式歸因用)
+- google-auth-oauthlib(690:Gmail API 唯讀授權)、Wiki.js 2.x GraphQL(690:寫入登記表)
 - HTML / CSS / JavaScript(免打包、無框架)
 
 ---
@@ -34,7 +36,7 @@
 > (`FlowCheckTrafficMonitor`),之後啟動直接觸發那個排程,不再詢問。**按取消也能跑**,
 > 只是內網排除/暴增歸因停用、總流量照常計(視窗頂端會提示)。關機即結束;開機後需再雙擊啟動。
 >
-> 改完 `program/core/` 或 `program/common/` 下的任何 `.py` 或 `config.json` 後需重新啟動才生效
+> 改完 `program/core/`、`program/common/` 或 `program/xfer690/` 下的任何 `.py` 或 `config.json` 後需重新啟動才生效
 > (網頁上方會自動跳「需重啟」橫幅提醒);改 `web/` 下的 `.html`/`.js`/`.css` 重整即可。
 
 ---
@@ -78,6 +80,96 @@
 
 ---
 
+## 690 資轉監控
+
+s690 的 Rundeck 每跑一個步驟就寄一封通知信(主旨像 `🔴【FAILURE】[s690] 012001-techreport-pdf-step1-raw | 01-tw/20-techreport-pdf`)。
+伺服器每 10 分鐘從 Gmail 讀這些信,判定每個轉置系統每天(或每一期)、每個步驟是成功、失敗、無資料還是沒來。
+Rundeck 在內網連不到,所以只靠信。
+
+### 第一次設定(每台電腦一次)
+
+1. `data/config/gmail_credentials.json`:GCP 的 OAuth 用戶端(電腦版應用程式,範圍只要 `gmail.readonly`)。已經放好就跳過。
+2. 雙擊 **`690授權.bat`** → 瀏覽器跳出 Google 登入,用 `alicia.huang@innovue.ltd` 同意唯讀權限。
+   完成後會印出近 30 天每個 job 的統計表(封數、成功失敗、時刻),拿來核對系統清單。
+   token 存在 `data/machines/gmail_token_<機器>.json`。
+3. 要寫 Wiki 的話,新增 `data/config/xfer690_secrets.json`,內容是 `{"wiki_user": "帳號", "wiki_password": "密碼"}`
+   (Wiki 用的不是本機帳號而是其他登入方式時,加 `"wiki_strategy": "…"`),並把 `xfer690.json` 的 `wiki.enabled` 改成 `true`。
+4. 重開 `start_monitor.bat`。第一次會自動安裝 `requirements-690.txt` 的套件;裝不起來只會停用 690,流量監控照常。
+
+> 三個機密檔(`gmail_credentials.json`、`gmail_token_<機器>.json`、`xfer690_secrets.json`)都不在版控內,
+> 也不會同步到 TIPO flow check。Wiki 帳號密碼只存在 `xfer690_secrets.json`,不經過網頁。
+
+### 畫面
+
+- **690資轉**頁籤,分類列:
+  - **每日資轉**:今天每個每日系統一列,步驟一顆點(步驟和它的 `-check` 併成一顆,兩個都成功才算綠)。
+  - **TWA 公開 / TWB 公告**:資料種類(全文、書目、雜項、英譯)× 公告期數。只追蹤最近一個月(TWA 2 期、TWB 3 期);
+    近一個月內補跑的舊期列在「更早的期」。點一格看那期的細節。
+  - **其他作業**:信裡出現、但不在系統清單裡的 job。手動作業每次執行一列(失敗會算警示);維運 99xxxx 只列最後一次。
+  - **Wiki 登記**:登入 Wiki 後顯示「填好之後」的表格預覽,按「寫入 Wiki」才寫。
+- **信件與連線**頁籤:Gmail 授權狀態、Wiki 登入(在這裡按「登入 Wiki」)、最近 20 封信。
+- 失敗項目的「失敗」兩個字就是連結,點了打開那封信附的 `.log`,自動捲到 `error:` 那一行(伺服器當下抓,不存檔)。
+- 分類上的紅色數字 = 需要處理的件數;主頁籤的 ⚠ = 有轉置警示(690資轉)或連線問題(信件與連線)。
+
+### 狀態的意思
+
+| 狀態 | 意思 |
+|---|---|
+| 成功 | 步驟與它的 check 都成功 |
+| 無資料 | step1-raw 失敗,原因是 `GCS 資料夾無檔案`。**每日系統**視為完成(wiki 照樣打 v);**期別系統**代表那期檔案還沒到,算警示 |
+| 失敗 | 有失敗信。之後的步驟顯示「沒有執行」 |
+| 該到沒到 | 過了 `expect_by` 還沒收到信;或一次執行收到幾步之後就沒信了(期別系統以最後一封信後 2 小時為期限) |
+| 還沒跑到 | 還沒到 `expect_by` |
+| 無法判定 | 主旨的狀態字不是 SUCCESS / FAILURE |
+
+同一期跑了好幾次(例如前一天無資料、隔天重跑成功)以最後一次為準。
+**不定期**的系統(全文、英譯)沒有排程,不會報「該到沒到」。
+
+### 期別怎麼對應到 wiki 的列
+
+- 每日系統:一天一列,列鍵是執行日期(`2026/10/01`)。
+- 書目、雜項、全文:列鍵是**公告期數**,取自 log 的 `RUNDECK:DATA:VOL`(手動補跑舊期也會歸到正確的期,不看收信日期)。
+  期數與日期互換:TWB 每月 1、11、21 日,`VOL = (年−1973)×100 + (月−1)×3 + 第幾旬`;TWA 每月 1、16 日,`VOL = (年−2002)×100 + (月−1)×2 + 上/下半月`。
+- 一次手動執行可能連跑好幾期,所以同一系統的信以「step1-raw 那封」或「跟上一封相隔超過 2 小時」切段,段裡其他信沿用該段的期數。
+
+### 寫 Wiki 的規則
+
+- **只填空格**:格子已經有值就不動(`2026xxxx` 這種佔位字當空格);值不同在預覽裡用波浪底線標出。
+- 打 `v` 的格:那一步**和它的 check** 都成功才打。
+- 筆數欄(書目頁的 Biblio、Gazette SUD):填 L1 那封信 log 的 `writes`,而且**整期每一步都成功**才填。
+- 缺列就照列鍵順序插入;列鍵比表格最舊的一列還舊時不插入。
+- 目標列以外的每一行逐位元組不變;欄名對不上時整張表不寫;內容沒變不送更新;一頁失敗不影響其他頁。
+- **手動修改**:Wiki 登記頁點任一格可改(Enter 存、Esc 取消),寫入時一起送出。這是唯一會覆寫非空值的路徑,
+  而且伺服器會先確認頁面上那格還是你看到的值,不是就整筆不寫、列為衝突。
+- 登入在「信件與連線」做一次,換到的憑證只放伺服器記憶體(不寫檔),伺服器重開要重新登入。
+- `xfer690.json` 的 `wiki.dry_run` 是 `true` 時,按「寫入 Wiki」只算結果、不真的寫。
+
+### 流量預算
+
+抓信一律先只抓主旨與時間(每封約 2 KB),只有三種信才下載全文:失敗信、期別系統每段的第一封(帶出期數)、
+要填筆數的步驟。單封超過 `max_raw_kb`(預設 512 KB)也不下載。實測:第一次抓 45 天 495 封共 2.75 MB,之後每輪幾 KB。
+
+### `data/config/xfer690.json`
+
+| 鍵 | 意義 |
+|---|---|
+| `enabled` | 690 監控開關 |
+| `poll_interval_min` | 抓信間隔(分,預設 10) |
+| `retain_days` / `history_days` | 快取保留天數(45)/ 每日系統往回看幾天(14) |
+| `gmail_query` | Gmail 搜尋條件 |
+| `status_map` / `nodata_re` | 主旨狀態字對應 / 判定「無資料」的錯誤訊息 |
+| `max_raw_kb` | 單封超過這個大小就不下載全文 |
+| `systems[]` | 系統清單:`id`、`label`、`view`(`daily` / `twa` / `twb`)、`type`(`full` / `biblio` / `sud` / `eng`)、`auto`(母 job 代碼)、`steps`(步驟代碼,`-check` 是下一號)、`schedule`(`daily` / `{"monthdays": [...]}` / `manual`)、`period`(`date` / `vol_twa` / `vol_twb` / `vol` / `none`)、`expect_by`(最晚幾點該收到信) |
+| `wiki.enabled` / `wiki.dry_run` | 開放登入 / 只算不寫 |
+| `wiki.base` | 子頁所在的路徑 |
+| `wiki.tables[]` | 每張表的每個系統一筆:`page`、`table`(`TWA` / `TWB` / 空)、`after`(表格前面的標題文字)、`header_has`、`label_row`、`key_col`、`key`、`new_row`、`cols`(`{欄號: {label, value: v/tag/writes, step, check}}`) |
+
+**wiki 表格改結構時**:欄位順序變了 → 改 `cols` 的欄號與 `label`(欄名對不上時程式會整張表不寫,在預覽裡顯示原因);
+表格前的標題改了 → 改 `after`;新增系統 → 在 `systems` 加一筆,要登記的話在 `tables` 加對應的 target。
+一個不在清單上的 job 想固定追蹤 → 加進 `systems`,它就從「其他作業」移到每日資轉或 TWA / TWB。
+
+---
+
 ## 檔案結構
 
 > **要加新功能時:**
@@ -97,24 +189,32 @@ flow_check/
 │  ├─ TIPO flow check README.md       TIPO flow check 的 README 來源(同步時複製成 TIPO flow check 的 README.md)
 │  ├─ specs/               設計文件
 │  └─ plans/               實作計畫與進度筆記
-├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉(啟動時自動檢查並安裝 psutil)
+├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉(啟動時自動檢查並安裝 psutil 與 690 的套件)
 ├─ diag_lan.bat           內網排除診斷(需管理員)
+├─ 690授權.bat            690:Gmail 唯讀授權 + 印出近 30 天信箱統計(每台電腦一次)
 ├─ 同步到TIPO flow check.bat        產生 TIPO flow check(雙擊只預覽;命令列加 --apply 才寫入)
-├─ requirements.txt       第三方相依套件(psutil)
+├─ requirements.txt       第三方相依套件(psutil;會同步到 TIPO flow check)
+├─ requirements-690.txt   690 的相依套件(google-auth-oauthlib;只在這裡)
 ├─ config.json            主設定:額度、port、取樣間隔、網段
+├─ tests/                 單元測試(690);fixtures/xfer690/ 是真實的 wiki 頁面原文與 log
 ├─ tools/                 開發用工具:sync_tipo.py(同步腳本)、sync_tipo.json(清單與路徑對應)、test_sync_tipo.py
-├─ web/                   網頁介面(免打包純 HTML/JS;頁籤:流量監控 / 流量報表)
+├─ web/                   網頁介面(免打包純 HTML/JS;頁籤:流量監控 / 流量報表 / 690資轉 / 信件與連線)
 │  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
 │  ├─ style.css           樣式:深色 / 淺色共用一份骨架,靠 <html data-theme> 切 token
 │  ├─ style-classic.css   「原版」外觀
-│  ├─ partials/           各分頁 HTML(monitor / report)
-│  └─ js/                 util / monitor / report / main(載入順序即相依順序、共用全域作用域)
-├─ data/                  (不在版控內)
+│  ├─ partials/           各分頁 HTML(monitor / report / xfer690;xfer690 自帶 x6- 開頭的樣式)
+│  └─ js/                 util / monitor / report / xfer690 / main(載入順序即相依順序、共用全域作用域)
+├─ data/                  (不在版控內,除了下面標「版控」的)
 │  ├─ config/machines.json 機器代號 → 友善名稱對照(如「桌機」;空值則顯示代號)
+│  ├─ config/xfer690.json  690 的系統清單與 wiki 表格設定(版控)
+│  ├─ config/gmail_credentials.json  ★機密:GCP 的 OAuth 用戶端
+│  ├─ config/xfer690_secrets.json    ★機密:wiki 帳號密碼
 │  └─ machines/            各電腦執行期資料(檔名含機器代號,同步不互相覆蓋)
 │     ├─ state_<機器>.json        當日用量(跨重啟保留、跨日歸零)
 │     ├─ prefs_<機器>.json        本機偏好:通知 / 暴增預警 / 排除內網開關與門檻、外觀
-│     └─ daily_stats_<機器>.json  每日用量統計(流量報表)
+│     ├─ daily_stats_<機器>.json  每日用量統計(流量報表)
+│     ├─ gmail_token_<機器>.json  ★機密:690 的 Gmail 授權
+│     └─ xfer690_<機器>.json      690 抓過的信(主旨、時間、log 摘要;不存整份 log)
 └─ program/
    ├─ core/
    │  ├─ traffic_monitor.py   進入點:組裝與啟動(載設定 → 造 Monitor → 起背景迴圈 → 開伺服器;VERSION 版號唯一來源)
@@ -123,14 +223,23 @@ flow_check/
    │  ├─ daily_stats.py       每日用量統計(流量報表)
    │  ├─ estats.py            Windows ESTATS 逐 TCP 連線收/發位元組(內網排除底層)
    │  ├─ procinfo.py          程序 → 軟體名稱 / Windows 服務名稱
-   │  ├─ health.py            錯誤收集與「程式碼已更新、需重啟」偵測(掃 core/ + common/)
+   │  ├─ health.py            錯誤收集與「程式碼已更新、需重啟」偵測(掃 core/ + common/ + xfer690/)
    │  ├─ lan_diag.py          內網排除診斷工具(由 diag_lan.bat 啟動)
    │  ├─ paths.py             路徑常數與機器身分
    │  └─ storage.py           資料層:設定 / 偏好 / 機器標籤
-   └─ common/
-      ├─ webapp.py            HTTP 底座:路由分派、靜態檔、路徑穿越防護、錯誤收斂、serve()
-      ├─ jsonio.py            JSON 原子寫入 / 容錯讀取 / 檔案簽章
-      └─ ident.py             機器代號 machine_id()
+   ├─ common/
+   │  ├─ webapp.py            HTTP 底座:路由分派、靜態檔、路徑穿越防護、錯誤收斂、serve()
+   │  ├─ jsonio.py            JSON 原子寫入 / 容錯讀取 / 檔案簽章
+   │  └─ ident.py             機器代號 machine_id()
+   └─ xfer690/                690 資轉監控(不同步到 TIPO flow check;不存在時主程式照常啟動)
+      ├─ periods.py           期數 ↔ 日期、民國日期
+      ├─ parser.py            通知信主旨 → 事件;原始信 → log 摘要(VOL、TAG、writes、error)
+      ├─ status.py            事件 → 各系統各期各步驟的狀態
+      ├─ wikitable.py         markdown 表格:找表、只填空格、插列、使用者的手動修改
+      ├─ wiki.py              填格規劃、Wiki.js GraphQL 用戶端、整頁同步與預覽
+      ├─ gmail_client.py      Gmail REST 唯讀用戶端
+      ├─ service.py           組裝:設定、抓信、快取、背景迴圈、Wiki 登入與寫入
+      └─ authorize.py         一次性 Gmail 授權與信箱統計(690授權.bat)
 ```
 
 ---
@@ -175,6 +284,11 @@ flow_check/
 | GET | `/api/config` | 額度、速率下限、本機偏好(`notify_*`、`surge_*`、`exclude_lan`、`theme`) |
 | POST | `/api/prefs` | 寫回本機偏好,即時套用到執行中的監控(不必重啟) |
 | POST | `/api/speedtest` | 主動測速:抓一小段量實際 Mbps、判斷有無被限速(每次約耗 8MB) |
+| GET | `/api/xfer690` | 690 快照:各系統狀態、最近 20 封信、Gmail 與 Wiki 的狀態、Wiki 預覽(前端每 60 秒讀) |
+| POST | `/api/xfer690/refresh` | 690「立即更新」:前景抓一次信,回傳新快照 |
+| GET | `/api/xfer690/log?id=<信件 id>` | 那封通知信附的 `.log` 純文字(當下從 Gmail 抓,不存檔) |
+| POST | `/api/xfer690/wiki/login` | 用 `xfer690_secrets.json` 登入 Wiki,憑證留在伺服器記憶體 |
+| POST | `/api/xfer690/wiki/write` | 寫入 Wiki(body `{"edits": [...]}` 是使用者手改的格);沒登入回 409 `{"error": "not_logged_in"}` |
 
 ---
 
