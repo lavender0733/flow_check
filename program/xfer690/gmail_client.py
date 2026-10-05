@@ -60,6 +60,10 @@ class GmailClient:
             raise GmailError(f"Gmail 回 HTTP {r.status_code}:{r.text[:200]}")
         return r.json()
 
+    def account(self) -> str:
+        """授權的信箱帳號(信件與連線頁籤顯示用)。"""
+        return self._get("profile", {}).get("emailAddress", "")
+
     def list_ids(self, query: str, limit: int = 1000) -> list:
         out, token = [], None
         while len(out) < limit:

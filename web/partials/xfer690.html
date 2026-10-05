@@ -1,0 +1,320 @@
+<!-- 690資轉頁籤與「信件與連線」頁籤。搭配 js/xfer690.js;資料來自 /api/xfer690(見 program/xfer690)。
+     畫面依 doc/plans/2026-10-02-690資轉畫面草圖.html。樣式只在這裡(x6- 開頭),顏色一律用
+     兩支 CSS 既有的變數,原版樣式沒定義的變數帶備用值。 -->
+<style>
+.x6 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+.x6 > * { min-width: 0; }
+.x6-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 12px;
+              font-size: 12px; color: var(--muted, var(--dim)); }
+.x6-upd b { color: var(--txt); font-weight: 600; font-variant-numeric: tabular-nums; transition: color .3s; }
+.x6-upd.flash b { color: var(--ok-ink, var(--ok)); }
+.x6-bad { color: var(--danger-ink, var(--danger)); font-weight: 600; }
+.x6-btn { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 15px; border-radius: 999px; border: 0;
+          background: var(--btn); color: #fff; cursor: pointer; white-space: nowrap; letter-spacing: 0; }
+.x6-btn:hover:not(:disabled) { background: var(--btn-hover, var(--btn)); }
+.x6-btn:disabled { opacity: .45; cursor: not-allowed; }
+.x6-btn[aria-busy="true"] { cursor: wait; }
+.x6-btn.ghost { background: var(--btn-weak, var(--accent-soft, #ede7fb)); color: var(--btn-ink, var(--btn)); }
+.x6-btn.ghost:hover:not(:disabled) { background: var(--btn); color: #fff; }
+.x6-btn:focus-visible, .x6 button:focus-visible, .x6 td[tabindex]:focus-visible, .x6 th[tabindex]:focus-visible {
+  outline: 2px solid var(--btn); outline-offset: 2px; }
+.x6-spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--track); border-top-color: var(--btn);
+           border-radius: 50%; animation: x6rot .8s linear infinite; }
+@keyframes x6rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .x6-spin { animation: none; } }
+.x6 [hidden] { display: none !important; }
+
+/* 分類列 */
+.x6-subnav { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.x6-grp { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 3px; border-radius: 999px;
+          background: var(--surface, var(--card)); border: 1px solid var(--line); min-width: 0; }
+.x6-cc { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--muted, var(--dim)); padding: 0 8px 0 11px; }
+.x6-sn { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 999px; border: 0;
+         background: transparent; color: var(--dim); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.x6-sn:hover { color: var(--txt); background: var(--btn-weak, var(--accent-soft, #ede7fb)); }
+.x6-sn[aria-pressed="true"] { color: #fff; background: var(--btn); }
+.x6-sn .sub { font-weight: 400; font-size: 12px; opacity: .85; }
+.x6-right { margin-left: auto; }
+@media (max-width: 560px) { .x6-right { margin-left: 0; } }
+.x6-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; font-size: 11px; font-weight: 700;
+            display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; }
+.x6-badge.bad { background: var(--danger); color: #fff; }
+.x6-badge.x6-info { background: var(--btn-weak, var(--accent-soft, #ede7fb)); color: var(--btn-ink, var(--btn)); }
+.x6-sn[aria-pressed="true"] .x6-badge.x6-info { background: rgba(255,255,255,.25); color: #fff; }
+.tab .x6-warn { margin-left: 4px; color: var(--warn); font-weight: 700; }
+.tab.on .x6-warn { background: var(--warn-bg, #fff4e0); border-radius: 5px; padding: 0 4px; }
+
+/* 卡片標題列 */
+.x6 .card > h2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.x6 .card > h2 .x6-btn { margin-left: auto; }
+.x6-summary { display: flex; flex-wrap: wrap; margin-top: 14px; }
+.x6-stat { flex: 1 1 120px; padding: 2px 16px; border-left: 1px solid var(--line); min-width: 0; }
+.x6-stat:first-child { padding-left: 0; border-left: 0; }
+.x6-stat .k { font-size: 12px; color: var(--muted, var(--dim)); font-weight: 600; letter-spacing: .06em; }
+.x6-stat .v { font-size: 19px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.x6-stat .v small { font-size: 12px; font-weight: 400; color: var(--muted, var(--dim)); margin-left: 4px; }
+.x6-stat .v.bad { color: var(--danger-ink, var(--danger)); }
+.x6-stat .v.good { color: var(--ok-ink, var(--ok)); }
+@media (max-width: 560px) { .x6-stat { flex-basis: 50%; margin-top: 10px; }
+                            .x6-stat:nth-child(odd) { padding-left: 0; border-left: 0; } }
+
+/* 狀態點:形狀 + 顏色雙重編碼 */
+.x6-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; vertical-align: middle;
+          background: var(--muted, var(--dim)); }
+.x6-dot.ok { background: var(--ok); }
+.x6-dot.nodata { background: transparent; box-shadow: inset 0 0 0 2px var(--ok); }
+.x6-dot.fail { background: var(--danger); }
+.x6-dot.missing { background: transparent; box-shadow: inset 0 0 0 2px var(--danger); border-radius: 2px; }
+.x6-dot.unknown { background: var(--warn); border-radius: 2px; transform: rotate(45deg) scale(.85); }
+.x6-dot.pending { background: transparent; box-shadow: inset 0 0 0 2px var(--muted, var(--dim)); }
+.x6-dot.none { background: var(--track); width: 6px; height: 6px; }
+.x6-dotbtn { background: none; border: 0; padding: 5px; cursor: help; border-radius: 6px; line-height: 0; color: inherit; }
+.x6-dotbtn[data-sel] { cursor: pointer; }
+.x6-dotbtn[aria-pressed="true"], .x6-chip[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--btn); }
+
+/* 圖例 ⓘ */
+.x6-lgd { position: relative; display: inline-flex; }
+.x6-lgd-btn { display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+              background: none; color: var(--muted, var(--dim)); cursor: help; }
+.x6-lgd-btn:hover, .x6-lgd:focus-within .x6-lgd-btn { color: var(--btn-ink, var(--btn)); background: var(--btn-weak, var(--accent-soft, #ede7fb)); }
+.x6-lgd-pop { display: none; position: absolute; z-index: 9; left: -8px; top: calc(100% + 8px); width: max-content;
+              max-width: min(320px, calc(100vw - 48px)); flex-direction: column; gap: 7px; padding: 11px 13px; border-radius: 10px;
+              background: var(--pop-bg, var(--card)); border: 1px solid var(--line); box-shadow: 0 10px 28px rgba(0,0,0,.18);
+              font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--dim); white-space: normal; }
+.x6-lgd-pop::before { content: ""; position: absolute; left: 0; right: 0; top: -9px; height: 9px; }
+.x6-lgd:hover .x6-lgd-pop, .x6-lgd:focus-within .x6-lgd-pop { display: flex; }
+.x6-lgd-pop span { display: inline-flex; align-items: center; gap: 8px; }
+@media (max-width: 560px) { .x6 .card:has(> h2 .x6-lgd) { position: relative; }
+  .x6-lgd { position: static; }
+  .x6-lgd-pop { left: 12px; right: 12px; top: 52px; max-width: none; width: auto; } }
+
+/* 每日 / 其他作業:一列一個系統 */
+.x6-sys { display: grid; grid-template-columns: 14px minmax(7.5em, 9em) minmax(5em, 6.5em) minmax(0, 1fr) auto;
+          gap: 6px 14px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.x6-sys:last-child { border-bottom: 0; }
+.x6-sys.wide { grid-template-columns: 14px minmax(11em, 16em) minmax(3.5em, 4.5em) minmax(0, 1fr) auto; }
+.x6-sys .name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.x6-sys .name small { display: block; font-weight: 400; color: var(--muted, var(--dim)); font-size: 11px; font-family: var(--ff-mono, monospace); }
+.x6-state { font-size: 13px; color: var(--dim); }
+.x6-state.bad { color: var(--danger-ink, var(--danger)); font-weight: 600; }
+.x6-sys .when { font-size: 12px; color: var(--muted, var(--dim)); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.x6-steps { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; min-width: 0; }
+.x6-step { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; color: var(--muted, var(--dim)); white-space: nowrap; }
+.x6-step.failed { color: var(--danger-ink, var(--danger)); font-weight: 700; }
+.x6-detail { grid-column: 2 / -1; font-size: 12.5px; border-radius: 10px; padding: 8px 12px;
+             display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; min-width: 0; }
+.x6-detail.soft { background: var(--track); color: var(--dim); }
+.x6-detail.bad { background: var(--danger-bg, #fdecee); color: var(--danger-ink, var(--danger)); border: 1px solid var(--danger-line, var(--danger)); }
+.x6-detail code { font-family: var(--ff-mono, monospace); font-size: 11.5px; overflow-wrap: anywhere; }
+.x6-detail .full { flex-basis: 100%; }
+.x6-faillink { font: inherit; font-weight: 700; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+               text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.x6-faillink .lg { font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 4px; text-decoration: none;
+                   background: var(--danger-bg, #fdecee); box-shadow: inset 0 0 0 1px var(--danger-line, var(--danger)); }
+.x6-faillink:hover .lg { background: var(--danger); color: #fff; }
+.x6-link { font: inherit; font-size: 12px; font-weight: 600; background: none; border: 0; padding: 0;
+           color: var(--btn-ink, var(--btn)); cursor: pointer; white-space: nowrap; text-decoration: underline; }
+@media (max-width: 680px) {
+  .x6-sys, .x6-sys.wide { grid-template-columns: 14px minmax(0, 1fr) auto; }
+  .x6-sys .x6-state { grid-column: 2; }
+  .x6-sys .when { grid-row: 1; grid-column: 3; }
+  .x6-sys .x6-steps { grid-column: 2 / -1; }
+}
+
+/* 表格 */
+.x6-wrap { overflow-x: auto; margin-top: 12px; }
+.x6 table td.c, .x6 table th.c { text-align: center; }
+.x6 table th, .x6 table td { white-space: nowrap; }
+.x6 table td:first-child, .x6 table th:first-child { max-width: none; overflow: visible; }
+.x6-pm td.on { background: var(--btn-weak, var(--accent-soft, #ede7fb)); }
+.x6-pm th.vol { text-align: center; line-height: 1.25; font-family: var(--ff-mono, monospace); }
+.x6-pm th.vol small, .x6-pm th small.sub { display: block; font-family: inherit; font-weight: 400; font-size: 11px; letter-spacing: 0; }
+.x6-pm td.type b { font-weight: 600; }
+.x6-pm td.type small { display: block; color: var(--muted, var(--dim)); font-size: 11px; }
+.x6-chip { font: inherit; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 6px; border-radius: 999px;
+           border: 1px solid var(--line); font-family: var(--ff-mono, monospace); font-size: 12px; color: var(--dim);
+           background: var(--surface, var(--card)); cursor: pointer; }
+.x6-olders { display: flex; flex-wrap: wrap; gap: 6px; }
+.x6-pd { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 10px; }
+.x6-pd-cap { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--btn-ink, var(--btn)); }
+.x6-pd-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.x6-pd-head b { font-size: 15px; font-weight: 600; }
+.x6-pd .x6-detail { grid-column: auto; }
+.x6-kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; font-size: 13px; margin: 0; }
+.x6-kv dt { color: var(--muted, var(--dim)); font-size: 12px; }
+.x6-kv dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+
+/* Wiki 預覽 */
+.x6-wpage { display: grid; gap: 8px; }
+.x6-wpage + .x6-wpage { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.x6-wpage h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.x6-wnote { font-size: 13px; color: var(--dim); }
+.x6-wt { font-size: 12.5px; }
+.x6-wt th, .x6-wt td { text-align: center; padding: 6px 9px; font-variant-numeric: tabular-nums; }
+.x6-wt th.grp, .x6-wt td.grp { border-left: 1px solid var(--line); }
+.x6-wt td.key { font-family: var(--ff-mono, monospace); text-align: left; }
+.x6-wt td.cell-fill { background: var(--btn-weak, var(--accent-soft, #ede7fb)); color: var(--btn-ink, var(--btn)); font-weight: 700; }
+.x6-wt td.cell-hold { background: var(--danger-bg, #fdecee); color: var(--danger-ink, var(--danger)); font-size: 11px; font-weight: 600;
+                      box-shadow: inset 0 0 0 1px var(--danger-line, var(--danger)); }
+.x6-wt td.cell-wait { color: var(--muted, var(--dim)); font-size: 11px; box-shadow: inset 0 0 0 1px var(--line); }
+.x6-wt td.cell-old { color: var(--dim); }
+.x6-wt s { color: var(--muted, var(--dim)); font-weight: 400; margin-right: 4px; }
+.x6-wt td[data-ek] { cursor: text; }
+.x6-wt td[data-ek]:hover { box-shadow: inset 0 0 0 1px var(--btn); }
+.x6-wt td.cell-edit { background: var(--warn-bg, #fff4e0); color: var(--warn-ink); font-weight: 700;
+                      box-shadow: inset 0 0 0 1px var(--warn-line, var(--warn)); }
+.x6-wt td.flag { text-decoration: underline wavy var(--warn); text-underline-offset: 4px; }
+.x6-wt td input { font: inherit; width: 100%; min-width: 5.5em; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--btn);
+                  background: var(--card); color: var(--txt); text-align: center; }
+.x6-edits { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--warn-bg, #fff4e0);
+            border: 1px solid var(--warn-line, var(--warn)); color: var(--warn-ink); display: grid; gap: 6px; font-size: 13px; }
+.x6-edits .row { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+.x6-edits .row .x6-link { margin-left: auto; }
+.x6-edits .chg { font-family: var(--ff-mono, monospace); font-size: 12px; }
+.x6-sw { display: inline-grid; place-items: center; min-width: 22px; height: 18px; padding: 0 4px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.x6-sw.fill { background: var(--btn-weak, var(--accent-soft, #ede7fb)); color: var(--btn-ink, var(--btn)); }
+.x6-sw.old { color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); font-weight: 400; }
+.x6-sw.hold { background: var(--danger-bg, #fdecee); color: var(--danger-ink, var(--danger)); box-shadow: inset 0 0 0 1px var(--danger-line, var(--danger)); }
+.x6-sw.wait { color: var(--muted, var(--dim)); box-shadow: inset 0 0 0 1px var(--line); font-weight: 400; }
+.x6-sw.edit { background: var(--warn-bg, #fff4e0); color: var(--warn-ink); box-shadow: inset 0 0 0 1px var(--warn-line, var(--warn)); }
+.x6-sw.flag { text-decoration: underline wavy var(--warn); text-underline-offset: 3px; }
+.x6-tag { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; margin-left: 6px; font-family: var(--ff-ui, inherit); }
+.x6-tag.add { background: var(--btn-weak, var(--accent-soft, #ede7fb)); color: var(--btn-ink, var(--btn)); }
+.x6-tag.conf { background: var(--warn-bg, #fff4e0); color: var(--warn-ink); }
+.x6-result { font-size: 13px; margin: 14px 0 0; padding: 9px 13px; border-radius: 10px; }
+.x6-result.ok { color: var(--ok-ink, var(--ok)); background: var(--surface, var(--card)); border: 1px solid var(--line); }
+.x6-result.bad { color: var(--danger-ink, var(--danger)); background: var(--danger-bg, #fdecee); border: 1px solid var(--danger-line, var(--danger)); }
+
+/* 信件與連線 */
+.x6-conn { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; margin-top: 14px; }
+.x6-cbox { border: 1px solid var(--line); background: var(--surface, var(--card)); border-radius: 14px; padding: 14px 16px;
+           display: grid; gap: 10px; align-content: start; min-width: 0; }
+.x6-cbox-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.x6-cbox-h b { font-size: 14px; font-weight: 600; }
+.x6-cbox .x6-btn { justify-self: start; }
+.x6-fix { font-size: 12.5px; border-radius: 10px; padding: 8px 11px; background: var(--danger-bg, #fdecee);
+          color: var(--danger-ink, var(--danger)); border: 1px solid var(--danger-line, var(--danger)); }
+.x6-mail { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 5px 12px; font-size: 12.5px; margin-top: 12px; align-items: center; }
+.x6-mail .t { color: var(--muted, var(--dim)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.x6-mail .s { font-family: var(--ff-mono, monospace); font-size: 12px; overflow-wrap: anywhere; }
+.x6-mail .s .hint { font-family: var(--ff-ui, inherit); }
+
+/* 提示框與 log 視窗 */
+.x6-tip { position: fixed; z-index: 30; max-width: min(300px, calc(100vw - 16px)); background: var(--pop-bg, #1c1230);
+          color: var(--pop-fg, #fff); border: 1px solid var(--line); font-size: 12px; line-height: 1.5; padding: 8px 11px;
+          border-radius: 8px; pointer-events: none; white-space: pre-line; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+dialog.x6-log { width: min(900px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--line);
+                border-radius: 16px; background: var(--bg); color: var(--txt); box-shadow: 0 24px 60px rgba(0,0,0,.35); }
+dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
+.x6-log-in { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; max-height: calc(100vh - 50px); }
+.x6-log-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.x6-log-head b { font-family: var(--ff-mono, monospace); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.x6-log-head .x { margin-left: auto; font: inherit; font-size: 18px; line-height: 1; background: none; border: 0; color: var(--muted, var(--dim));
+                  cursor: pointer; padding: 4px 8px; border-radius: 8px; }
+.x6-log-body { overflow: auto; margin: 0; padding: 10px 0; font-family: var(--ff-mono, monospace); font-size: 12px; line-height: 1.6; }
+.x6-log-body div { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); padding: 0 18px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.x6-log-body i { font-style: normal; color: var(--muted, var(--dim)); text-align: right; padding-right: 14px; user-select: none; }
+.x6-log-body .data { color: var(--btn-ink, var(--btn)); }
+.x6-log-body .done { color: var(--ok-ink, var(--ok)); }
+.x6-log-body .err { background: var(--danger-bg, #fdecee); color: var(--danger-ink, var(--danger)); font-weight: 700; }
+.x6-log-foot { padding: 10px 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted, var(--dim)); }
+</style>
+
+  <div class="panel hidden x6" id="panel-xfer690">
+    <div class="x6-toolbar">
+      <span class="x6-upd" id="x6-upd" role="status"></span>
+      <span class="x6-spin" id="x6-spin" hidden></span>
+      <button type="button" class="x6-btn" id="x6-refresh">立即更新</button>
+    </div>
+    <nav class="x6-subnav" aria-label="690資轉分類">
+      <div class="x6-grp" role="group" aria-label="台灣">
+        <span class="x6-cc">TW</span>
+        <button type="button" class="x6-sn" data-v="daily">每日資轉<span class="x6-badge bad" hidden></span></button>
+        <button type="button" class="x6-sn" data-v="twa">TWA<span class="sub">公開</span><span class="x6-badge bad" hidden></span></button>
+        <button type="button" class="x6-sn" data-v="twb">TWB<span class="sub">公告</span><span class="x6-badge bad" hidden></span></button>
+        <button type="button" class="x6-sn" data-v="adhoc">其他作業<span class="x6-badge bad" hidden></span></button>
+      </div>
+      <div class="x6-grp x6-right">
+        <button type="button" class="x6-sn" data-v="wiki">Wiki 登記<span class="x6-badge x6-info" hidden></span></button>
+      </div>
+    </nav>
+
+    <section class="card" id="x6-v-daily">
+      <h2><span id="x6-today"></span><span class="x6-lgd"><button type="button" class="x6-lgd-btn" aria-label="圖例" aria-describedby="x6-lgd-daily"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <span class="x6-lgd-pop" id="x6-lgd-daily" role="tooltip">
+          <span><i class="x6-dot ok"></i>成功</span>
+          <span><i class="x6-dot nodata"></i>無資料(當天沒有新檔,視為完成)</span>
+          <span><i class="x6-dot fail"></i>失敗</span>
+          <span><i class="x6-dot missing"></i>該到沒到</span>
+          <span><i class="x6-dot pending"></i>今天還沒跑到</span>
+          <span><i class="x6-dot none"></i>沒有執行(前一步失敗)</span>
+        </span></span></h2>
+      <div class="x6-summary" id="x6-d-summary"></div>
+      <div id="x6-systems" style="margin-top:8px"></div>
+    </section>
+
+    <section class="card" id="x6-v-period" hidden>
+      <h2><span id="x6-p-title"></span><span class="x6-lgd"><button type="button" class="x6-lgd-btn" aria-label="圖例" aria-describedby="x6-lgd-period"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <span class="x6-lgd-pop" id="x6-lgd-period" role="tooltip">
+          <span><i class="x6-dot ok"></i>成功</span>
+          <span><i class="x6-dot nodata"></i>無檔案</span>
+          <span><i class="x6-dot fail"></i>失敗</span>
+          <span><i class="x6-dot missing"></i>該到沒到</span>
+          <span><i class="x6-dot pending"></i>還沒跑到</span>
+          <span><i class="x6-dot none"></i>沒有執行 / 沒有紀錄</span>
+        </span></span></h2>
+      <div class="x6-summary" id="x6-p-summary"></div>
+      <div class="x6-wrap"><table class="x6-pm" id="x6-p-table"></table></div>
+      <div class="x6-pd" id="x6-pd" aria-live="polite"></div>
+    </section>
+
+    <section class="card" id="x6-v-adhoc" hidden>
+      <h2>其他作業 <span class="hint">近 7 天</span></h2>
+      <div class="x6-summary" id="x6-a-summary"></div>
+      <h3 style="margin:20px 0 0;font-size:14px">不在清單上的作業</h3>
+      <div id="x6-adhoc"></div>
+      <h3 style="margin:20px 0 0;font-size:14px">維運 99xxxx <span class="hint">只列最後一次,不算警示</span></h3>
+      <div class="x6-mail" id="x6-maint"></div>
+      <p class="hint" style="margin:16px 0 0">某個作業之後要固定追蹤,就把它加進 data/config/xfer690.json 的系統清單:它會移到每日資轉或 TWA / TWB,開始判斷「該到沒到」,也可以設定要寫 Wiki 的欄。</p>
+    </section>
+
+    <section class="card" id="x6-v-wiki" hidden>
+      <h2>Wiki 登記預覽<span class="x6-lgd"><button type="button" class="x6-lgd-btn" aria-label="圖例" aria-describedby="x6-lgd-wiki"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <span class="x6-lgd-pop" id="x6-lgd-wiki" role="tooltip">
+          <span><i class="x6-sw fill">v</i>這次要填進去</span>
+          <span><i class="x6-sw old">07/16</i>頁面上原本就有</span>
+          <span><i class="x6-sw hold">留空</i>失敗或沒到,不填</span>
+          <span><i class="x6-sw wait">待跑</i>還沒跑到,之後再填</span>
+          <span><i class="x6-sw edit">07/16</i>你手動改的,寫入時一起送出</span>
+          <span><i class="x6-sw old flag">07/11</i>值跟 log 不一樣,點一下可以改</span>
+          <span><span class="x6-tag add">新增</span>表格原本沒有這一列</span>
+        </span></span>
+        <span class="x6-spin" id="x6-w-spin" hidden></span>
+        <button type="button" class="x6-btn" id="x6-w-go"></button></h2>
+      <div class="x6-summary" id="x6-w-summary"></div>
+      <div id="x6-w-edits"></div>
+      <p class="x6-result" id="x6-w-result" role="status" hidden></p>
+      <div id="x6-wikipages" style="margin-top:20px"></div>
+    </section>
+  </div>
+
+  <div class="panel hidden x6" id="panel-xfer690conn">
+    <section class="card">
+      <h2>連線狀態</h2>
+      <div class="x6-conn" id="x6-conn"></div>
+    </section>
+    <section class="card">
+      <h2>最近收到的信 <span class="hint">全部分類,含維運 job · 新的在前</span></h2>
+      <div class="x6-mail" id="x6-mail"></div>
+    </section>
+  </div>
+
+  <div class="x6-tip" id="x6-tip" hidden></div>
+  <dialog class="x6-log" id="x6-logdlg" aria-labelledby="x6-log-title">
+    <div class="x6-log-in">
+      <div class="x6-log-head"><b id="x6-log-title"></b><span class="hint" id="x6-log-meta"></span>
+        <button type="button" class="x" id="x6-log-close" aria-label="關閉">✕</button></div>
+      <div class="x6-log-body" id="x6-log-body"></div>
+      <div class="x6-log-foot" id="x6-log-count"></div>
+    </div>
+  </dialog>

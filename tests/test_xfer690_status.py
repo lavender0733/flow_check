@@ -198,6 +198,13 @@ class StateTest(unittest.TestCase):
         st = build_status([], CFG["systems"], NOW, 1)
         self.assertEqual(st["alerts"], sum(s["alerts"] for s in st["systems"]))
 
+    def test_names_from_any_period(self):
+        # 今天沒來信的步驟,名稱取自之前的信(畫面上才不會只顯示代碼)
+        evs = [ev("012003", "09-30 02:10", name="techreport-pdf-step2-l1"),
+               ev("012001", "10-01 02:10", status="nodata", data={}, name="techreport-pdf-step1-raw")]
+        names = system(build_status(evs, CFG["systems"], NOW, 14), "techreport")["names"]
+        self.assertEqual(names["012003"], "techreport-pdf-step2-l1")
+
     def test_step_pairs(self):
         self.assertEqual(step_pairs(["012001", "012002", "012003", "012004"]),
                          [["012001", "012002"], ["012003", "012004"]])

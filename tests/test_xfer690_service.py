@@ -229,6 +229,21 @@ class PollTest(ServiceCase):
         svc.poll()
         self.assertEqual(set(svc.events), {"new"})
 
+    def test_account_fetched_once_and_cached(self):
+        g = FakeGmail({"a": mail("012001", "techreport-pdf-step1-raw", "02:10")})
+        g.account_calls = 0
+
+        def account():
+            g.account_calls += 1
+            return "alicia.huang@innovue.ltd"
+        g.account = account
+        svc = self.make(g)
+        svc.poll()
+        svc.poll()
+        self.assertEqual(g.account_calls, 1)
+        self.assertEqual(svc.snapshot()["gmail_account"], "alicia.huang@innovue.ltd")
+        self.assertEqual(self.make(FakeGmail({})).snapshot()["gmail_account"], "alicia.huang@innovue.ltd")
+
     def test_unrelated_mail_kept_for_dedupe(self):
         g = FakeGmail({"x": ("週報", "Thu, 01 Oct 2026 08:00:00 +0800", 100, None)})
         svc = self.make(g)

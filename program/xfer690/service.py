@@ -101,6 +101,7 @@ class Xfer690Service:
         self.last_poll_kind = cache.get("last_poll_kind")
         self.last_error = None
         self.auth = "unknown"
+        self.account = cache.get("account")
         t = cache.get("traffic") or {}
         self.traffic = {"day": t.get("day"), "today_bytes": int(t.get("today_bytes") or 0),
                         "last_poll_bytes": int(t.get("last_poll_bytes") or 0)}
@@ -183,6 +184,11 @@ class Xfer690Service:
                         ev["error"] = f"解析失敗:{e}"[:200]
                 self.events.update(new)
                 self._prune()
+                if not self.account and hasattr(gmail, "account"):
+                    try:
+                        self.account = gmail.account()
+                    except Exception:
+                        pass        # 只是顯示用,抓不到下次再試
                 self.last_poll = self.now().isoformat()
                 self.last_poll_kind = kind
                 self.last_error = None
@@ -210,7 +216,7 @@ class Xfer690Service:
     def _save(self) -> None:
         try:
             write_json_atomic(self.cache_path, {
-                "events": self.events, "last_poll": self.last_poll,
+                "events": self.events, "last_poll": self.last_poll, "account": self.account,
                 "last_poll_kind": self.last_poll_kind, "traffic": self.traffic,
                 "wiki": {"last_write": self.wiki["last_write"]}})
         except OSError as e:
@@ -235,7 +241,8 @@ class Xfer690Service:
             traffic["today_bytes"] = 0
         return {
             "ok": True, "enabled": bool(self.cfg.get("enabled", True)),
-            "auth": self.auth, "last_poll": self.last_poll, "last_poll_kind": self.last_poll_kind,
+            "auth": self.auth, "gmail_account": self.account,
+            "last_poll": self.last_poll, "last_poll_kind": self.last_poll_kind,
             "last_error": self.last_error, "stale": stale,
             "poll_interval_min": int(self.cfg["poll_interval_min"]),
             "traffic": {"today_bytes": traffic["today_bytes"],
