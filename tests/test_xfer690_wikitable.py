@@ -1,0 +1,222 @@
+import unittest
+from datetime import datetime
+
+import _util  # noqa: F401  (sys.path)
+from core.paths import XFER690_CONFIG_PATH
+from xfer690.parser import TPE
+from xfer690.service import load_xfer_config
+from xfer690.status import build_status
+from xfer690.wiki import plan_fills
+from xfer690.wikitable import (LabelMismatch, TableNotFound, apply_edits, apply_fills,
+                               read_rows, split_row)
+from xfer690_mail import FIX
+
+CFG = load_xfer_config(XFER690_CONFIG_PATH)
+WIKI = CFG["wiki"]
+PH = WIKI["placeholder_re"]
+
+
+def target(page, system):
+    return next(t for t in WIKI["tables"] if t["page"] == page and t["system"] == system)
+
+
+def text(name):
+    return (FIX / name).read_bytes().decode("utf-8")
+
+
+FULL = text("wiki_full.md")
+DAILY = text("wiki_daily.md")
+BIBLIO = text("wiki_biblio.md")
+T_FULL_A = target("TW全文Full", "twa-full")
+T_FULL_B = target("TW全文Full", "twb-full")
+T_BIB_A = target("TW書目Biblio及雜項", "twa-biblio")
+T_BIB_B = target("TW書目Biblio及雜項", "twb-biblio")
+T_TECH = target("每日執行項目", "techreport")
+
+
+def changed(a, b):
+    la, lb = a.splitlines(keepends=True), b.splitlines(keepends=True)
+    return [(i, x, y) for i, (x, y) in enumerate(zip(la, lb)) if x != y]
+
+
+def row_of(content, key, key_col=2):
+    for line in content.splitlines():
+        cells = split_row(line) if line.lstrip().startswith("|") else []
+        if len(cells) > key_col and cells[key_col].strip() == key:
+            return [c.strip() for c in cells]
+    return None
+
+
+class TableTest(unittest.TestCase):
+    def test_split_row_keeps_spacing_and_escaped_pipe(self):
+        self.assertEqual(split_row("| a | b\\|c |  d  |\n"), [" a ", " b\\|c ", "  d  "])
+        self.assertEqual(split_row("|x|y|"), ["x", "y"])
+
+    def test_full_twa_keyed_by_vol(self):
+        out, rep = apply_fills(FULL, T_FULL_A, {"2414": {"cells": {4: "v"}}}, PH)
+        self.assertEqual(rep["filled"], 1)
+        self.assertEqual(row_of(out, "2414")[4], "v")
+        self.assertEqual(row_of(out, "2413")[4], "")
+
+    def test_only_target_lines_change(self):
+        out, _ = apply_fills(FULL, T_FULL_A, {"2414": {"cells": {4: "v", 5: "v"}}}, PH)
+        diff = changed(FULL, out)
+        self.assertEqual(len(diff), 1)
+        self.assertIn("2414", diff[0][1])
+        self.assertEqual(len(out.splitlines()), len(FULL.splitlines()))
+        # 寬度不變
+        self.assertEqual(len(diff[0][1]), len(diff[0][2]))
+
+    def test_never_overwrites_filled_cell(self):
+        out, rep = apply_fills(FULL, T_FULL_A, {"2411": {"cells": {4: "v"}}}, PH)
+        self.assertEqual(out, FULL)
+        self.assertEqual(rep["conflicts"], [{"key": "2411", "col": 4, "existing": "2153", "wanted": "v"}])
+
+    def test_placeholder_treated_empty(self):
+        out, rep = apply_fills(FULL, T_FULL_A, {"2413": {"cells": {3: "20260930"}}}, PH)
+        self.assertEqual(row_of(out, "2413")[3], "20260930")
+        self.assertEqual(rep["filled"], 1)
+
+    def test_same_value_is_noop(self):
+        out, rep = apply_fills(FULL, T_FULL_A, {"2409": {"cells": {4: "v"}}}, PH)
+        self.assertEqual(out, FULL)
+        self.assertEqual((rep["filled"], rep["conflicts"]), (0, []))
+
+    def test_twb_table_selected_by_after(self):
+        out, _ = apply_fills(FULL, T_FULL_B, {"5320": {"cells": {4: "v"}}}, PH)
+        self.assertEqual(row_of(out, "5320")[4], "v")
+        self.assertEqual(changed(FULL, out)[0][0], FULL.splitlines().index(
+            next(l for l in FULL.splitlines() if "| 5320 |" in l)))
+
+    def test_skips_commented_row(self):
+        # 註解裡的範例列 "| 1150701A13X01 | 20260701 | 07/01 | 2413 |" 不能被當成表格
+        out, rep = apply_fills(FULL, T_FULL_A, {"2413": {"cells": {4: "v"}}}, PH)
+        diff = changed(FULL, out)
+        self.assertEqual(len(diff), 1)
+        self.assertNotIn("1150701A13X01 | 20260701", diff[0][1])
+        self.assertIn("<!-- copy & paste", out)
+
+    def test_label_mismatch_refuses_table(self):
+        bad = dict(T_FULL_A, cols={"4": {"label": "L1", "value": "v", "step": "011603"}})
+        with self.assertRaises(LabelMismatch):
+            apply_fills(FULL, bad, {"2414": {"cells": {4: "v"}}}, PH)
+
+    def test_daily_uses_first_row_labels(self):
+        out, rep = apply_fills(DAILY, T_TECH, {"2026/08/28": {"cells": {9: "v"}}}, PH)
+        self.assertEqual(out, DAILY)    # 原本就是 v
+        self.assertEqual(rep["conflicts"], [])
+
+    def test_insert_row_daily_in_order(self):
+        out, rep = apply_fills(DAILY, T_TECH, {"2026/10/01": {"cells": {9: "v", 10: "v", 11: "v"},
+                                                             "new": {0: "2026/10/01"}}}, PH)
+        self.assertEqual(rep["inserted"], 1)
+        lines = out.splitlines()
+        i = next(n for n, l in enumerate(lines) if "2026/10/01" in l)
+        self.assertIn("RAW | L3 | OS | 案例", lines[i - 1])
+        self.assertIn("2026/08/28", lines[i + 1])
+        self.assertEqual(len(split_row(lines[i])), 15)
+        self.assertEqual([c.strip() for c in split_row(lines[i])][9:12], ["v", "v", "v"])
+        self.assertEqual(len(lines), len(DAILY.splitlines()) + 1)
+
+    def test_older_than_oldest_row_skipped(self):
+        out, rep = apply_fills(BIBLIO, T_BIB_B, {"5211": {"cells": {4: "1819"}}}, PH)
+        self.assertEqual(out, BIBLIO)
+        self.assertEqual((rep["inserted"], rep["skipped"]), (0, ["5211"]))
+
+    def test_insert_row_biblio_with_new(self):
+        out, rep = apply_fills(BIBLIO, T_BIB_A, {"2420": {"cells": {3: "20261016"},
+                                                       "new": {0: "20261016", 1: "10/16", 2: "2420"}}}, PH)
+        self.assertEqual(rep["inserted"], 1)
+        lines = out.splitlines()
+        i = next(n for n, l in enumerate(lines) if "| 2420 |" in l)
+        self.assertIn("| 2419 |", lines[i + 1])
+        self.assertEqual([c.strip() for c in split_row(lines[i])][:4], ["20261016", "10/16", "2420", "20261016"])
+
+    def test_biblio_existing_row_writes_noop(self):
+        out, rep = apply_fills(BIBLIO, T_BIB_A, {"2419": {"cells": {4: "2384"}}}, PH)
+        self.assertEqual(out, BIBLIO)
+        self.assertEqual(rep["filled"], 0)
+
+    def test_table_not_found(self):
+        with self.assertRaises(TableNotFound):
+            apply_fills("# empty\n", T_FULL_A, {}, PH)
+        with self.assertRaises(TableNotFound):
+            apply_fills(FULL, dict(T_FULL_A, after="不存在的標題"), {}, PH)
+
+    def test_crlf_preserved(self):
+        crlf = FULL.replace("\n", "\r\n")
+        out, _ = apply_fills(crlf, T_FULL_A, {"2414": {"cells": {4: "v"}}}, PH)
+        self.assertEqual(out.count("\r\n"), crlf.count("\r\n"))
+        self.assertEqual(len(changed(crlf, out)), 1)
+
+    def test_read_rows(self):
+        r = read_rows(BIBLIO, T_BIB_A)
+        self.assertEqual(r["rows"]["2419"][4], "2384")
+        self.assertEqual(r["labels"][5], "Gazette SUD")
+
+    def test_edit_overwrites_when_expect_matches(self):
+        out, rep = apply_edits(FULL, T_FULL_A, [{"key": "2414", "col": 1, "expect": "07/11", "value": "07/16"}])
+        self.assertEqual(rep, {"edited": 1, "conflicts": []})
+        self.assertEqual(row_of(out, "2414")[1], "07/16")
+        self.assertEqual(len(changed(FULL, out)), 1)
+
+    def test_edit_refused_when_page_changed(self):
+        out, rep = apply_edits(FULL, T_FULL_A, [{"key": "2414", "col": 1, "expect": "07/10", "value": "07/16"}])
+        self.assertEqual(out, FULL)
+        self.assertEqual(rep["edited"], 0)
+        self.assertEqual(rep["conflicts"][0]["existing"], "07/11")
+
+
+def ev(code, at, status="ok", data=None, writes=None):
+    e = {"id": code + at, "code": code, "name": "", "group": "", "status": status,
+         "at": f"2026-{at[:5]}T{at[6:]}:00+08:00", "subject": ""}
+    if data is not None:
+        e.update(raw=True, data=data, writes=writes, error="")
+    return e
+
+
+NOW = datetime(2026, 10, 1, 9, 0, tzinfo=TPE)
+
+
+class PlanTest(unittest.TestCase):
+    def status(self, evs, now=NOW):
+        return build_status(evs, CFG["systems"], now, 14)
+
+    def test_plan_v_requires_check(self):
+        st = self.status([ev("012001", "10-01 02:10")], datetime(2026, 10, 1, 3, 0, tzinfo=TPE))
+        self.assertEqual(plan_fills(st, T_TECH, WIKI), {})
+
+    def test_plan_nodata_fills_all(self):
+        st = self.status([ev("012000", "10-01 02:10", "fail"),
+                          ev("012001", "10-01 02:10", "nodata", {"VOL_DATE": "1151001"})])
+        plan = plan_fills(st, T_TECH, WIKI)
+        self.assertEqual(plan["2026/10/01"]["cells"], {9: "v", 10: "v", 11: "v"})
+        self.assertEqual(plan["2026/10/01"]["new"], {0: "2026/10/01"})
+
+    def test_plan_writes_and_tag(self):
+        steps = ["010301", "010302", "010303", "010304", "010305", "010306", "010307", "010308",
+                 "010309", "010310", "010311", "010312", "010315", "010300"]
+        evs = [ev(c, "10-01 00:30") for c in steps[1:]]
+        evs.insert(0, ev("010301", "10-01 00:30", data={"VOL": "2419", "TAG": "20261001"}))
+        evs[2] = ev("010303", "10-01 00:30", data={"VOL": "2419", "TAG": "20261001"}, writes=2384)
+        plan = plan_fills(self.status(evs), T_BIB_A, WIKI)
+        self.assertEqual(plan["2419"]["cells"], {3: "20261001", 4: "2384"})
+
+    def test_plan_writes_only_when_whole_period_ok(self):
+        evs = [ev("010301", "10-01 00:30", data={"VOL": "2419", "TAG": "20261001"}),
+               ev("010303", "10-01 00:30", data={"VOL": "2419"}, writes=2384),
+               ev("010305", "10-01 00:31", "fail")]
+        plan = plan_fills(self.status(evs), T_BIB_A, WIKI)
+        self.assertEqual(plan["2419"]["cells"], {3: "20261001"})
+
+    def test_plan_new_row_template(self):
+        evs = [ev("010301", "10-01 00:30", data={"VOL": "2420", "TAG": "20261016"})]
+        plan = plan_fills(self.status(evs), T_BIB_A, WIKI)
+        self.assertEqual(plan["2420"]["new"], {0: "20261016", 1: "10/16", 2: "2420"})
+
+    def test_plan_skips_missing_periods(self):
+        self.assertEqual(plan_fills(self.status([]), T_TECH, WIKI), {})
+
+
+if __name__ == "__main__":
+    unittest.main()
