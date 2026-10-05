@@ -73,6 +73,18 @@ if errorlevel 1 (
   )
 )
 
+REM 690 transfer monitoring (only in flow_check, not synced to TIPO flow check):
+REM install its Google package if requirements-690.txt exists. A failure only
+REM disables 690 monitoring - the traffic monitor still starts.
+if exist requirements-690.txt (
+  python -c "import google_auth_oauthlib" >nul 2>&1
+  if errorlevel 1 (
+    echo Installing packages for 690 monitoring...
+    python -m pip install -r requirements-690.txt
+    if errorlevel 1 echo [WARN] google-auth-oauthlib install failed - 690 monitoring disabled.
+  )
+)
+
 echo Starting traffic monitor... the browser opens once the server is ready. Press Ctrl+C here to stop.
 REM The browser is opened by traffic_monitor.py after the port binds (see its main()).
 REM We do NOT "start" the browser here, otherwise it opens before the server is ready and

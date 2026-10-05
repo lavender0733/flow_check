@@ -1,0 +1,4 @@
+# 690 資轉監控的相依套件(只有 flow_check 需要,不同步到 TIPO flow check)。
+# 安裝:python -m pip install -r requirements-690.txt
+# google-auth-oauthlib:Gmail API 的 OAuth 授權與 HTTP(連帶裝 google-auth、requests)。
+google-auth-oauthlib>=1.2
