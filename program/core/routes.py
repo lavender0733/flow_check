@@ -10,6 +10,7 @@
 
 import re
 
+from common.webapp import HttpError, Raw
 from core.health import health_snapshot, needs_restart
 from core.paths import MACHINE_ID, WEB_DIR
 from core.sampler import run_speedtest, traffic_log_dates
@@ -23,11 +24,14 @@ class App:
     那是全域可變狀態，且讓 Handler 無法被獨立測試。
     """
 
-    __slots__ = ("cfg", "monitor")
+    __slots__ = ("cfg", "monitor", "xfer690")
 
-    def __init__(self, cfg, monitor):
+    def __init__(self, cfg, monitor, xfer690=None):
         self.cfg = cfg
         self.monitor = monitor
+        # 690 資轉監控(program/xfer690)。TIPO flow check 沒有這個套件、或載入失敗時是 None,
+        # 那幾個端點回「模組載入失敗」,流量監控照常。
+        self.xfer690 = xfer690
 
 
 # ============================================================
@@ -192,6 +196,49 @@ def speedtest(app, body: dict) -> dict:
 
 
 # ============================================================
+# 690 資轉監控
+# ============================================================
+# 不在模組層級 import xfer690:這個檔會同步到 TIPO flow check,那邊沒有那個套件。
+_XFER_OFF = {"ok": False, "enabled": False, "message": "690 監控模組載入失敗"}
+
+
+def xfer690_status(app) -> dict:
+    return app.xfer690.snapshot() if app.xfer690 else dict(_XFER_OFF)
+
+
+def xfer690_refresh(app) -> dict:
+    """「立即更新」:前景抓一次信,回傳新的快照。"""
+    return app.xfer690.poll("manual") if app.xfer690 else dict(_XFER_OFF)
+
+
+def xfer690_log(app, msg_id) -> Raw:
+    """那封通知信附的 .log(伺服器當下抓,不存檔)。"""
+    if not app.xfer690:
+        raise HttpError(404, _XFER_OFF["message"])
+    try:
+        text = app.xfer690.log(msg_id or "")
+    except KeyError:
+        raise HttpError(404, "找不到這封信")
+    return Raw(text.encode("utf-8"), "text/plain; charset=utf-8")
+
+
+def xfer690_wiki_login(app) -> dict:
+    return app.xfer690.wiki_login() if app.xfer690 else dict(_XFER_OFF)
+
+
+def xfer690_wiki_write(app, body: dict) -> dict:
+    """用伺服器記憶體裡的登入寫入 Wiki。沒登入回 409,不會自己登入。"""
+    if not app.xfer690:
+        raise HttpError(404, _XFER_OFF["message"])
+    try:
+        return app.xfer690.wiki_write(body.get("edits") or [])
+    except Exception as e:
+        if type(e).__name__ == "NotLoggedIn":
+            raise HttpError(409, {"ok": False, "error": "not_logged_in"})
+        raise
+
+
+# ============================================================
 # 路由表
 # ============================================================
 def build_routes(app: App) -> dict:
@@ -203,4 +250,9 @@ def build_routes(app: App) -> dict:
         ("GET",  "/api/config"):        lambda req: config_payload(app),
         ("POST", "/api/prefs"):         lambda req: prefs_write(app, req.body),
         ("POST", "/api/speedtest"):     lambda req: speedtest(app, req.body),
+        ("GET",  "/api/xfer690"):            lambda req: xfer690_status(app),
+        ("POST", "/api/xfer690/refresh"):    lambda req: xfer690_refresh(app),
+        ("GET",  "/api/xfer690/log"):        lambda req: xfer690_log(app, req.query.get("id")),
+        ("POST", "/api/xfer690/wiki/login"): lambda req: xfer690_wiki_login(app),
+        ("POST", "/api/xfer690/wiki/write"): lambda req: xfer690_wiki_write(app, req.body),
     }

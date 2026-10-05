@@ -50,7 +50,7 @@ from core.storage import load_config, machine_label
 
 # 系統版本(語意化版本控制)。這是唯一來源:網頁底部的「系統版本」會由
 # render_index() 把 index.html 裡的 <!--#version--> 換成這個值,改版只改這裡。
-VERSION = "8.0.0"
+VERSION = "8.1.0"
 
 
 def _ensure_machines_file():
@@ -69,7 +69,26 @@ def _ensure_machines_file():
             pass
 
 
-def _startup_banner(cfg, monitor, url, probe_int) -> str:
+def _start_xfer690():
+    """載入 690 資轉監控並起背景抓信。回傳 (服務或 None, banner 用的一行說明)。
+
+    program/xfer690 不存在(TIPO flow check)時安靜略過;載入失敗只記錯,流量監控照常啟動。
+    """
+    if not (Path(__file__).resolve().parents[1] / "xfer690").is_dir():
+        return None, None
+    try:
+        from xfer690.service import Xfer690Service
+        xfer = Xfer690Service()
+    except Exception as e:
+        record_error("xfer690", e)
+        return None, f"  690 資轉監控: 載入失敗({e})"
+    if not xfer.cfg.get("enabled", True):
+        return xfer, "  690 資轉監控: 停用(data/config/xfer690.json 的 enabled)"
+    threading.Thread(target=xfer.loop, daemon=True).start()
+    return xfer, f"  690 資轉監控: 每 {xfer.cfg['poll_interval_min']} 分鐘抓信"
+
+
+def _startup_banner(cfg, monitor, url, probe_int, xfer_line=None) -> str:
     """主控台啟動訊息。回傳字串交給 serve() 印(它會在綁好連接埠、開瀏覽器前印出)。"""
     lines = [
         "=" * 56,
@@ -78,6 +97,8 @@ def _startup_banner(cfg, monitor, url, probe_int) -> str:
         f"  |  連線探測 {probe_int}s",
         f"  本機代號: {MACHINE_ID}  (顯示名:{machine_label(MACHINE_ID)})",
     ]
+    if xfer_line:
+        lines.append(xfer_line)
     if monitor._estats_ok:
         lines.append("  內網排除: 已啟用(管理員身分,ESTATS 取每條連線收/發 byte)")
     else:
@@ -115,7 +136,8 @@ def main():
         return
 
     monitor = Monitor(cfg)
-    app = App(cfg, monitor)
+    xfer, xfer_line = _start_xfer690()
+    app = App(cfg, monitor, xfer)
 
     threading.Thread(target=sampler_loop,
                      args=(monitor, int(cfg["sample_interval_sec"])),
@@ -135,7 +157,7 @@ def main():
         static_dir=WEB_DIR,
         index_renderer=lambda: render_index(VERSION),
         on_error=record_error,
-        banner=_startup_banner(cfg, monitor, url, probe_int),
+        banner=_startup_banner(cfg, monitor, url, probe_int, xfer_line),
     )
 
 

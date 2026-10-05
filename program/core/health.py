@@ -25,12 +25,13 @@ def _watched_sources() -> list:
     """在這個程序內載入、改了需要重啟才生效的原始碼檔。
 
     掃 core/*.py 而非硬編清單：拆檔或新增模組時會自動納入，不會漏掉。
-    另含 common/*.py。
+    另含 common/*.py 與 xfer690/*.py(690 資轉監控;沒有這個資料夾時 glob 是空的)。
 
     不列入：web/index.html 與 partials（每次請求即時讀檔），改完重整就生效。
     """
     files = sorted(_CORE_DIR.glob("*.py"))
     files += sorted((_CORE_DIR.parent / "common").glob("*.py"))
+    files += sorted((_CORE_DIR.parent / "xfer690").glob("*.py"))
     return files
 
 
