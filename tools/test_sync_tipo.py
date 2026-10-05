@@ -122,7 +122,7 @@ class BuildTest(SyncTestCase):
 
     def test_no_xfer690_or_secrets_in_output(self):
         src = copy_repo(self.tmp / "src")
-        (src / "program" / "xfer690").mkdir()
+        (src / "program" / "xfer690").mkdir(exist_ok=True)
         (src / "program" / "xfer690" / "a.py").write_text("x = 1\n", encoding="utf-8")
         (src / "data" / "config").mkdir(parents=True)
         (src / "data" / "config" / "gmail_credentials.json").write_text("{}", encoding="utf-8")
