@@ -16,7 +16,7 @@
   --warn: #d98e04; --warn-ink: #7a5200; --warn-bg: #fff4e0; --warn-line: #d98e04;
   --track: rgba(88,50,160,.12); --th-bg: rgba(255,255,255,.34); --row-hover: rgba(133,59,246,.06);
   --surface: rgba(255,255,255,.5); --note-bg: #fffbe8; --note-line: #e7cf74; --note-ink: #5c4a00;
-  --tip-bg: #1c1230; --tip-fg: #ffffff;
+  --tip-bg: #1c1230; --tip-fg: #ffffff; --pop-bg: #fbf8ff;
   --sh-card: 0 16px 40px rgba(88,50,160,.14);
   --ff-ui: "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", system-ui, sans-serif;
   --ff-mono: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace;
@@ -30,7 +30,7 @@
   --warn: #fcc419; --warn-ink: #ffd75e; --warn-bg: rgba(217,142,4,.20); --warn-line: rgba(217,142,4,.55);
   --track: rgba(255,255,255,.10); --th-bg: rgba(255,255,255,.05); --row-hover: rgba(255,255,255,.04);
   --surface: rgba(255,255,255,.06); --note-bg: rgba(231,207,116,.10); --note-line: rgba(231,207,116,.45); --note-ink: #f1dc8c;
-  --tip-bg: #2a2140; --tip-fg: #ffffff;
+  --tip-bg: #2a2140; --tip-fg: #ffffff; --pop-bg: #1d1530;
   --sh-card: 0 16px 40px rgba(0,0,0,.40); color-scheme: dark;
 } }
 :root[data-theme="dark"] {
@@ -42,7 +42,7 @@
   --warn: #fcc419; --warn-ink: #ffd75e; --warn-bg: rgba(217,142,4,.20); --warn-line: rgba(217,142,4,.55);
   --track: rgba(255,255,255,.10); --th-bg: rgba(255,255,255,.05); --row-hover: rgba(255,255,255,.04);
   --surface: rgba(255,255,255,.06); --note-bg: rgba(231,207,116,.10); --note-line: rgba(231,207,116,.45); --note-ink: #f1dc8c;
-  --tip-bg: #2a2140; --tip-fg: #ffffff;
+  --tip-bg: #2a2140; --tip-fg: #ffffff; --pop-bg: #1d1530;
   --sh-card: 0 16px 40px rgba(0,0,0,.40); color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -57,16 +57,23 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
      display: flex; align-items: center; gap: 10px; flex-wrap: wrap; text-wrap: balance; }
 .hint { color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: 0; }
 .mono { font-family: var(--ff-mono); font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
 
 /* ── 草圖說明區 ── */
 .brief { display: grid; gap: 12px; }
 .brief p { margin: 0; max-width: 68ch; color: var(--dim); }
+.decide { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; max-width: 72ch; }
+.decide li { color: var(--dim); padding-left: 14px; border-left: 2px solid var(--line); }
+.decide b { color: var(--txt); font-weight: 600; }
 .scen { display: flex; gap: 6px; flex-wrap: wrap; }
 .scen button { font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 999px; cursor: pointer;
                border: 1px solid var(--line); background: var(--surface); color: var(--dim); }
 .scen button:hover { color: var(--txt); background: var(--btn-weak); }
 .scen button[aria-pressed="true"] { color: #fff; background: var(--btn); border-color: var(--btn); }
-.scen button:focus-visible, .btn:focus-visible, summary:focus-visible, .dotbtn:focus-visible {
+.scen button.fake::after { content: "示意"; font-size: 10px; font-weight: 700; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+                           background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--warn-line); }
+.scen button:focus-visible, .btn:focus-visible, summary:focus-visible, .dotbtn:focus-visible, .sn:focus-visible,
+.spanbar:focus-visible, .volchip:focus-visible, .linkbtn:focus-visible, .logbtn:focus-visible, .faillink:focus-visible, .log-head .x:focus-visible {
   outline: 2px solid var(--btn); outline-offset: 2px; }
 .scen-note { border-left: 3px solid var(--note-line); background: var(--note-bg); color: var(--note-ink);
              padding: 9px 13px; border-radius: 0 10px 10px 0; font-size: 13px; }
@@ -78,12 +85,31 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
 .tab { font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 999px;
        background: var(--surface); color: var(--dim); }
 .tab.on { color: #fff; background: var(--btn); }
-.tab .warnmark { margin-left: 4px; }
+button.tab { font: inherit; font-size: 13px; font-weight: 600; border: 0; cursor: pointer; }
+button.tab:hover:not(.on) { color: var(--txt); background: var(--btn-weak); }
+button.tab:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
+.tab .warnmark { margin-left: 4px; color: var(--warn); font-weight: 700; }
+.tab.on .warnmark { background: var(--warn-bg); border-radius: 5px; padding: 0 4px; }
 
-.banner { border-radius: 12px; padding: 11px 15px; font-size: 13px; display: grid; gap: 4px; }
-.banner-warn { background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-ink); }
-.banner-danger { background: var(--danger-bg); border: 1px solid var(--danger-line); color: var(--danger-ink); }
-.banner b { font-weight: 600; }
+
+/* ── 690 頁籤內的分類列:國家群組 + Wiki ── */
+.subnav { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.sn-group { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 3px; border-radius: 999px;
+            background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.sn-cc { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--muted); padding: 0 8px 0 11px; }
+.sn { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 999px; border: 0;
+      background: transparent; color: var(--dim); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.sn:hover { color: var(--txt); background: var(--btn-weak); }
+.sn[aria-pressed="true"] { color: #fff; background: var(--btn); }
+.sn .sub { font-weight: 400; font-size: 12px; opacity: .85; }
+.sn-future { font-size: 12px; color: var(--muted); padding: 7px 14px; border-radius: 999px; border: 1px dashed var(--line); cursor: help; }
+.sn-right { margin-left: auto; }
+.badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; font-size: 11px; font-weight: 700;
+         display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; }
+.badge.bad { background: var(--danger); color: #fff; }
+.badge.info { background: var(--btn-weak); color: var(--btn-ink); }
+.sn[aria-pressed="true"] .badge.info { background: rgba(255,255,255,.25); color: #fff; }
+@media (max-width: 560px) { .sn-right { margin-left: 0; } }
 
 /* ── 摘要列 ── */
 .summary { display: flex; flex-wrap: wrap; margin-top: 14px; }
@@ -91,6 +117,7 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
 .stat:first-child { padding-left: 0; border-left: 0; }
 .stat .k { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .06em; }
 .stat .v { font-size: 19px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.stat .v small { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 4px; }
 .stat .v.bad { color: var(--danger-ink); }
 .stat .v.good { color: var(--ok-ink); }
 @media (max-width: 560px) {
@@ -99,9 +126,16 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
 }
 
 .btn { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 15px; border-radius: 999px; border: 0;
-       background: var(--btn); color: #fff; cursor: pointer; margin-left: auto; letter-spacing: 0; }
+       background: var(--btn); color: #fff; cursor: pointer; margin-left: auto; letter-spacing: 0; white-space: nowrap; }
 .btn:hover { background: var(--btn-hover); }
 .btn[disabled] { opacity: .45; cursor: wait; }
+.btn.ghost[disabled]:not([aria-busy]) { cursor: not-allowed; }
+.btn.ghost[disabled]:hover { background: var(--btn-weak); color: var(--btn-ink); }
+.btn.ghost { background: var(--btn-weak); color: var(--btn-ink); }
+.btn.ghost:hover { background: var(--btn); color: #fff; }
+.linkbtn { font: inherit; font-size: 12px; font-weight: 600; background: none; border: 0; padding: 0;
+           color: var(--btn-ink); cursor: pointer; white-space: nowrap; }
+.linkbtn:hover { text-decoration: underline; }
 
 /* ── 狀態點:形狀 + 顏色雙重編碼,色盲也分得出來 ── */
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; vertical-align: middle; background: var(--muted); }
@@ -112,27 +146,71 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
 .dot.unknown { background: var(--warn); border-radius: 2px; transform: rotate(45deg) scale(.85); }
 .dot.pending { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
 .dot.none { background: var(--track); width: 6px; height: 6px; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); margin-top: 14px; }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend span, .wlegend span { display: inline-flex; align-items: center; gap: 8px; }
+/* 圖例:標題旁的 ⓘ,滑鼠移上去或 focus(手機點一下)時展開 */
+.lgd { position: relative; display: inline-flex; }
+.lgd-btn { display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+           background: none; color: var(--muted); cursor: help; }
+.lgd-btn:hover, .lgd:focus-within .lgd-btn { color: var(--btn-ink); background: var(--btn-weak); }
+.lgd-btn:focus-visible { outline: 2px solid var(--btn); outline-offset: 1px; }
+.lgd-pop { display: none; position: absolute; z-index: 9; left: -8px; top: calc(100% + 8px); width: max-content;
+           max-width: min(320px, calc(100vw - 48px)); flex-direction: column; gap: 7px; padding: 11px 13px; border-radius: 10px;
+           background: var(--pop-bg); border: 1px solid var(--line); box-shadow: 0 10px 28px rgba(0,0,0,.18);
+           font-size: 12px; font-weight: 400; letter-spacing: 0; color: var(--dim); white-space: normal; }
+.lgd-pop::before { content: ""; position: absolute; left: 0; right: 0; top: -9px; height: 9px; }   /* 滑鼠移過空隙時不收起 */
+.lgd:hover .lgd-pop, .lgd:focus-within .lgd-pop { display: flex; }
+@media (max-width: 560px) {   /* 手機:對齊卡片左右,不超出畫面 */
+  .card:has(> h2 .lgd) { position: relative; }
+  .lgd { position: static; }
+  .lgd-pop { left: 12px; right: 12px; top: 52px; max-width: none; width: auto; }
+}
 
-/* ── 今日卡:每個系統一列 ── */
+/* ── 每日:今天,每個系統一列 ── */
 .sys { display: grid; grid-template-columns: 14px minmax(7.5em, 9em) minmax(5em, 6.5em) minmax(0, 1fr) auto;
        gap: 6px 14px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
 .sys:last-child { border-bottom: 0; }
 .sys .name { font-weight: 600; min-width: 0; }
 .sys .name small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; font-family: var(--ff-mono); }
-.sys .state { font-size: 13px; color: var(--dim); }
-.sys .state.bad { color: var(--danger-ink); font-weight: 600; }
+.state { font-size: 13px; color: var(--dim); }
+.state.bad { color: var(--danger-ink); font-weight: 600; }
 .sys .when { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .steps { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; min-width: 0; }
 .step { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; color: var(--muted); white-space: nowrap; }
-.step.wiki { color: var(--txt); font-weight: 600; }
-.detail { grid-column: 2 / -1; font-size: 12.5px; border-radius: 10px; padding: 7px 11px;
+.step.failed { color: var(--danger-ink); font-weight: 700; }
+.detail { grid-column: 2 / -1; font-size: 12.5px; border-radius: 10px; padding: 8px 12px;
           display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; min-width: 0; }
-.detail.bad { background: var(--danger-bg); color: var(--danger-ink); }
+.detail.bad { background: var(--danger-bg); color: var(--danger-ink); border: 1px solid var(--danger-line); }
 .detail.soft { background: var(--track); color: var(--dim); }
 .detail a { color: inherit; font-weight: 600; }
 .detail code { font-family: var(--ff-mono); font-size: 11.5px; overflow-wrap: anywhere; }
+.detail .lead { font-weight: 700; }
+.detail .full { flex-basis: 100%; }
+.faillink { font: inherit; font-weight: 700; color: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+            text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.faillink .lg { font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 4px; text-decoration: none;
+                background: var(--danger-bg); box-shadow: inset 0 0 0 1px var(--danger-line); }
+.faillink:hover .lg { background: var(--danger); color: #fff; }
+.detail .logbtn { font: inherit; font-size: 12px; font-weight: 700; color: inherit; background: none; border: 0; padding: 0;
+                  text-decoration: underline; cursor: pointer; white-space: nowrap; }
+
+/* ── log 檢視 ── */
+dialog.log { width: min(900px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--line);
+             border-radius: 16px; background: var(--bg); color: var(--txt); box-shadow: 0 24px 60px rgba(0,0,0,.35); }
+dialog.log::backdrop { background: rgba(12,7,20,.55); }
+.log-in { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; max-height: calc(100vh - 50px); }
+.log-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.log-head b { font-family: var(--ff-mono); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.log-head .x { margin-left: auto; font: inherit; font-size: 18px; line-height: 1; background: none; border: 0; color: var(--muted);
+               cursor: pointer; padding: 4px 8px; border-radius: 8px; }
+.log-head .x:hover { background: var(--btn-weak); color: var(--txt); }
+.log-body { overflow: auto; margin: 0; padding: 10px 0; font-family: var(--ff-mono); font-size: 12px; line-height: 1.6; }
+.log-body div { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); padding: 0 18px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.log-body i { font-style: normal; color: var(--muted); text-align: right; padding-right: 14px; user-select: none; }
+.log-body .data { color: var(--btn-ink); }
+.log-body .done { color: var(--ok-ink); }
+.log-body .err { background: var(--danger-bg); color: var(--danger-ink); font-weight: 700; }
+.log-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; padding: 10px 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.log-foot a { color: var(--btn-ink); font-weight: 600; }
 @media (max-width: 680px) {
   .sys { grid-template-columns: 14px minmax(0, 1fr) auto; }
   .sys .state { grid-column: 2; }
@@ -140,39 +218,120 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-s
   .sys .steps { grid-column: 2 / -1; }
 }
 
-/* ── 近幾天矩陣 ── */
-.mx-wrap { overflow-x: auto; margin-top: 10px; }
+/* ── 表格(TWA / TWB 的種類 × 期數)── */
+.mx-wrap { overflow-x: auto; margin-top: 12px; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
 th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 th { font-size: 12px; color: var(--muted); background: var(--th-bg); font-weight: 600; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
 td.c, th.c { text-align: center; }
 tbody tr:hover > td { background: var(--row-hover); }
 tbody tr:last-child > td { border-bottom: 0; }
-.dotbtn { background: none; border: 0; padding: 4px; cursor: help; border-radius: 6px; line-height: 0; color: inherit; }
+.dotbtn { background: none; border: 0; padding: 5px; cursor: help; border-radius: 6px; line-height: 0; color: inherit; }
+.dotbtn[data-sel] { cursor: pointer; }
+.dotbtn[aria-pressed="true"], .spanbar[aria-pressed="true"], .volchip[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--btn); }
+.pm td.on, tbody tr:hover > td.on { background: var(--btn-weak); }
+.selmark { display: inline-block; width: 16px; height: 16px; border-radius: 5px; box-shadow: inset 0 0 0 2px var(--btn); background: var(--btn-weak); }
+.pd-cap { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--btn-ink); }
+.olders { display: flex; flex-wrap: wrap; gap: 6px; }
+.pm th small.sub { display: block; font-weight: 400; font-size: 11px; letter-spacing: 0; }
+.pm th.vol { text-align: center; line-height: 1.25; font-family: var(--ff-mono); }
+.pm th.vol small { display: block; font-family: var(--ff-ui); font-weight: 400; font-size: 11px; letter-spacing: 0; }
+.pm th.vol.cur { color: var(--txt); }
+.pm td.type b { font-weight: 600; }
+.pm td.type small { display: block; color: var(--muted); font-size: 11px; }
+.spanbar { font: inherit; font-size: 12px; color: var(--dim); background: var(--track); border: 0; border-radius: 999px;
+           padding: 4px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; width: 100%; justify-content: center; }
+.volchip { font: inherit; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 6px; border-radius: 999px;
+           border: 1px solid var(--line); font-family: var(--ff-mono); font-size: 12px; color: var(--dim); background: var(--surface); cursor: pointer; }
 
-/* ── 期別列 / Wiki 列(共用一列三欄的版型)── */
-.lines { display: grid; gap: 10px; margin-top: 12px; }
-.line { display: grid; grid-template-columns: minmax(8em, 11em) minmax(0, 1fr) auto; gap: 4px 14px; align-items: center;
-        font-size: 13px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-.line:last-child { border-bottom: 0; padding-bottom: 0; }
-.line .pg { font-weight: 600; min-width: 0; }
-.line .pg .hint { display: block; font-weight: 400; }
-.line .what { color: var(--dim); min-width: 0; }
-.volrow { display: flex; flex-wrap: wrap; gap: 6px; }
-.volchip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 10px 1px 3px; border-radius: 999px; border: 1px solid var(--line);
-           font-family: var(--ff-mono); font-size: 12px; color: var(--dim); background: var(--surface); }
-.volchip.stale { opacity: .55; text-decoration: line-through; }
-.tag { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; justify-self: end; }
+/* ── 期別細節 ── */
+.pd { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 10px; }
+.pd-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.pd-head b { font-size: 15px; font-weight: 600; }
+.pd .detail { grid-column: auto; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; font-size: 13px; margin: 0; }
+.kv dt { color: var(--muted); font-size: 12px; }
+.kv dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; }
+
+/* ── 上方工具列:最後更新 + 立即更新 ── */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 12px; font-size: 12px; color: var(--muted); }
+.toolbar .btn { margin-left: 0; }
+.upd b { color: var(--txt); font-weight: 600; font-variant-numeric: tabular-nums; transition: color .3s; }
+.upd.flash b { color: var(--ok-ink); }
+.upd .bad { color: var(--danger-ink); font-weight: 600; }
+
+
+/* ── 信件與連線 ── */
+.conn { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; margin-top: 14px; }
+.cbox { border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 14px 16px;
+        display: grid; gap: 10px; align-content: start; min-width: 0; }
+.cbox-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cbox-h b { font-size: 14px; font-weight: 600; }
+.cbox .fix { font-size: 12.5px; border-radius: 10px; padding: 8px 11px; background: var(--danger-bg); color: var(--danger-ink);
+             border: 1px solid var(--danger-line); }
+
+/* ── 其他作業 ── */
+.sub-h { margin: 20px 0 0; font-size: 14px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.sys.wide { grid-template-columns: 14px minmax(11em, 16em) minmax(3.5em, 4.5em) minmax(0, 1fr) auto; }
+.sys.wide .name small { font-family: var(--ff-ui); }
+@media (max-width: 680px) { .sys.wide { grid-template-columns: 14px minmax(0, 1fr) auto; } }
+.sys .name .tag { margin-left: 6px; font-family: var(--ff-ui); vertical-align: 1px; }
+.tag.fake { background: var(--warn-bg); color: var(--warn-ink); }
+.adhoc-foot { margin: 16px 0 0; }
+
+/* ── Wiki 分頁:填好的表格 ── */
+.cbox .btn { justify-self: start; margin-left: 0; }
+.result { font-size: 13px; margin: 14px 0 0; padding: 9px 13px; border-radius: 10px; }
+.result.ok { color: var(--ok-ink); background: var(--surface); border: 1px solid var(--line); }
+.result.bad { color: var(--danger-ink); background: var(--danger-bg); border: 1px solid var(--danger-line); }
+
+.wpage { display: grid; gap: 8px; }
+.wpage + .wpage { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.wpage h3 { margin: 0; font-size: 14px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.wnote { font-size: 13px; color: var(--dim); }
+.wt { font-size: 12.5px; }
+.wt th, .wt td { text-align: center; padding: 6px 9px; font-variant-numeric: tabular-nums; }
+.wt th { font-family: var(--ff-ui); }
+.wt th.grp, .wt td.grp { border-left: 1px solid var(--line); }
+.wt td.key { font-family: var(--ff-mono); text-align: left; }
+.wt td.key .tag { margin-left: 6px; font-family: var(--ff-ui); }
+.wt td.cell-new { background: var(--btn-weak); color: var(--btn-ink); font-weight: 700; }
+.wt td.cell-hold { background: var(--danger-bg); color: var(--danger-ink); font-size: 11px; font-weight: 600;
+                   box-shadow: inset 0 0 0 1px var(--danger-line); cursor: help; }
+.wt td.cell-wait { color: var(--muted); font-size: 11px; box-shadow: inset 0 0 0 1px var(--line); cursor: help; }
+.wt td.cell-old { color: var(--dim); }
+.wt s { color: var(--muted); font-weight: 400; margin-right: 4px; }
+.wt td[data-ek] { cursor: text; }
+.wt td[data-ek]:hover { box-shadow: inset 0 0 0 1px var(--btn); }
+.wt td.cell-edit, .wt tbody tr:hover > td.cell-edit { background: var(--warn-bg); color: var(--warn-ink); font-weight: 700;
+                                                       box-shadow: inset 0 0 0 1px var(--warn-line); }
+.wt td.flag { text-decoration: underline wavy var(--warn); text-underline-offset: 4px; }
+.wt td input { font: inherit; width: 100%; min-width: 5.5em; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--btn);
+               background: var(--card); color: var(--txt); text-align: center; }
+.wt td input:focus-visible { outline: 2px solid var(--btn); outline-offset: 1px; }
+.edits { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--warn-bg); border: 1px solid var(--warn-line);
+         color: var(--warn-ink); display: grid; gap: 6px; font-size: 13px; }
+.edits-h { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.edits-h .linkbtn { margin-left: auto; }
+.edl { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+.edl .where { font-weight: 600; }
+.edl .chg { font-family: var(--ff-mono); font-size: 12px; }
+.edl .linkbtn { margin-left: auto; }
+.wt tbody tr:hover > td.cell-new { background: var(--btn-weak); }
+.sw { display: inline-grid; place-items: center; min-width: 22px; height: 18px; padding: 0 4px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.sw.new { background: var(--btn-weak); color: var(--btn-ink); }
+.sw.old { color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); font-weight: 400; }
+.sw.hold { background: var(--danger-bg); color: var(--danger-ink); box-shadow: inset 0 0 0 1px var(--danger-line); }
+.sw.wait { color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); font-weight: 400; }
+.sw.edit { background: var(--warn-bg); color: var(--warn-ink); box-shadow: inset 0 0 0 1px var(--warn-line); }
+.sw.flag { text-decoration: underline wavy var(--warn); text-underline-offset: 3px; }
+
+.tag { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
 .tag.add { background: var(--btn-weak); color: var(--btn-ink); }
 .tag.skip { background: var(--track); color: var(--dim); }
-.tag.conf { background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--warn-line); }
-@media (max-width: 560px) {
-  .line { grid-template-columns: minmax(0, 1fr) auto; }
-  .line .what, .line .volrow { grid-column: 1 / -1; }
-}
 
 details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .06em; }
-.mail { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 5px 12px; font-size: 12.5px; margin-top: 12px; align-items: center; }
+.mail { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 5px 12px; font-size: 12.5px; margin-top: 12px; align-items: center; }
 .mail .t { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mail .s { font-family: var(--ff-mono); font-size: 12px; overflow-wrap: anywhere; }
 .mail .s .hint { font-family: var(--ff-ui); }
@@ -192,14 +351,25 @@ details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var
 
 <div class="wrap">
   <section class="card brief" aria-labelledby="brief-h">
-    <h1 id="brief-h">「690資轉」頁籤草圖</h1>
-    <p>這是要加進流量監控工具的新頁籤。內容取自 2026-09-29 到 10-02 實際收到的 284 封 <span class="mono">[s690]</span> 通知信,只有「授權失效」這個情境是假造的。下方用主工具的外殼呈現,配色跟著深色 / 淺色走。</p>
-    <p>切換情境,看畫面在不同狀況下怎麼提示。滑鼠移到任何一個圓點,會顯示那一步的細節。</p>
+    <h1 id="brief-h">「690資轉」頁籤草圖 <span class="hint">第五版 · 2026-10-02</span></h1>
+    <p>這是要加進流量監控工具的新頁籤。內容取自 2026-09-29 到 10-02 實際收到的 284 封 <span class="mono">[s690]</span> 通知信;標了「示意」的情境是假造的。</p>
+    <ul class="decide">
+      <li><b>分成兩大類。</b>「每日資轉」只顯示今天;「TWA 公開」「TWB 公告」各一頁,是「資料種類 × 公告期數」的表,只追蹤最近一個月(TWA 2 期、TWB 3 期),不列還沒到的下一期。點一格看那一期的細節,被點的那格會變成紫底紫框。</li>
+      <li><b>失敗時直接看 log。</b>失敗項目的「失敗」兩個字就是連結,點下去打開那封通知信附的 .log,自動捲到 error 那一行;滑鼠移上去會先顯示錯誤訊息。不再另外出桃紅色的說明框,上方也不再有「有 N 件需要處理」的摘要框,有幾件要處理看分類上的紅色數字和頁籤上的 ⚠。</li>
+      <li><b>Wiki 要填什麼,在「Wiki 登記」頁看填好的表格。</b>確認後按「寫入 Wiki」。<b>Wiki 的登入拆到「信件與連線」</b>:在那裡登入一次(帳號密碼從設定檔讀),之後每次「寫入 Wiki」都直接用這次的登入,不用每按一次就登入一次;還沒登入時,「寫入 Wiki」按鈕只顯示「Wiki 還沒登入」,登入失敗或憑證過期時只顯示「Wiki 登入失敗」,按了會切到信件與連線。<b>筆數欄也一起填:Biblio = 書目 L1 的寫入筆數、Gazette SUD = 雜項 L1 的寫入筆數</b>,整期每一步都成功才填。頁面上已經有人填的筆數時,先從 log 抓 L1 寫入筆數,再跟人填的值比對,不一樣的用波浪底線標出來。</li>
+      <li><b>需要人工修改時,在 Wiki 登記頁直接點格子改。</b>勾、TAG、日期、筆數都能改,包括頁面上原本就填錯的值;改過的格用橘色標出來,寫入時一起送出。畫面上沒有的欄(備註、案例)不經過這個工具,直接到 wiki 上改。</li>
+      <li><b>「信件與連線」是主工具的另一個頁籤,在 690資轉 旁邊。</b>Gmail、Wiki 的連線狀態和最近收到的信放在這裡,不再每頁底下都出現;有連線問題時頁籤上會出現橘色的 ⚠,690資轉 有失敗或該到沒到時也一樣。授權失效不再出桃紅色橫幅,看上方「最後更新」那行的紅字和頁籤的 ⚠。上方的「最後更新」顯示最後一次抓信的時間,按「立即更新」後會跟著變。</li>
+      <li><b>不在清單上的作業放「其他作業」。</b>信裡出現、但不是每日資轉 / TWA / TWB 固定項目的 <span class="mono">[s690]</span> job,例如手動補資料、臨時重建索引,每次執行列一列,顯示步驟、log 裡的 DATA 和筆數;失敗會列入警示,但因為沒有排程,不判斷「該到沒到」,也不寫 Wiki。維運 99xxxx(備份、快照)也在這頁,只列最後一次,不算警示。要固定追蹤,就加進系統清單。</li>
+      <li><b>Wiki 的表名寫成一行。</b>每張表一個標題,例如「TWA全文Full」「TWB全文Full」「TWA書目Biblio及雜項」,不再是頁名底下小字的「TWA 表」。</li>
+      <li><b>預留其他國家。</b>分類列是「國家群組」的結構,目前只有 TW 一組。新國家加進來時多一組,每個分類選用「每日」或「期別」版型。</li>
+    </ul>
+    <p>切換情境,看畫面在不同狀況下怎麼提示。滑鼠移到任何一個圓點或格子,會顯示細節;圓點、格子的顏色代表什麼,移到卡片標題旁的 ⓘ 看圖例。</p>
     <div class="scen" role="group" aria-label="情境">
       <button type="button" data-s="now" aria-pressed="true">10-02 上午(現況)</button>
+      <button type="button" data-s="fail" class="fake" aria-pressed="false">有失敗的項目</button>
       <button type="button" data-s="early" aria-pressed="false">10-02 清晨 05:00</button>
       <button type="button" data-s="oct1" aria-pressed="false">回看 10-01</button>
-      <button type="button" data-s="auth" aria-pressed="false">授權失效</button>
+      <button type="button" data-s="auth" class="fake" aria-pressed="false">授權失效</button>
     </div>
     <div class="scen-note" id="scen-note"></div>
   </section>
@@ -207,79 +377,210 @@ details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var
   <div class="shell">
     <div class="shell-cap">主工具畫面 · 127.0.0.1:8765</div>
     <nav class="tabs" aria-label="頁籤">
-      <span class="tab">流量監控</span><span class="tab">檢索控制台</span><span class="tab">爬取統計</span><span class="tab">檢索進度</span>
-      <span class="tab on">690資轉<span class="warnmark" id="tabwarn" hidden>⚠</span></span>
+      <span class="tab">流量監控</span><span class="tab">流量報表</span>
+      <button type="button" class="tab" id="tab-690" data-tab="690">690資轉<span class="warnmark" id="tabwarn" hidden>⚠</span></button>
+      <button type="button" class="tab" id="tab-conn" data-tab="conn">信件與連線<span class="warnmark" id="connwarn" hidden>⚠</span></button>
     </nav>
 
-    <div id="banners" class="stack"></div>
+    <div class="toolbar">
+      <span class="upd" id="upd" role="status"></span>
+      <span class="spin" id="spin" hidden></span>
+      <button type="button" class="btn" id="refresh">立即更新</button>
+    </div>
 
-    <section class="card" aria-labelledby="today-h">
-      <h2 id="today-h">今日轉置 <span class="hint" id="today-date"></span>
-        <span class="spin" id="spin" hidden></span>
-        <button type="button" class="btn" id="refresh">立即更新</button></h2>
-      <div class="summary" id="summary"></div>
-      <div id="systems" style="margin-top:8px"></div>
-      <div class="legend" aria-label="圖例">
+
+    <nav class="subnav" id="subnav" aria-label="690資轉分類">
+      <div class="sn-group" role="group" aria-label="台灣">
+        <span class="sn-cc">TW</span>
+        <button type="button" class="sn" data-v="daily">每日資轉<span class="badge bad" hidden></span></button>
+        <button type="button" class="sn" data-v="twa">TWA<span class="sub">公開</span><span class="badge bad" hidden></span></button>
+        <button type="button" class="sn" data-v="twb">TWB<span class="sub">公告</span><span class="badge bad" hidden></span></button>
+        <button type="button" class="sn" data-v="adhoc">其他作業<span class="badge bad" hidden></span></button>
+      </div>
+      <span class="sn-future" data-tip="預留位置:其他國家的資轉規格還沒定。&#10;加進來時在這裡多一組分類,每個分類選用「每日」或「期別」版型。">+ 其他國家 · 規格未定</span>
+      <div class="sn-group sn-right">
+        <button type="button" class="sn" data-v="wiki">Wiki 登記<span class="badge info" hidden></span></button>
+      </div>
+    </nav>
+
+    <!-- 每日資轉:只有今天 -->
+    <section id="v-daily" class="card" aria-labelledby="today-date">
+      <h2 id="today-h"><span id="today-date"></span><span class="lgd"><button type="button" class="lgd-btn" aria-label="圖例" aria-describedby="lgd-daily"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+          <div class="legend lgd-pop" id="lgd-daily" role="tooltip">
         <span><i class="dot ok"></i>成功</span>
-        <span><i class="dot nodata"></i>無資料(當天沒有新檔)</span>
+        <span><i class="dot nodata"></i>無資料(當天沒有新檔,視為完成)</span>
         <span><i class="dot fail"></i>失敗</span>
         <span><i class="dot missing"></i>該到沒到</span>
-        <span><i class="dot pending"></i>等待中</span>
-        <span><i class="dot unknown"></i>無法判定</span>
-        <span>粗體步驟 = 會登記到 wiki</span>
-      </div>
+        <span><i class="dot pending"></i>今天還沒跑到</span>
+        <span><i class="dot none"></i>沒有執行(前一步失敗)</span>
+          </div></span></h2>
+      <div class="summary" id="d-summary"></div>
+      <div id="systems" style="margin-top:8px"></div>
     </section>
 
-    <section class="card" aria-labelledby="hist-h">
-      <h2 id="hist-h">每日系統 · 近幾天</h2>
-      <div class="mx-wrap"><table id="matrix"></table></div>
-      <h2 style="margin-top:22px">期別系統 · 最近幾期 <span class="hint">依 log 裡的公告期數 VOL;一次手動執行可能連跑好幾期</span></h2>
-      <div class="lines" id="vols"></div>
+    <!-- TWA / TWB(共用同一個版型)-->
+    <section id="v-period" class="card" aria-labelledby="p-title" hidden>
+      <h2 id="p-h"><span id="p-title"></span><span class="lgd"><button type="button" class="lgd-btn" aria-label="圖例" aria-describedby="lgd-period"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+          <div class="legend lgd-pop" id="lgd-period" role="tooltip">
+        <span><i class="dot ok"></i>成功</span>
+        <span><i class="dot nodata"></i>無檔案</span>
+        <span><i class="dot fail"></i>失敗</span>
+        <span><i class="dot missing"></i>該到沒到</span>
+        <span><i class="dot none"></i>沒有執行 / 沒有紀錄</span>
+        <span><i class="selmark"></i>下方正在看的那一格</span>
+          </div></span></h2>
+      <div class="summary" id="p-summary"></div>
+      <div class="mx-wrap"><table class="pm" id="p-table"></table></div>
+      <div class="pd" id="pd" aria-live="polite"></div>
     </section>
 
-    <section class="card" aria-labelledby="wiki-h">
-      <h2 id="wiki-h">Wiki 登記 <span class="hint" id="wiki-mode"></span></h2>
-      <div class="lines" id="wiki"></div>
+    <!-- 其他作業:信裡出現、但不在固定項目清單的 job -->
+    <section id="v-adhoc" class="card" aria-labelledby="adhoc-h" hidden>
+      <h2 id="adhoc-h">其他作業 <span class="hint">近 7 天</span></h2>
+      <div class="summary" id="a-summary"></div>
+      <h3 class="sub-h">不在清單上的作業</h3>
+      <div id="adhoc"></div>
+      <h3 class="sub-h">維運 99xxxx <span class="hint">備份、快照、清檔,每天跑;只列最後一次,不算警示</span></h3>
+      <div class="mail" id="maint"></div>
+      <p class="hint adhoc-foot">某個作業之後要固定追蹤,就把它加進 <span class="mono">data/config/xfer690.json</span> 的系統清單:它會移到每日資轉或 TWA / TWB,開始判斷「該到沒到」,也可以設定要寫 Wiki 的欄。</p>
     </section>
 
-    <section class="card">
-      <details id="maildetails">
-        <summary>最近收到的信(含維運 job)</summary>
+    <!-- Wiki 登記 -->
+    <section id="v-wiki" class="card" aria-labelledby="wiki-h" hidden>
+      <h2 id="wiki-h">Wiki 登記預覽<span class="lgd"><button type="button" class="lgd-btn" aria-label="圖例" aria-describedby="lgd-wiki"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+          <div class="wlegend lgd-pop" id="lgd-wiki" role="tooltip">
+        <span><i class="sw new">v</i>這次要填進去</span>
+        <span><i class="sw old">07/16</i>頁面上原本就有</span>
+        <span><i class="sw hold">留空</i>失敗或沒到,不填</span>
+        <span><i class="sw wait">待跑</i>今天還沒跑到,之後再填</span>
+        <span><i class="sw edit">07/16</i>你手動改的,寫入時一起送出</span>
+        <span><i class="sw old flag">07/11</i>值看起來不對,點一下可以改</span>
+        <span><span class="tag add">新增</span>表格原本沒有這一列</span>
+          </div></span>
+        <span class="spin" id="w-spin" hidden></span>
+        <button type="button" class="btn" id="w-go"></button></h2>
+      <div class="summary" id="w-summary"></div>
+      <div id="w-edits"></div>
+      <p class="result" id="w-result" role="status" hidden></p>
+      <div id="wikipages" style="margin-top:20px"></div>
+    </section>
+
+    <!-- 信件與連線 -->
+    <div id="v-conn" class="stack" style="gap:18px" hidden>
+      <section class="card" aria-labelledby="conn-h">
+        <h2 id="conn-h">連線狀態</h2>
+        <div class="conn" id="conn"></div>
+      </section>
+      <section class="card" aria-labelledby="mail-h">
+        <h2 id="mail-h">最近收到的信 <span class="hint">全部分類,含維運 job · 新的在前</span></h2>
         <div class="mail" id="mail"></div>
-      </details>
-    </section>
-
-    <div class="foot" id="foot"></div>
+      </section>
+    </div>
   </div>
 </div>
 <div class="tip" id="tip" hidden></div>
+<dialog class="log" id="logdlg" aria-labelledby="log-title">
+  <div class="log-in">
+    <div class="log-head"><b id="log-title"></b><span class="hint" id="log-meta"></span>
+      <button type="button" class="x" id="log-close" aria-label="關閉">✕</button></div>
+    <div class="log-body" id="log-body"></div>
+    <div class="log-foot"><span id="log-count"></span><a id="log-raw" target="_blank" rel="noopener">在新分頁開啟原始 log</a>
+      <span>草圖示意:內容依真實 log 的格式編寫</span></div>
+  </div>
+</dialog>
 
 <script>
 // ===== 真實資料(2026-10-02 由 Gmail 唯讀讀取後整理)=====
 // 每一步都有自己的 -check 信;畫面上把「步驟 + check」併成一顆點,check 也成功才算綠。
+const MAIL_START = "2026-09-29";   // 逐步通知信從這天下午才開始寄
+// 通知信附的 .log(示意;格式照真實 log:RUNDECK:DATA、job_complete、error:)
+const LOGS = {
+  "legal-backfill": { file: "014102-legal-backfill-step2-l1.log", at: "10-02 08:21", exec: 2252, lines: [
+    "RUNDECK:DATA:DOWNLOAD_DATE=20260915",
+    "2026-10-02 08:20:02 [start] legal-backfill step1-raw",
+    "2026-10-02 08:20:40 [job_complete] legal-backfill-step1-raw writes=9120 fail=0",
+    "2026-10-02 08:20:41 [start] legal-backfill step2-l1",
+    "2026-10-02 08:21:05 [l1] row 88: 13 columns, expected 14",
+    "error: L1 寫入失敗 — 欄位數不符(第 88 列:預期 14 欄,實際 13 欄)",
+    "2026-10-02 08:21:05 [job_failed] legal-backfill-step2-l1 writes=87 fail=1 exit=1",
+  ] },
+  "techreport-1001": { file: "012001-techreport-pdf-step1-raw.log", at: "10-01 02:10", exec: 2177, lines: [
+    "RUNDECK:DATA:VOL_DATE=1151001",
+    "2026-10-01 02:10:01 [start] techreport-pdf step1-raw",
+    "2026-10-01 02:10:01 [config] source=gs://s690-patent-data/tw/techreport-pdf/1151001",
+    "2026-10-01 02:10:02 [gcs] listing gs://s690-patent-data/tw/techreport-pdf/1151001 …",
+    "2026-10-01 02:10:02 [gcs] 0 objects",
+    "error: GCS 資料夾無檔案: gs://s690-patent-data/tw/techreport-pdf/1151001",
+    "2026-10-01 02:10:02 [job_failed] techreport-pdf-step1-raw exit=2",
+  ] },
+  "status-l3": { file: "011707-posted-status-step4-l3.log", at: "10-02 06:11", exec: 2241, lines: [
+    "RUNDECK:DATA:DOWNLOAD_DATE=20261001",
+    "RUNDECK:DATA:TAG=20261002",
+    "2026-10-02 06:10:03 [start] posted-status step1-raw",
+    "2026-10-02 06:10:21 [job_complete] posted-status-step1-raw writes=18422 fail=0",
+    "2026-10-02 06:10:22 [start] posted-status step2-l1",
+    "2026-10-02 06:10:47 [job_complete] posted-status-step2-l1 writes=18422 fail=0",
+    "2026-10-02 06:10:48 [start] posted-status step3-l2-classify",
+    "2026-10-02 06:10:59 [job_complete] posted-status-step3-l2-classify writes=18422 fail=0",
+    "2026-10-02 06:11:00 [start] posted-status step4-l3",
+    "2026-10-02 06:11:03 [l3] batch 1/19 ok (1,000)",
+    "2026-10-02 06:11:04 [l3] batch 2/19 …",
+    "2026-10-02 06:11:04 [l3] row 1204: APPL_DATE=\"1150931\" — 不是有效的民國日期",
+    "error: L3 轉換失敗 — APPL_DATE 欄位格式不符(第 1,204 筆:\"1150931\")",
+    "2026-10-02 06:11:04 [job_failed] posted-status-step4-l3 writes=1203 fail=1 exit=1",
+  ] },
+  "full-2414": { file: "011603-pub-fullimage-step2-l1.log", at: "09-30 14:26", exec: 2209, lines: [
+    "RUNDECK:DATA:VOL=2414",
+    "RUNDECK:DATA:TAG=20260930",
+    "2026-09-30 14:26:02 [start] pub-fullimage step1-raw",
+    "2026-09-30 14:26:31 [job_complete] pub-fullimage-step1-raw writes=1946 fail=0",
+    "2026-09-30 14:26:32 [start] pub-fullimage step2-l1",
+    "2026-09-30 14:26:40 [l1] 0422.xml ok",
+    "2026-09-30 14:26:40 [l1] 0423.xml: XML 解析錯誤,第 88 行 <claim> 沒有結束標籤",
+    "error: L1 寫入失敗 — gs://s690-patent-data/tw/pub-fullimage/1150716A15/0423.xml 解析錯誤",
+    "2026-09-30 14:26:41 [job_failed] pub-fullimage-step2-l1 writes=422 fail=1 exit=1",
+  ] },
+  "sud-2419": { file: "011205-pub-gazette-sud-step3-l3.log", at: "10-01 01:31", exec: 2188, lines: [
+    "RUNDECK:DATA:VOL=2419",
+    "RUNDECK:DATA:TAG=20261001",
+    "2026-10-01 01:30:02 [start] pub-gazette-sud step1-raw",
+    "2026-10-01 01:30:19 [job_complete] pub-gazette-sud-step1-raw writes=2632 fail=0",
+    "2026-10-01 01:30:20 [start] pub-gazette-sud step2-l1",
+    "2026-10-01 01:30:44 [job_complete] pub-gazette-sud-step2-l1 writes=2632 fail=0",
+    "2026-10-01 01:30:45 [start] pub-gazette-sud step3-l3",
+    "2026-10-01 01:31:12 [db] connection to citus-coordinator lost (timeout 30s)",
+    "error: L3 寫入失敗 — 資料庫連線逾時(citus-coordinator)",
+    "2026-10-01 01:31:12 [job_failed] pub-gazette-sud-step3-l3 writes=0 fail=2632 exit=1",
+  ] },
+};
+
+// ── 每日資轉 ──
+// wiki:每日執行項目表的 RAW / L3 / OS 對應到哪一個步驟(steps 的索引);沒有 wiki 的系統不上表
+// 依排程起跑時刻排序(同一時刻依代碼)
 const DAILY = [
+  { id: "setup", label: "建資料包", code: "010100", start: "00:01", due: "01:30", steps: ["建表"] },
   { id: "techreport", label: "技術報告", code: "012000", start: "02:10", due: "03:40",
-    steps: [["RAW", 1], ["L1", 0], ["L3", 1], ["OS", 1]] },
-  { id: "status", label: "案件狀態", code: "011700", start: "06:10", due: "07:40",
-    steps: [["RAW", 1], ["L1", 0], ["L2 分類", 0], ["L3", 1], ["OS", 1], ["L2P TWB", 0], ["L2P TWA", 0]] },
-  { id: "legal", label: "權利異動", code: "011900", start: "06:10", due: "07:40",
-    steps: [["RAW", 1], ["L1", 0], ["L2", 0], ["L2 分類", 0], ["L3", 1], ["OS", 1], ["L2P TWB", 0]] },
-  { id: "circuit", label: "積體電路佈局", code: "011800", start: "06:10", due: "07:40",
-    steps: [["RAW", 1], ["L1", 0], ["L3", 1], ["OS", 1]] },
+    steps: ["RAW", "L1", "L3", "OS"], wiki: [0, 2, 3] },
   { id: "search", label: "搜尋後續", code: "015100 · 015200", start: "04:00", due: "05:30",
-    steps: [["TWB L3", 0], ["TWB OS", 0], ["TWA L3", 0], ["TWA OS", 0]] },
-  { id: "setup", label: "建資料包", code: "010100", start: "00:01", due: "01:30", steps: [["建表", 0]] },
+    steps: ["TWB L3", "TWB OS", "TWA L3", "TWA OS"] },
+  { id: "status", label: "案件狀態", code: "011700", start: "06:10", due: "07:40",
+    steps: ["RAW", "L1", "L2 分類", "L3", "OS", "L2P TWB", "L2P TWA"], wiki: [0, 3, 4] },
+  { id: "circuit", label: "積體電路佈局", code: "011800", start: "06:10", due: "07:40",
+    steps: ["RAW", "L1", "L3", "OS"], wiki: [0, 2, 3] },
+  { id: "legal", label: "權利異動", code: "011900", start: "06:10", due: "07:40",
+    steps: ["RAW", "L1", "L2", "L2 分類", "L3", "OS", "L2P TWB"], wiki: [0, 4, 5] },
 ];
-const ALL = (st, n) => Array(n).fill(st);
-const n = (id) => DAILY.find(d => d.id === id).steps.length;
+const WIKI_DAILY_ORDER = ["status", "legal", "techreport", "circuit"];   // 每日執行項目表的欄位順序
+const ALL = (st, k) => Array(k).fill(st);
+const nSteps = (id) => DAILY.find(d => d.id === id).steps.length;
 const DAYS = {
   "2026-09-30": {
     techreport: { s: ALL("ok", 4), at: "02:10" }, status: { s: ALL("ok", 7), at: "06:10" },
     legal: { s: ALL("ok", 7), at: "06:11" }, circuit: { s: ALL("ok", 4), at: "06:10" },
-    search: { s: ALL("ok", 4), at: "04:00", note: "15:47 另有手動補跑一次,也成功" }, setup: { s: ALL("ok", 1), at: "00:01" },
+    search: { s: ALL("ok", 4), at: "04:00" }, setup: { s: ALL("ok", 1), at: "00:01" },
   },
   "2026-10-01": {
-    techreport: { s: ALL("nodata", 4), at: "02:10", soft: true, exec: 2177,
+    techreport: { s: ALL("nodata", 4), at: "02:10", soft: true, log: "techreport-1001",
                   err: "GCS 資料夾無檔案: gs://s690-patent-data/tw/techreport-pdf/1151001" },
     status: { s: ALL("ok", 7), at: "06:11" },
     legal: { s: ["ok", "missing", "missing", "missing", "missing", "missing", "missing"], at: "06:10",
@@ -294,281 +595,1070 @@ const DAYS = {
 };
 // 10-02 清晨 05:00:技術報告與搜尋已跑完,06:10 那批還沒開始
 const EARLY = Object.assign({}, DAYS["2026-10-02"]);
-for (const k of ["status", "legal", "circuit"]) EARLY[k] = { s: ALL("pending", n(k)), at: null };
+for (const k of ["status", "legal", "circuit"]) EARLY[k] = { s: ALL("pending", nSteps(k)), at: null };
+// 假造:案件狀態在 L3 失敗,後面的步驟沒有執行
+const FAILDAY = Object.assign({}, DAYS["2026-10-02"], {
+  status: { s: ["ok", "ok", "ok", "fail", "none", "none", "none"], at: "06:11", log: "status-l3", failStep: "L3",
+            err: "error: L3 轉換失敗 — APPL_DATE 欄位格式不符(第 1,204 筆:\"1150931\")",
+            after: "OS、L2P TWB、L2P TWA 因為 L3 失敗沒有執行" },
+});
 
-// 期別系統:依 log 的 VOL 分段(真實)
-const VOLSYS = [
-  { label: "全文 TWA", code: "011600", wiki: "全文頁 TWA 表", steps: ["RAW", "L1", "L2 Pending"], last: "09-30",
-    runs: [
-      { vol: "2415", of: "2026-08-01", at: "09-29 14:54", st: ["fail", "none", "none"], stale: true,
-        err: "GCS 資料夾無檔案: …/pub-fullimage/1150801A15", after: "隔天重跑已成功,不再列為警示" },
-      { vol: "2415", of: "2026-08-01", at: "09-30 14:24", st: ALL("ok", 3), writes: 2518 },
-      { vol: "2414", of: "2026-07-16", at: "09-30 14:26", st: ALL("ok", 3), writes: 1946 },
-      { vol: "2413", of: "2026-07-01", at: "09-30 14:28", st: ALL("ok", 3), writes: 3175 },
-    ] },
-  { label: "全文 TWB", code: "0115xx", wiki: "全文頁 TWB 表", steps: ["RAW", "L1", "L2 Pending"], last: "—", runs: [] },
-  { label: "書目 TWB", code: "010200", wiki: "書目頁 TWB 表", steps: ["RAW", "L1", "Industry", "L2 Pending"], last: "10-01",
-    runs: [
-      { vol: "5328", of: "2026-10-01", at: "RAW 09-30 14:31 · 其餘 10-01 00:30", st: ALL("ok", 4), writes: 1640 },
-      { vol: "5211", of: "2025-04-11", at: "09-30 15:38", st: ["ok", "none", "none", "none"], writes: 1819, note: "手動補跑舊期,只跑了 RAW" },
-    ] },
-  { label: "書目 TWA", code: "010300", wiki: "書目頁 TWA 表", steps: ["RAW", "L1", "Industry", "L2 Pending"], last: "10-01",
-    runs: [ { vol: "2419", of: "2026-10-01", at: "RAW 09-30 14:32 · 其餘 10-01 00:30", st: ALL("ok", 4), writes: 2384 } ] },
-  { label: "雜項 TWB", code: "011100", wiki: null, steps: ["RAW", "L1", "L3", "OS", "L2 Pending"], last: "10-01",
-    runs: [ { vol: "5328", of: "2026-10-01", at: "10-01 01:30", st: ALL("ok", 5), writes: 3561 } ] },
-  { label: "雜項 TWA", code: "011200", wiki: null, steps: ["RAW", "L1", "L3", "OS", "L2 Pending"], last: "10-01",
-    runs: [ { vol: "2419", of: "2026-10-01", at: "10-01 01:30", st: ALL("ok", 5), writes: 2632 } ] },
-  { label: "英譯 公告 · 公開", code: "011300 · 011400", wiki: null, steps: ["RAW"], last: "09-30",
-    runs: [ { vol: "5325–5327", of: null, at: "09-30 01:00", st: ["nodata"], err: "GCS 資料夾無檔案(公告英譯)" },
-            { vol: "2417–2418", of: null, at: "09-30 01:00", st: ["nodata"], err: "GCS 資料夾無檔案(公開英譯)" } ] },
+// ── TWA / TWB:資料種類 × 公告期數 ──
+// cols 由新到舊;sched 是排程起跑時刻(null = 不定期);spans 是一次涵蓋好幾期的執行(英譯)
+// wiki:這種資料登記在哪一頁、哪幾欄(步驟索引 → 欄名);row = 頁面上原本那一列的值(null = 表格沒有這一列)
+const OK = (k) => ALL("ok", k);
+// track:追蹤最近一個月 = TWA 每月 2 期、TWB 每月 3 期。更早的期只有在近一個月內收到它的信(補跑)時,才列在「更早的期」
+const PERIOD = {
+  twa: {
+    code: "TWA", label: "TWA 公開", track: 2,
+    cols: [[2420, "2026-10-16"], [2419, "2026-10-01"], [2418, "2026-09-16"], [2417, "2026-09-01"]],
+    types: [
+      { id: "full", label: "公開全文", code: "011600", sched: null, schedText: "不定期(手動)",
+        steps: ["RAW", "L1", "L2 Pending"],
+        runs: {
+          2415: { st: OK(3), of: "2026-08-01", at: "09-30 14:24", recv: "09-30 14:24", writes: 2518, tag: "20260930", runs: 2,
+                  history: "09-29 14:54 第一次執行:RAW 失敗,GCS 資料夾無檔案: …/pub-fullimage/1150801A15。隔天補上資料重跑成功,以最後一次為準。" },
+          2414: { st: OK(3), of: "2026-07-16", at: "09-30 14:26", recv: "09-30 14:26", writes: 1946, tag: "20260930" },
+          2413: { st: OK(3), of: "2026-07-01", at: "09-30 14:28", recv: "09-30 14:28", writes: 3175, tag: "20260930" },
+        } },
+      { id: "biblio", label: "書目", code: "010300", sched: "00:30", due: "02:00", schedText: "每月 1、16 日",
+        steps: ["RAW", "L1", "Industry", "L2 Pending"],
+        runs: {
+          2419: { st: OK(4), of: "2026-10-01", at: "RAW 09-30 14:32 · 其餘 10-01 00:30", recv: "10-01 00:30", writes: 2384, tag: "20261001" },
+        } },
+      { id: "sud", label: "雜項", code: "011200", sched: "01:30", due: "03:00", schedText: "每月 1、16 日",
+        steps: ["RAW", "L1", "L3", "OS", "L2 Pending"],
+        runs: { 2419: { st: OK(5), of: "2026-10-01", at: "10-01 01:30", recv: "10-01 01:30", writes: 2632 } } },
+      { id: "eng", label: "英譯", code: "011400", sched: null, schedText: "不定期",
+        steps: ["RAW"], wikiNone: "英譯頁這版不寫入,只上儀表板",
+        spans: [ { lo: 2417, hi: 2418, st: ["nodata"], at: "09-30 01:00", recv: "09-30 01:00", soft: true,
+                   err: "GCS 資料夾無檔案(公開英譯)", note: "一次執行涵蓋兩期;當期英譯檔還沒到" } ] },
+    ],
+  },
+  twb: {
+    code: "TWB", label: "TWB 公告", track: 3,
+    cols: [[5329, "2026-10-11"], [5328, "2026-10-01"], [5327, "2026-09-21"], [5326, "2026-09-11"], [5325, "2026-09-01"]],
+    types: [
+      { id: "full", label: "公告全文", code: "0115xx", sched: null, schedText: "不定期(手動)", never: true,
+        steps: ["RAW", "L1", "L2 Pending"],
+        runs: {} },
+      { id: "biblio", label: "書目", code: "010200", sched: "00:30", due: "02:00", schedText: "每月 1、11、21 日",
+        steps: ["RAW", "L1", "Industry", "L2 Pending"],
+        runs: {
+          5328: { st: OK(4), of: "2026-10-01", at: "RAW 09-30 14:31 · 其餘 10-01 00:30", recv: "10-01 00:30", writes: 1640, tag: "20261001" },
+          5211: { st: ["ok", "none", "none", "none"], of: "2025-04-11", at: "09-30 15:38", recv: "09-30 15:38", writes: 1819,
+                  note: "手動補跑舊期,只跑了 RAW", tooOld: "比表格最舊的 5315 還舊,不插入" },
+        } },
+      { id: "sud", label: "雜項", code: "011100", sched: "01:30", due: "03:00", schedText: "每月 1、11、21 日",
+        steps: ["RAW", "L1", "L3", "OS", "L2 Pending"],
+        runs: { 5328: { st: OK(5), of: "2026-10-01", at: "10-01 01:30", recv: "10-01 01:30", writes: 3561 } } },
+      { id: "eng", label: "英譯", code: "011300", sched: null, schedText: "不定期",
+        steps: ["RAW"], wikiNone: "英譯頁這版不寫入,只上儀表板",
+        spans: [ { lo: 5325, hi: 5327, st: ["nodata"], at: "09-30 01:00", recv: "09-30 01:00", soft: true,
+                   err: "GCS 資料夾無檔案(公告英譯)", note: "一次執行涵蓋三期;當期英譯檔還沒到" } ] },
+    ],
+  },
+};
+// 假造:TWA 公開全文 2414(補跑的舊期)在 L1 失敗;TWA 雜項 2419 在 L3 失敗
+const FAIL_RUNS = {
+  "twa|sud|2419": { st: ["ok", "ok", "fail", "none", "none"], of: "2026-10-01", at: "10-01 01:31", recv: "10-01 01:31", log: "sud-2419",
+                    failStep: "L3", err: "error: L3 寫入失敗 — 資料庫連線逾時(citus-coordinator)", after: "OS、L2 Pending 因為 L3 失敗沒有執行" },
+  "twa|full|2414": { st: ["ok", "fail", "none"], of: "2026-07-16", at: "09-30 14:26", recv: "09-30 14:26", tag: "20260930", log: "full-2414",
+                     failStep: "L1", err: "error: L1 寫入失敗 — gs://s690-patent-data/tw/pub-fullimage/1150716A15/0423.xml 解析錯誤",
+                     after: "L2 Pending 因為 L1 失敗沒有執行" },
+};
+
+// ── Wiki 的表 ──
+// 頁面上原本的列(2026-10-01 讀到的內容,只列這次會碰到的期);null = 表格沒有這一列
+const WIKI_ROWS = {
+  "TW全文Full|TWA": { 2415: null, 2414: { date: "07/11", tag: "2026xxxx" }, 2413: { tag: "2026xxxx" } },
+  "TW書目Biblio及雜項|TWA": { 2419: { tag: "20261001", Biblio: "2384" } },
+  "TW書目Biblio及雜項|TWB": { 5328: { tag: "20261001", Biblio: "1640" } },
+};
+// 期別表的每一欄來自哪種資料的哪一步;value "v" 打勾、"writes" 填 L1 的寫入筆數
+const WIKI_TABLES = [
+  { page: "TW全文Full", pid: 8441, omit: "備註", cols: [
+      { type: "full", step: 0, name: "RAW", value: "v" }, { type: "full", step: 1, name: "L1", value: "v" },
+      { type: "full", step: 2, name: "L2 Pending", value: "v" } ] },
+  { page: "TW書目Biblio及雜項", pid: 8354, omit: "備註", cols: [
+      { type: "biblio", step: 1, name: "Biblio", value: "writes" }, { type: "sud", step: 1, name: "Gazette SUD", value: "writes" } ] },
 ];
+const PLACEHOLDER = /^\d{4}x{4}$/;
 
-// 最近的信(真實主旨,節錄)
+// 最近的信(真實主旨,節錄);第 5 欄是附的 log
+
 const MAIL = [
   ["10-02 06:30", "ok", "990107-pg-restore-point", "維運"], ["10-02 06:30", "ok", "990607-citus-restore-point", "維運"],
-  ["10-02 06:11", "ok", "011900-posted-legal-auto", "權利異動"], ["10-02 06:11", "ok", "011700-posted-status-auto", "案件狀態"],
-  ["10-02 06:10", "ok", "011800-posted-circuit-auto", "積體電路佈局"], ["10-02 05:01", "ok", "990606-citus-backup-incr", "維運"],
+  ["10-02 06:11", "ok", "011900-posted-legal-auto", "每日 · 權利異動"], ["10-02 06:11", "ok", "011700-posted-status-auto", "每日 · 案件狀態"],
+  ["10-02 06:10", "ok", "011800-posted-circuit-auto", "每日 · 積體電路佈局"], ["10-02 05:01", "ok", "990606-citus-backup-incr", "維運"],
   ["10-02 05:00", "ok", "990106-pg-backup-incr", "維運"], ["10-02 05:00", "ok", "990704-os-snapshot", "維運"],
-  ["10-02 04:00", "ok", "015200-search-twa-auto", "搜尋後續"], ["10-02 04:00", "ok", "015100-search-twb-auto", "搜尋後續"],
-  ["10-02 03:00", "ok", "990201-mailer-files-clean", "維運"], ["10-02 02:10", "ok", "012000-techreport-pdf-auto", "技術報告"],
-  ["10-01 06:11", "ok", "011700-posted-status-auto", "案件狀態"], ["10-01 06:10", "ok", "011800-posted-circuit-auto", "積體電路佈局"],
-  ["10-01 06:10", "ok", "011902-posted-legal-step1-raw-check", "權利異動(之後就沒有信了)"],
-  ["10-01 02:10", "fail", "012000-techreport-pdf-auto", "技術報告"], ["10-01 02:10", "fail", "012001-techreport-pdf-step1-raw", "技術報告"],
-  ["10-01 01:30", "ok", "011100-gazette-sud-auto", "雜項 TWB"], ["10-01 00:30", "ok", "010200-gazette-biblio-auto", "書目 TWB"],
+  ["10-02 04:00", "ok", "015200-search-twa-auto", "每日 · 搜尋後續"], ["10-02 04:00", "ok", "015100-search-twb-auto", "每日 · 搜尋後續"],
+  ["10-02 03:00", "ok", "990201-mailer-files-clean", "維運"], ["10-02 02:10", "ok", "012000-techreport-pdf-auto", "每日 · 技術報告"],
+  ["10-01 06:11", "ok", "011700-posted-status-auto", "每日 · 案件狀態"], ["10-01 06:10", "ok", "011800-posted-circuit-auto", "每日 · 積體電路佈局"],
+  ["10-01 06:10", "ok", "011902-posted-legal-step1-raw-check", "每日 · 權利異動(之後就沒有信了)"],
+  ["10-01 02:10", "fail", "012000-techreport-pdf-auto", "每日 · 技術報告"], ["10-01 02:10", "fail", "012001-techreport-pdf-step1-raw", "每日 · 技術報告", "techreport-1001"],
+  ["10-01 01:30", "ok", "011100-gazette-sud-auto", "TWB · 雜項"], ["10-01 00:30", "ok", "010200-gazette-biblio-auto", "TWB · 書目"],
+];
+const FAIL_MAIL = [
+  ["10-01 01:31", "fail", "011205-pub-gazette-sud-step3-l3", "TWA · 雜項", "sud-2419"],
+  ["09-30 14:26", "fail", "011603-pub-fullimage-step2-l1", "TWA · 公開全文", "full-2414"],
+  ["10-02 06:11", "fail", "011700-posted-status-auto", "每日 · 案件狀態"],
+  ["10-02 06:11", "fail", "011707-posted-status-step4-l3", "每日 · 案件狀態", "status-l3"],
 ];
 
-// Wiki 預計改動(以 2026-10-01 讀到的頁面內容推算)
-const WIKI = [
-  { pg: "每日執行項目", what: "新增 2026/10/02 一列:技術報告、案件狀態、權利異動、積體電路的 RAW / L3 / OS 共 12 格打 v", kind: "add", tag: "新增 1 列" },
-  { pg: "每日執行項目", what: "新增 2026/10/01 一列:技術報告 3 格打 v(無資料也算完成)、案件狀態 3 格、積體電路 3 格;權利異動只打 RAW,L3 / OS 留空等人處理", kind: "add", tag: "新增 1 列", oct1: true },
-  { pg: "每日執行項目", what: "新增 2026/09/30 一列:四個系統 12 格打 v", kind: "add", tag: "新增 1 列" },
-  { pg: "TW全文 · TWA", what: "公告期數 2415:表格沒有這一列,新增(資料日期 20260801、日期 08/01),RAW / L1 / L2 Pending 打 v、TAG 20260930", kind: "add", tag: "新增 1 列" },
-  { pg: "TW全文 · TWA", what: "公告期數 2414、2413:RAW / L1 / L2 Pending 打 v,TAG 由 2026xxxx 改成 20260930", kind: "add", tag: "填 8 格" },
-  { pg: "TW書目 · TWB", what: "公告期數 5328:TAG 20261001、Biblio 1640 跟頁面上的值一樣", kind: "skip", tag: "不用改" },
-  { pg: "TW書目 · TWB", what: "公告期數 5211(2025-04-11 那期)比表格最舊的 5315 還舊,不插入", kind: "skip", tag: "略過" },
-  { pg: "TW書目 · TWA", what: "公告期數 2419:TAG 20261001、Biblio 2384 跟頁面上的值一樣", kind: "skip", tag: "不用改" },
+// ── 其他作業 ──
+// 維運 99xxxx:每天跑(時刻取自真實的信),只列最後一次
+const MAINT = [
+  { code: "990201", name: "mailer-files-clean", at: "03:00" }, { code: "990106", name: "pg-backup-incr", at: "05:00" },
+  { code: "990704", name: "os-snapshot", at: "05:00" }, { code: "990606", name: "citus-backup-incr", at: "05:01" },
+  { code: "990107", name: "pg-restore-point", at: "06:30" }, { code: "990607", name: "citus-restore-point", at: "06:30" },
+];
+// 不在清單上的作業(假造的示意):步驟取自信件主旨的後半段,DATA 取自 log 的 RUNDECK:DATA
+const ADHOC = [
+  { code: "013500", name: "pub-fullimage-reindex", group: "01-tw/90-manual", day: "2026-09-30", at: "16:05",
+    steps: [["step1-reindex", "ok"], ["step2-os-sync", "ok"]], data: "VOL=2410 · TAG=20260930", writes: 3021 },
+  { code: "014100", name: "legal-backfill", group: "01-tw/90-manual", day: "2026-10-02", at: "08:20", failOnly: true,
+    steps: [["step1-raw", "ok"], ["step2-l1", "fail"], ["step3-l3", "none"]], data: "DOWNLOAD_DATE=20260915",
+    failStep: "step2-l1", err: "error: L1 寫入失敗 — 欄位數不符(第 88 列:預期 14 欄,實際 13 欄)", log: "legal-backfill",
+    after: "step3-l3 因為 step2-l1 失敗沒有執行" },
 ];
 
 // ===== 畫面 =====
 const $ = (id) => document.getElementById(id);
-const LABEL = { ok: "成功", nodata: "無資料", fail: "失敗", missing: "該到沒到", pending: "等待中", unknown: "無法判定", none: "沒有執行" };
+const LABEL = { ok: "成功", nodata: "無資料", fail: "失敗", missing: "該到沒到", pending: "今天還沒跑到", unknown: "無法判定", none: "沒有執行" };
 const RANK = ["fail", "missing", "unknown", "pending", "nodata", "ok"];
+const BAD = ["fail", "missing", "unknown"];
 const worst = (arr) => RANK.find(r => arr.includes(r)) || "none";
+const mmdd = (iso) => iso.slice(5).replace("-", "/");
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   if (text != null) e.textContent = text;
   return e;
 }
-function dot(state, tip) {
+function dot(state, tip, selKey) {
   const b = el("button", "dotbtn");
   b.type = "button";
   b.setAttribute("aria-label", tip.replace(/\n/g, ","));
   b.dataset.tip = tip;
+  if (selKey) { b.dataset.sel = selKey; b.setAttribute("aria-pressed", String(isSel(selKey))); }
   b.appendChild(el("i", "dot " + state));
   return b;
 }
-
-const SCEN = {
-  now:   { today: "2026-10-02", clock: "09:12", data: DAYS["2026-10-02"], mb: "1.3 MB",
-           note: "10-02 上午:六個每日系統都跑完了,畫面一片綠,頁籤上沒有警示。這是平常最常看到的樣子。" },
-  early: { today: "2026-10-02", clock: "05:00", data: EARLY, mb: "0.4 MB",
-           note: "10-02 清晨 05:00:技術報告與搜尋已經跑完;案件狀態、權利異動、積體電路 06:10 才開始,顯示「等待中」,不算警示。過了 07:40 還沒收到信,才會變成「該到沒到」。" },
-  oct1:  { today: "2026-10-01", clock: "09:12", data: DAYS["2026-10-01"], mb: "1.1 MB",
-           note: "10-01 的真實狀況。技術報告當天沒有新檔,顯示「無資料」並視為完成。權利異動跑完 RAW 之後就沒有下文,也沒有任何失敗信,所以畫面要靠「該到沒到」把它抓出來。" },
-  auth:  { today: "2026-10-02", clock: "09:12", data: DAYS["2026-10-02"], mb: "—", auth: true,
-           note: "假造的情境:Gmail 授權過期或被收回。畫面保留最後一次抓到的資料,用紅色橫幅說明資料已經過時、要怎麼修好。" },
-};
-let cur = "now";
-
-function renderBanners(sc, alerts) {
-  const box = $("banners");
+function stats(box, rows) {
   box.replaceChildren();
-  if (sc.auth) {
-    const b = el("div", "banner banner-danger");
-    b.append(el("b", null, "Gmail 授權已失效,下面是 10-02 08:40 最後抓到的資料。"),
-             el("span", null, "到 flow_check 資料夾雙擊「690授權.bat」,用 alicia.huang@innovue.ltd 重新登入,完成後按「立即更新」。"));
-    box.append(b);
-  }
-  if (alerts.length) {
-    const b = el("div", "banner banner-warn");
-    b.append(el("b", null, `有 ${alerts.length} 件需要處理`));
-    for (const a of alerts) b.append(el("span", null, "・" + a));
-    box.append(b);
+  for (const [k, v, c, small] of rows) {
+    const s = el("div", "stat");
+    const vv = el("div", "v " + (c || ""), v);
+    if (small) vv.append(el("small", null, small));
+    s.append(el("div", "k", k), vv);
+    box.append(s);
   }
 }
+// 失敗的狀態文字:直接連到那封信附的 log;錯誤訊息放在提示裡
+function stateEl(tag, state, r) {
+  const box = el(tag, "state" + (BAD.includes(state) ? " bad" : ""));
+  const word = state === "nodata" && tag === "span" ? "無檔案" : LABEL[state];
+  if (state !== "fail" || !r.log) { box.textContent = word; return box; }
+  const b = el("button", "faillink", word);
+  b.type = "button";
+  b.append(el("span", "lg", "log"));
+  b.dataset.tip = [r.failStep && `${r.failStep} 失敗`, r.err, r.after, "點一下看 log"].filter(Boolean).join("\n");
+  b.setAttribute("aria-label", `${r.failStep || ""} 失敗,看 log`);
+  b.addEventListener("click", () => openLog(r.log));
+  box.append(b);
+  return box;
+}
+// 無資料 / 缺信的說明框(失敗不出框,錯誤訊息在失敗文字的提示裡)
+function errBox(r) {
+  const de = el("div", "detail " + (r.soft ? "soft" : "bad"));
+  if (r.failStep) de.append(el("span", "lead", `${r.failStep} 失敗`));
+  de.append(el("code", null, r.err));
+  if (r.log) {
+    const b = el("button", "logbtn", "查看 log");
+    b.type = "button";
+    b.addEventListener("click", () => openLog(r.log));
+    de.append(b);
+  }
+  if (r.after) de.append(el("span", "full", r.after));
+  if (r.soft && !r.failStep) de.append(el("span", null, "當天沒有新檔,視為完成,wiki 照樣打 v"));
+  return de;
+}
 
-function renderToday() {
+const SCEN = {
+  now:   { today: "2026-10-02", clock: "09:12",
+           note: "10-02 上午:六個每日系統都跑完了,沒有警示。TWA / TWB 只追蹤最近一個月的期;09-30 補跑的全文 2413–2415、書目 5211 列在「更早的期」。書目頁的 Biblio、Gazette SUD 都填 L1 寫入筆數:2419、5328 的 Biblio 頁面上已經有人填(灰字;從 log 抓到的 L1 寫入筆數跟它一致),所以這次只填 Gazette SUD;之後的新期兩欄會一起填。到「Wiki 登記」點全文 TWA 2414 那列的日期 07/11(波浪底線),可以試著改成 07/16。「其他作業」有一筆 09-30 手動跑的重建索引(示意)和每天的維運 job。" },
+  fail:  { today: "2026-10-02", clock: "09:12", fail: true,
+           note: "假造的情境:案件狀態今天在 L3 失敗;TWA 雜項 2419 在 L3 失敗;TWA 公開全文 2414(補跑的舊期)在 L1 失敗。看分類上的紅色數字、每日資轉案件狀態的「失敗」連結(點了直接看 log)、TWA 表格的紅點和「更早的期」,以及 Wiki 預覽裡留空的紅框格。另外 08:20 有一個不在清單上的手動作業 014100-legal-backfill 在 L1 失敗,列在「其他作業」,分類上一樣會有紅色數字。" },
+  early: { today: "2026-10-02", clock: "05:00",
+           note: "10-02 清晨 05:00:Wiki 還沒有人登入,Wiki 登記頁的寫入按鈕顯示「Wiki 還沒登入」,到那裡按「登入 Wiki」後就能寫入。技術報告與搜尋已經跑完;案件狀態、權利異動、積體電路 06:10 才開始,顯示「今天還沒跑到」,不算警示。過了 07:40 還沒收到信,才會變成「該到沒到」。" },
+  oct1:  { today: "2026-10-01", clock: "09:12",
+           note: "10-01 的真實狀況。權利異動跑完 RAW 之後就沒有下文,也沒有任何失敗信,靠「該到沒到」抓出來(沒有失敗信,所以也沒有 log 可看)。技術報告當天沒有新檔,顯示「無資料」並視為完成,可以點「查看 log」看原因。" },
+  auth:  { today: "2026-10-02", clock: "09:12", auth: true,
+           note: "假造的情境:Gmail 授權過期,Wiki 上次登入也失敗。上方的「最後更新」停在 08:40,後面用紅字寫抓信失敗,按「立即更新」會顯示失敗;點主頁籤「信件與連線」(⚠)看兩邊的狀態和修法;Wiki 卡片有「重新登入」按鈕(這個情境按了還是會失敗);Wiki 登記頁的寫入按鈕這時會帶你去信件與連線。" },
+};
+let cur = "now";
+let view = "daily";
+const sel = { twa: null, twb: null };
+function splitSel(k) { const i = k.indexOf("|"); return [k.slice(0, i), k.slice(i + 1)]; }
+const isSel = (k) => { const [v, rest] = splitSel(k); return sel[v] === rest; };
+
+function dayData(iso) {
+  if (cur === "early" && iso === "2026-10-02") return EARLY;
+  if (cur === "fail" && iso === "2026-10-02") return FAILDAY;
+  return DAYS[iso];
+}
+
+// ── 期別資料的查找 ──
+function runAt(v, t, vol) {
+  if (SCEN[cur].fail && FAIL_RUNS[`${v}|${t.id}|${vol}`]) return FAIL_RUNS[`${v}|${t.id}|${vol}`];
+  return (t.runs || {})[vol];
+}
+function runsOf(v, t) {   // [key, run],新的期在前
+  const keys = Object.keys(t.runs || {}).sort((a, b) => b - a);
+  return [...keys.map(k => [k, runAt(v, t, k)]),
+          ...(t.spans || []).map(s => [`${s.lo}-${s.hi}`, s])];
+}
+function runOf(v, t, k) {
+  if (k.includes("-")) return (t.spans || []).find(s => `${s.lo}-${s.hi}` === k);
+  return runAt(v, t, k);
+}
+// 不在追蹤範圍(最近一個月)內、但近一個月內有執行過的舊期
+function olderOf(v, t) {
+  const min = Math.min(...colsOf(v).map(c => c.vol));
+  return Object.keys(t.runs || {}).filter(k => +k < min).sort((a, b) => b - a).map(k => [k, runAt(v, t, k)]);
+}
+const runState = (r) => worst(r.st.filter(x => x !== "none"));
+// 只列今天以前、而且最舊到「有紀錄的最舊一期」的期數;還沒到的期不列
+// 最近一個月的期數(今天以前、最新的 track 期);還沒到的期不列
+function colsOf(v) {
+  const today = SCEN[cur].today;
+  return PERIOD[v].cols.map(([vol, iso]) => ({ vol, iso })).filter(c => c.iso <= today).slice(0, PERIOD[v].track);
+}
+function periodCell(v, t, col) {
   const sc = SCEN[cur];
-  $("today-date").textContent = `${sc.today} · 現在 ${sc.clock}`;
+  const head = `${PERIOD[v].code} ${t.label} · VOL ${col.vol}(${col.iso} 那期)`;
+  const r = runAt(v, t, col.vol);
+  if (r) {
+    const s = runState(r);
+    const lines = [head, `${LABEL[s]},${r.at} 收到`];
+    if (r.failStep) lines.push(`${r.failStep} 失敗`);
+    if (r.writes) lines.push(`寫入 ${r.writes.toLocaleString()} 筆`);
+    if (r.runs > 1) lines.push(`共執行 ${r.runs} 次,以最後一次為準`);
+    return { s, tip: lines.join("\n"), key: `${v}|${t.id}|${col.vol}`, err: r.failStep ? `${r.failStep} 失敗` : null };
+  }
+  if (!t.sched) return { s: "none", tip: `${head}\n${t.never ? "還沒收到過這個系統的信" : "不定期,這期沒有執行過"}` };
+  if (col.iso < MAIL_START) return { s: "none", tip: `${head}\n通知信 09-29 起才有,這期沒有紀錄` };
+  if (col.iso === sc.today && sc.clock < t.due) return { s: "pending", tip: `${head}\n${t.sched} 開始,還沒收到信` };
+  return { s: "missing", tip: `${head}\n過了 ${t.due} 還沒收到信`, err: `過了 ${t.due} 還沒收到信` };
+}
+
+// ── 警示:全部分類一起算,分類列的數字和頁籤的 ⚠ 都從這裡來 ──
+function collectAlerts() {
+  const sc = SCEN[cur];
+  const out = [];
+  const today = dayData(sc.today);
+  for (const d of DAILY) {
+    const r = today[d.id];
+    if (BAD.includes(worst(r.s))) {
+      out.push({ view: "daily", where: `每日 · ${d.label}`,
+                 text: r.failStep ? `${r.failStep} 失敗` : (r.err || `過了 ${d.due} 還沒收到信`) });
+    }
+  }
+  for (const v of ["twa", "twb"]) {
+    for (const t of PERIOD[v].types) {
+      for (const col of colsOf(v)) {
+        const c = periodCell(v, t, col);
+        if (BAD.includes(c.s)) out.push({ view: v, key: c.key, where: `${PERIOD[v].code} · ${t.label} VOL ${col.vol}`, text: c.err });
+      }
+      for (const [k, r] of olderOf(v, t)) {
+        if (BAD.includes(runState(r))) out.push({ view: v, key: `${v}|${t.id}|${k}`, where: `${PERIOD[v].code} · ${t.label} VOL ${k}(補跑的舊期)`,
+                                                  text: r.failStep ? `${r.failStep} 失敗` : LABEL[runState(r)] });
+      }
+    }
+  }
+  for (const a of adhocRuns()) {
+    if (a.failStep) out.push({ view: "adhoc", where: `其他作業 · ${a.code}-${a.name}`, text: `${a.failStep} 失敗` });
+  }
+  return out;
+}
+
+// ── Wiki 預覽:把每頁每張表「會改到的列」整理成填好的樣子 ──
+// 格子:{v, k} k ∈ new(這次填)/ old(原本就有)/ swap(佔位字換成新值)/ hold(失敗或沒到,留空)/ wait(今天還沒跑到)
+function cellFor(state, value, why) {
+  if (state === "ok" || state === "nodata") return { v: value, k: "new" };
+  if (state === "pending") return { v: "待跑", k: "wait", tip: "今天還沒跑到,跑完以後再填" };
+  return { v: "留空", k: "hold", tip: why || `${LABEL[state]},這格不填` };
+}
+// 手動修改:edits 是還沒寫入的,writtenEdits 是已經寫入的(草圖示意)。key = 列的 key + "|" + 欄的序號
+const baseVal = (c) => c.k === "edit" ? baseVal(c.base) : (c.k === "hold" || c.k === "wait") ? "" : c.v;
+function applyEdits(row) {
+  row.cells = row.cells.map((c, i) => {
+    const ek = `${row.key}|${i}`;
+    if (ek in writtenEdits) c = { v: writtenEdits[ek], k: "old" };
+    if (!(ek in edits)) return c;
+    const was = baseVal(c);
+    const overwrite = c.k === "old" && !!c.v;
+    return { v: edits[ek], k: "edit", base: c, was, overwrite,
+             tip: `你改的,原本 ${was || "(空白)"}${overwrite ? "\n這是頁面上人填的值,寫入時會覆寫" : ""}` };
+  });
+  return row;
+}
+function wikiPlan() {
+  const sc = SCEN[cur];
+  // 每日執行項目:有收到信的每一天都會是一列(頁面從 2026/08/28 之後就沒人更新,所以都是新增)
+  const dates = Object.keys(DAYS).filter(d => d <= sc.today).sort().reverse();
+  let daily = dates.map(iso => {
+    const data = dayData(iso);
+    const cells = [];
+    for (const id of WIKI_DAILY_ORDER) {
+      const d = DAILY.find(x => x.id === id);
+      const r = data[id];
+      for (const i of d.wiki) {
+        const why = r.s[i] === "none" ? "前一步失敗,這步沒有執行,留空" : null;
+        cells.push(cellFor(r.s[i], "v", why));
+      }
+    }
+    return applyEdits({ key: `daily|${iso}`, label: iso.replaceAll("-", "/"), isNew: true, cells, grp: [0, 3, 6, 9] });
+  });
+  // 全文 / 書目:每張表一期一列;書目頁的一列同時有書目(Biblio)和雜項(Gazette SUD)
+  const tables = [];
+  for (const T of WIKI_TABLES) {
+    for (const v of ["twa", "twb"]) {
+      const code = PERIOD[v].code, id = `${T.page}|${code}`;
+      const tb = { page: T.page, pid: T.pid, omit: T.omit, code, v, cols: T.cols, rows: [], same: [], skipped: [] };
+      tables.push(tb);
+      const byVol = new Map();
+      for (const tid of new Set(T.cols.map(c => c.type))) {
+        const t = PERIOD[v].types.find(x => x.id === tid);
+        for (const [k, r] of runsOf(v, t)) {
+          if (k.includes("-")) continue;
+          if (!byVol.has(k)) byVol.set(k, {});
+          byVol.get(k)[tid] = r;
+        }
+      }
+      for (const k of [...byVol.keys()].sort((a, b) => b - a)) {
+        const runs = byVol.get(k);
+        const any = Object.values(runs)[0];
+        if (any.tooOld) { tb.skipped.push(`${k}(${any.of} 那期)${any.tooOld}`); continue; }
+        const page = (WIKI_ROWS[id] || {})[k];
+        const isNew = page === null;
+        const old = page || {};
+        const cells = [];
+        const ymd = any.of.replaceAll("-", "");
+        cells.push({ v: ymd, k: isNew ? "new" : "old" });
+        const dd = old.date || mmdd(any.of);
+        cells.push({ v: dd, k: isNew ? "new" : "old",
+                     flag: !!(old.date && old.date !== mmdd(any.of)),
+                     tip: old.date && old.date !== mmdd(any.of) ? `頁面上寫 ${old.date},照期數應該是 ${mmdd(any.of)}。程式不會自動改人填的值` : null });
+        const tag = Object.values(runs).map(r => r.tag).find(Boolean);
+        if (old.tag && !PLACEHOLDER.test(old.tag)) cells.push({ v: old.tag, k: "old" });
+        else if (old.tag) cells.push({ v: tag, k: "swap", was: old.tag });
+        else cells.push(tag ? { v: tag, k: "new" } : { v: "", k: "old" });
+        for (const c of T.cols) {
+          const r = runs[c.type];
+          if (old[c.name]) {
+            // 筆數欄頁面上已經有人填的值:先從 log 抓 L1 寫入筆數,再跟人填的值比對;不一樣就標出來(不自動改人填的值)
+            const log = c.value === "writes" && r && runState(r) === "ok" ? String(r.writes) : null;
+            const diff = log && log !== old[c.name];
+            cells.push({ v: old[c.name], k: "old", flag: diff,
+                         tip: !log ? null : diff ? `log 的 L1 寫入筆數是 ${log},頁面上人填 ${old[c.name]},不一致。程式不會自動改人填的值,要改就點這格`
+                                                 : `log 的 L1 寫入筆數是 ${log},頁面上人填 ${old[c.name]},一致` });
+            continue;
+          }
+          if (!r) { cells.push({ v: "", k: "old", tip: "這期沒有收到這種資料的信" }); continue; }
+          if (c.value === "v") {
+            cells.push(cellFor(r.st[c.step], "v", r.st[c.step] === "none" ? "前一步失敗,這步沒有執行,留空" : null));
+            continue;
+          }
+          // 筆數:整期每一步都成功才填,避免填了沒跑完的數字
+          const st = runState(r);
+          if (st === "ok") cells.push({ v: String(r.writes), k: "new", tip: `${c.name} = L1 寫入筆數` });
+          else if (st === "pending") cells.push({ v: "待跑", k: "wait", tip: "還沒跑完,跑完以後再填" });
+          else cells.push({ v: "留空", k: "hold", tip: r.failStep ? `${r.failStep} 失敗,整期沒跑完,筆數先不填` : `${LABEL[st]},筆數先不填` });
+        }
+        const row = applyEdits({ key: `${v}|${T.page}|${k}`, vol: k, label: k, isNew, cells });
+        if (row.cells.some(c => ["new", "swap", "hold", "wait", "edit"].includes(c.k) || c.flag)) tb.rows.push(row);
+        else tb.same.push(k);
+      }
+    }
+  }
+  // 草圖示意:按過「寫入 Wiki」之後,填進去的格就是頁面上原本有的值;只剩留空 / 待跑的列
+  if (written) {
+    const settle = (r) => {
+      r.cells = r.cells.map(c => (c.k === "new" || c.k === "swap") ? { v: c.v, k: "old" } : c);
+      r.isNew = false;
+      return r.cells.some(c => c.k === "hold" || c.k === "wait" || c.k === "edit" || c.flag);
+    };
+    daily = daily.filter(settle);
+    for (const tb of tables) {
+      const keep = [];
+      for (const r of tb.rows) { if (settle(r)) keep.push(r); else tb.same.push(r.vol); }
+      tb.rows = keep;
+    }
+  }
+  return { daily, tables };
+}
+function planCounts(plan) {
+  const all = [...plan.daily.map(r => ["每日執行項目", r]), ...plan.tables.flatMap(t => t.rows.map(r => [t.page, r]))];
+  const n = (r, f) => r.cells.filter(f).length;
+  const fillOf = (r) => n(r, c => c.k === "new" || c.k === "swap");
+  const todo = all.filter(([, r]) => fillOf(r) || n(r, c => c.k === "edit"));
+  const sum = (f) => all.reduce((a, [, r]) => a + n(r, f), 0);
+  return {
+    pages: new Set(todo.map(([pg]) => pg)).size, rows: todo.length,
+    added: all.filter(([, r]) => r.isNew).length,
+    fill: all.reduce((a, [, r]) => a + fillOf(r), 0),
+    hold: sum(c => c.k === "hold"),
+    edit: sum(c => c.k === "edit"), overwrite: sum(c => c.k === "edit" && c.overwrite),
+  };
+}
+
+
+const connProblems = () => (SCEN[cur].auth ? 1 : 0) + (wikiState && wikiState.ok === false ? 1 : 0);
+function renderNav(alerts, counts) {
+  document.querySelectorAll(".sn").forEach(b => {
+    const v = b.dataset.v;
+    b.setAttribute("aria-pressed", String(v === view));
+    const badge = b.querySelector(".badge");
+    const cnt = v === "wiki" ? counts.rows : alerts.filter(a => a.view === v).length;
+    badge.hidden = !cnt;
+    badge.textContent = cnt;
+    badge.setAttribute("aria-label", v === "wiki" ? `${cnt} 列要登記` : `${cnt} 件需要處理`);
+  });
+  const onConn = view === "conn";
+  $("tab-690").classList.toggle("on", !onConn);
+  $("tab-conn").classList.toggle("on", onConn);
+  $("tab-690").setAttribute("aria-current", onConn ? "false" : "page");
+  $("tab-conn").setAttribute("aria-current", onConn ? "page" : "false");
+  $("subnav").hidden = onConn;
+}
+
+function renderToolbar() {
+  const u = $("upd");
+  u.replaceChildren("最後更新 ", el("b", null, poll.at), `(${poll.how})`);
+  u.append(poll.err ? el("span", "bad", ` · ${poll.err}`) : " · 每 10 分鐘自動更新");
+}
+
+// ── 每日資轉:只有今天 ──
+function renderDaily() {
+  const sc = SCEN[cur];
+  const data = dayData(sc.today);
+  $("today-date").textContent = `TW 每日資轉 · ${sc.today}`;
   const box = $("systems");
   box.replaceChildren();
-  const alerts = [];
   const counts = { ok: 0, nodata: 0, fail: 0, missing: 0, pending: 0, unknown: 0 };
   for (const d of DAILY) {
-    const r = sc.data[d.id];
+    const r = data[d.id];
     const overall = worst(r.s);
     counts[overall]++;
     const row = el("div", "sys");
     row.append(el("i", "dot " + overall));
     const nm = el("div", "name", d.label);
-    nm.append(el("small", null, d.code));
+    nm.append(el("small", null, `${d.start} · ${d.code}`));
     row.append(nm);
-    row.append(el("div", "state" + (["fail", "missing", "unknown"].includes(overall) ? " bad" : ""), LABEL[overall]));
+    row.append(stateEl("div", overall, r));
     const steps = el("div", "steps");
-    d.steps.forEach(([name, wiki], i) => {
-      const s = el("span", "step" + (wiki ? " wiki" : ""));
-      const when = r.at && !["pending", "missing"].includes(r.s[i]) ? `,${r.at} 收到` : "";
-      s.append(dot(r.s[i], `${d.label} · ${name}\n${LABEL[r.s[i]]}${when}${wiki ? "\n會登記到 wiki" : ""}`),
-               document.createTextNode(name));
+    d.steps.forEach((name, i) => {
+      const s = el("span", "step" + (r.s[i] === "fail" ? " failed" : ""));
+      const when = r.at && ["ok", "nodata", "fail"].includes(r.s[i]) ? `,${r.at} 收到` : "";
+      s.append(dot(r.s[i], `${d.label} · ${name}\n${LABEL[r.s[i]]}${when}`), document.createTextNode(name));
       steps.append(s);
     });
     row.append(steps);
     row.append(el("div", "when", r.at ? `收信 ${r.at}` : `${d.start} 開始`));
-    if (r.err) {
-      const de = el("div", "detail " + (r.soft ? "soft" : "bad"));
-      de.append(el("code", null, r.err));
-      if (r.exec) {
-        const a = el("a", null, `Rundeck 執行 #${r.exec}`);
-        a.href = `http://s690-twipfinder.tipo.gov.tw/s690/rundeck/project/s690/execution/show/${r.exec}`;
-        a.target = "_blank"; a.rel = "noopener";
-        de.append(a);
-      }
-      if (r.soft) de.append(el("span", null, "當天沒有新檔,視為完成,wiki 照樣打 v"));
-      row.append(de);
-    }
-    if (["fail", "missing", "unknown"].includes(overall)) {
-      alerts.push(r.err ? `${d.label}:${r.err}` : `${d.label}:過了 ${d.due} 還沒收到信`);
-    }
+    if (r.err && !r.failStep) row.append(errBox(r));
     box.append(row);
   }
   const done = counts.ok + counts.nodata;
   const bad = counts.fail + counts.missing + counts.unknown;
-  const sm = $("summary");
-  sm.replaceChildren();
-  for (const [k, v, c] of [
-    ["每日系統完成", `${done} / ${DAILY.length}`, done === DAILY.length ? "good" : ""],
+  stats($("d-summary"), [
+    ["完成", `${done} / ${DAILY.length}`, done === DAILY.length ? "good" : ""],
     ["需要處理", String(bad), bad ? "bad" : "good"],
-    ["等待中", String(counts.pending), ""],
-    ["今日抓信流量", sc.mb, ""],
-  ]) {
-    const s = el("div", "stat");
-    s.append(el("div", "k", k), el("div", "v " + c, v));
-    sm.append(s);
-  }
-  renderBanners(sc, alerts);
-  $("tabwarn").hidden = !(alerts.length || sc.auth);
+    ["今天還沒跑到", String(counts.pending), ""],
+  ]);
 }
 
-function renderMatrix() {
-  const sc = SCEN[cur];
-  const days = Object.keys(DAYS).filter(d => d <= sc.today);
-  const t = $("matrix");
-  t.replaceChildren();
+// ── TWA / TWB ──
+function renderPeriod(v, alerts, plan) {
+  const P = PERIOD[v];
+  const cols = colsOf(v);
+  const last = cols[0];
+  $("p-title").textContent = `TW · ${P.label}`;
+  const nAlert = alerts.filter(a => a.view === v).length;
+  const nWiki = plan.tables.filter(t => t.v === v).reduce((a, t) => a + t.rows.length, 0);
+  stats($("p-summary"), [
+    ["最新一期", `VOL ${last.vol}`, "", mmdd(last.iso)],
+    ["需要處理", String(nAlert), nAlert ? "bad" : "good"],
+    ["Wiki 要登記", String(nWiki), "", "列"],
+  ]);
+
+  // 預設選有問題的那一格,沒有就選最近收到信的
+  const keys = new Set(alerts.filter(a => a.view === v && a.key).map(a => splitSel(a.key)[1]));
+  if (!sel[v] || !runOf(v, P.types.find(t => t.id === splitSel(sel[v])[0]), splitSel(sel[v])[1])) {
+    let best = null;
+    for (const t of P.types) for (const [k, r] of runsOf(v, t)) if (!best || r.recv > best.recv) best = { recv: r.recv, key: `${t.id}|${k}` };
+    sel[v] = keys.size ? [...keys][0] : best && best.key;
+  }
+
+  const hasOlder = P.types.some(t => olderOf(v, t).length);
+  const tbl = $("p-table");
+  tbl.replaceChildren();
   const thead = el("thead"), hr = el("tr");
-  hr.append(el("th", null, "系統"), el("th", "c", "09/29"));
-  for (const dd of days) hr.append(el("th", "c", dd.slice(5).replace("-", "/")));
+  hr.append(el("th", null, "資料種類"));
+  for (const c of cols) {
+    const th = el("th", "c vol" + (c === last ? " cur" : ""), String(c.vol));
+    th.append(el("small", null, mmdd(c.iso)));
+    hr.append(th);
+  }
+  if (hasOlder) {
+    const th = el("th", null, "更早的期");
+    th.append(el("small", "sub", "近一個月內有補跑"));
+    hr.append(th);
+  }
   thead.append(hr);
-  t.append(thead);
+  tbl.append(thead);
+
   const tb = el("tbody");
-  for (const d of DAILY) {
+  for (const t of P.types) {
     const tr = el("tr");
-    tr.append(el("td", null, d.label));
-    const first = el("td", "c");
-    first.append(dot("none", `${d.label} · 09-29\n通知信從 09-29 下午才開始寄,這天沒有資料`));
-    tr.append(first);
-    for (const dd of days) {
-      const r = (cur === "early" && dd === "2026-10-02") ? EARLY[d.id] : DAYS[dd][d.id];
-      const s = worst(r.s);
+    const nm = el("td", "type");
+    nm.append(el("b", null, t.label), el("small", null, `${t.code} · ${t.schedText}`));
+    tr.append(nm);
+    for (let i = 0; i < cols.length; i++) {
+      const col = cols[i];
+      const sp = (t.spans || []).find(s => s.hi === col.vol);
       const td = el("td", "c");
-      td.append(dot(s, `${d.label} · ${dd}\n${LABEL[s]}${r.at ? `,${r.at} 收到` : ""}${r.err ? "\n" + r.err : ""}${r.note ? "\n" + r.note : ""}`));
+      if (sp) {
+        const w = Math.min(sp.hi - sp.lo + 1, cols.length - i);
+        td.colSpan = w;
+        const key = `${v}|${t.id}|${sp.lo}-${sp.hi}`;
+        const s = runState(sp);
+        const b = el("button", "spanbar");
+        b.type = "button";
+        b.dataset.sel = key;
+        b.dataset.tip = `${P.code} ${t.label} · VOL ${sp.lo}–${sp.hi}\n${LABEL[s]},${sp.at} 收到\n${sp.err}`;
+        b.setAttribute("aria-pressed", String(isSel(key)));
+        b.append(el("i", "dot " + s), document.createTextNode(`${sp.lo}–${sp.hi} 無檔案`));
+        if (isSel(key)) td.classList.add("on");
+        td.append(b);
+        tr.append(td);
+        i += w - 1;
+        continue;
+      }
+      const c = periodCell(v, t, col);
+      td.append(dot(c.s, c.tip, c.key));
+      if (c.key && isSel(c.key)) td.classList.add("on");
+      tr.append(td);
+    }
+    if (hasOlder) {
+      const td = el("td");
+      const box = el("div", "olders");
+      for (const [k, o] of olderOf(v, t)) {
+        const key = `${v}|${t.id}|${k}`;
+        const s = runState(o);
+        const b = el("button", "volchip");
+        b.type = "button";
+        b.dataset.sel = key;
+        b.dataset.tip = `${P.code} ${t.label} · VOL ${k}(${o.of} 那期)\n${LABEL[s]},${o.at} 收到${o.failStep ? `\n${o.failStep} 失敗` : ""}${o.note ? "\n" + o.note : ""}`;
+        b.setAttribute("aria-pressed", String(isSel(key)));
+        b.append(el("i", "dot " + s), document.createTextNode(k));
+        box.append(b);
+      }
+      td.append(box);
       tr.append(td);
     }
     tb.append(tr);
   }
-  t.append(tb);
-
-  const vb = $("vols");
-  vb.replaceChildren();
-  for (const v of VOLSYS) {
-    const row = el("div", "line");
-    const nm = el("div", "pg", v.label);
-    nm.append(el("span", "hint", v.wiki ? `${v.code} → ${v.wiki}` : `${v.code} · 只顯示,不寫 wiki`));
-    row.append(nm);
-    const chips = el("div", "volrow");
-    if (!v.runs.length) chips.append(el("span", "hint", "還沒收到過這個系統的信"));
-    for (const r of v.runs) {
-      const s = worst(r.st.filter(x => x !== "none"));
-      const c = el("span", "volchip" + (r.stale ? " stale" : ""));
-      const lines = [`${v.label} · VOL ${r.vol}${r.of ? `(${r.of} 那期)` : ""}`, r.at,
-        v.steps.map((k, i) => `${k}:${LABEL[r.st[i]]}`).join("、")];
-      if (r.writes) lines.push(`寫入 ${r.writes.toLocaleString()} 筆`);
-      if (r.err) lines.push(r.err);
-      if (r.after) lines.push(r.after);
-      if (r.note) lines.push(r.note);
-      c.append(dot(s, lines.join("\n")), document.createTextNode(`VOL ${r.vol}`));
-      chips.append(c);
-    }
-    row.append(chips);
-    row.append(el("div", "hint", v.last === "—" ? "" : `最近 ${v.last}`));
-    vb.append(row);
-  }
+  tbl.append(tb);
+  renderDetail(v);
 }
 
-function renderWiki() {
-  const sc = SCEN[cur];
-  $("wiki-mode").textContent = "乾跑模式:只列出會改什麼,還沒真的寫入。正式寫入前會先請妳確認";
-  const box = $("wiki");
+function renderDetail(v) {
+  const P = PERIOD[v];
+  const box = $("pd");
   box.replaceChildren();
-  for (const w of WIKI) {
-    if (cur === "oct1" && w.pg === "每日執行項目" && w.what.includes("10/02")) continue;
-    const r = el("div", "line");
-    r.append(el("div", "pg", w.pg), el("div", "what", w.what), el("span", "tag " + w.kind, w.tag));
-    box.append(r);
-  }
+  if (!sel[v]) { box.append(el("p", "hint", "點表格裡的圓點,看那一期的細節")); return; }
+  const [tid, k] = splitSel(sel[v]);
+  const t = P.types.find(x => x.id === tid);
+  const r = runOf(v, t, k);
+  const s = runState(r);
+
+  box.append(el("div", "pd-cap", "紫框那一格的細節"));
+  const head = el("div", "pd-head");
+  head.append(el("i", "dot " + s), el("b", null, `${P.code} ${t.label} · VOL ${k.replace("-", "–")}`),
+              stateEl("span", s, r));
+  box.append(head);
+
+  const steps = el("div", "steps");
+  t.steps.forEach((name, i) => {
+    const st = r.st[i];
+    const sp = el("span", "step" + (st === "fail" ? " failed" : ""));
+    sp.append(dot(st, `${t.label} · ${name}\n${LABEL[st]}`), document.createTextNode(name));
+    steps.append(sp);
+  });
+  box.append(steps);
+
+  if (r.err && !r.failStep) box.append(errBox(r));
+
+  const kv = el("dl", "kv");
+  const oldest = Math.min(...colsOf(v).map(c => c.vol));
+  const add = (dt, dd) => { kv.append(el("dt", null, dt), el("dd", null, dd)); };
+  add("期別", r.of ? `${r.of} 那期${+k < oldest ? "(超過一個月,是補跑的舊期)" : ""}` : `一次涵蓋 ${r.hi - r.lo + 1} 期`);
+  add("收信", r.at);
+  if (r.writes) add("寫入", `${r.writes.toLocaleString()} 筆`);
+  if (r.tag) add("資料包 TAG", r.tag);
+  if (r.runs > 1) add("執行次數", `${r.runs} 次,以最後一次為準`);
+  add("排程", `${t.code} · ${t.schedText}`);
+  box.append(kv);
+
+  if (r.history) box.append(el("div", "detail soft", r.history));
+  if (r.note) box.append(el("div", "detail soft", r.note));
 }
 
-function renderMail() {
+// ── Wiki 登記 ──
+function wtable(head, rows, editable) {
+  const wrap = el("div", "mx-wrap");
+  const t = el("table", "wt");
+  t.append(head);
+  const tb = el("tbody");
+  for (const r of rows) {
+    const tr = el("tr");
+    tr.dataset.key = r.key;
+    const k = el("td", "key", r.label);
+    if (r.isNew) k.append(el("span", "tag add", "新增"));
+    tr.append(k);
+    r.cells.forEach((c, i) => {
+      const td = el("td", "cell-" + (c.k === "swap" ? "new" : c.k) + (r.grp && r.grp.includes(i) ? " grp" : "") + (c.flag ? " flag" : ""));
+      const shown = c.k === "edit" && !c.v ? "(空白)" : c.v;
+      if ((c.k === "swap" || c.k === "edit") && c.was) td.append(el("s", null, c.was), document.createTextNode(shown));
+      else td.textContent = shown;
+      const tipText = [c.tip, editable ? "點一下可以修改" : null].filter(Boolean).join("\n");
+      if (tipText) td.dataset.tip = tipText;
+      if (editable) {
+        td.tabIndex = 0;
+        td.dataset.ek = `${r.key}|${i}`;
+        td.dataset.base = baseVal(c);
+        td.dataset.cur = c.k === "hold" || c.k === "wait" ? "" : c.v;
+      } else if (c.tip) td.tabIndex = 0;
+      tr.append(td);
+    });
+    tb.append(tr);
+  }
+  t.append(tb);
+  wrap.append(t);
+  return wrap;
+}
+function dailyNames() {
+  return WIKI_DAILY_ORDER.flatMap(id => ["RAW", "L3", "OS"].map(n => `${DAILY.find(d => d.id === id).label} ${n}`));
+}
+function dailyHead() {
+  const th = el("thead"), r1 = el("tr"), r2 = el("tr");
+  const d0 = el("th", null, "日期"); d0.rowSpan = 2; r1.append(d0);
+  for (const id of WIKI_DAILY_ORDER) {
+    const g = el("th", "grp", DAILY.find(d => d.id === id).label); g.colSpan = 3; r1.append(g);
+    ["RAW", "L3", "OS"].forEach((n, i) => r2.append(el("th", i === 0 ? "grp" : null, n)));
+  }
+  th.append(r1, r2);
+  return th;
+}
+const periodNames = (tb) => ["資料日期", "日期", "資料包 TAG", ...tb.cols.map(c => c.name)];
+function periodHead(tb) {
+  const head = el("thead"), hr = el("tr");
+  for (const n of ["公告期數", ...periodNames(tb)]) {
+    const th = el("th", null, n);
+    const c = tb.cols.find(x => x.name === n && x.value === "writes");
+    if (c) {
+      th.append(el("span", "hint", " 筆數"));
+      th.dataset.tip = `${n} = ${c.type === "biblio" ? "書目" : "雜項"} L1 的寫入筆數`;
+      th.tabIndex = 0;
+    }
+    hr.append(th);
+  }
+  head.append(hr);
+  return head;
+}
+
+// 已登入時按鈕還在,只是不能按
+function loginBtn() {
+  const done = wikiState && wikiState.ok;
+  const b = el("button", "btn ghost", wlogging ? "登入中…" : done ? "已登入" : wikiState ? "重新登入" : "登入 Wiki");
+  b.type = "button";
+  if (wlogging) b.setAttribute("aria-busy", "true");
+  b.disabled = wlogging || wbusy || done;
+  if (done) b.title = "目前已登入 Wiki";
+  b.addEventListener("click", wikiLogin);
+  return b;
+}
+function renderWiki(plan) {
+  const c = planCounts(plan);
+  stats($("w-summary"), [
+    ["會改的頁", String(c.pages), "", "頁"],
+    ["要填的格", String(c.fill), "", "格"],
+    ["新增的列", String(c.added), "", "列"],
+    ["失敗留空", String(c.hold), c.hold ? "bad" : "good", "格"],
+  ]);
+  const go = $("w-go");
+  if (!wbusy) {
+    const login = wikiState && wikiState.ok;
+    go.textContent = !c.pages ? "沒有要寫入的"
+                   : !login ? (wikiState ? "Wiki 登入失敗" : "Wiki 還沒登入")
+                   : `寫入 Wiki(${c.pages} 頁${c.edit ? `,含手改 ${c.edit} 格` : ""})`;
+    go.disabled = !c.pages;
+  }
+  renderEdits(plan);
+
+  const box = $("wikipages");
+  box.replaceChildren();
+  // 每日執行項目:只列 RAW / L3 / OS,案例欄程式不碰,省略
+  const sec = el("div", "wpage");
+  const h = el("h3", null, "每日執行項目");
+  sec.append(h, plan.daily.length ? wtable(dailyHead(), plan.daily, true) : el("div", "wnote", "沒有要更新的列。"));
+  box.append(sec);
+  // 全文 / 書目:每頁 TWA、TWB 兩張表,各自一個標題(TWA全文Full、TWB全文Full)
+  for (const T of WIKI_TABLES) {
+    for (const tb of plan.tables.filter(x => x.page === T.page)) {
+      const s = el("div", "wpage");
+      const hh = el("h3", null, tblName(tb));
+      s.append(hh);
+      if (tb.rows.length) s.append(wtable(periodHead(tb), tb.rows, true));
+      const notes = [];
+      if (tb.same.length) notes.push(`${tb.same.join("、")} 頁面上的值跟這次一樣,不用改`);
+      notes.push(...tb.skipped);
+      if (notes.length) s.append(el("div", "wnote", notes.join(";") + "。"));
+      else if (!tb.rows.length) {
+        s.append(el("div", "wnote", tb.page === "TW全文Full" && tb.code === "TWB" ? "還沒收到過全文 TWB 的信,沒有要登記的。" : "沒有要登記的。"));
+      }
+      box.append(s);
+    }
+  }
+  const off = el("div", "wpage");
+  off.append(el("div", "wnote", "TW英譯En、TW影像GCS 這版不寫入。"));
+  box.append(off);
+}
+
+const tblName = (tb) => tb.code + tb.page.replace(/^TW/, "");   // TW全文Full 的 TWA 表 → TWA全文Full
+// 改過的格列在表格上方,可以一格一格還原
+function renderEdits(plan) {
+  const box = $("w-edits");
+  box.replaceChildren();
+  const list = [];
+  const scan = (title, rows, names) => rows.forEach(r => r.cells.forEach((c, i) => {
+    if (c.k === "edit") list.push({ where: `${title} · ${r.label} · ${names[i]}`, c, ek: `${r.key}|${i}` });
+  }));
+  scan("每日執行項目", plan.daily, dailyNames());
+  plan.tables.forEach(t => scan(tblName(t), t.rows, periodNames(t)));
+  if (!list.length) return;
+  const w = el("div", "edits");
+  const h = el("div", "edits-h");
+  const nOver = list.filter(x => x.c.overwrite).length;
+  h.append(el("b", null, `你改了 ${list.length} 格`),
+           el("span", null, nOver ? `其中 ${nOver} 格會覆寫頁面上人填的值;寫入前會先確認頁面上還是你看到的那個值` : "寫入時一起送出"));
+  const all = el("button", "linkbtn", "全部還原");
+  all.type = "button";
+  all.addEventListener("click", () => { edits = {}; render(); });
+  h.append(all);
+  w.append(h);
+  for (const x of list) {
+    const line = el("div", "edl");
+    line.append(el("span", "where", x.where), el("span", "chg", `${x.c.was || "(空白)"} → ${x.c.v || "(空白)"}`));
+    if (x.c.overwrite) line.append(el("span", "tag conf", "覆寫人填的值"));
+    const undo = el("button", "linkbtn", "還原");
+    undo.type = "button";
+    undo.addEventListener("click", () => { delete edits[x.ek]; render(); });
+    line.append(undo);
+    w.append(line);
+  }
+  box.append(w);
+}
+function startEdit(td) {
+  if (td.querySelector("input")) return;
+  const base = td.dataset.base, ek = td.dataset.ek;
+  const inp = document.createElement("input");
+  inp.value = td.dataset.cur;
+  inp.placeholder = base || "(空白)";
+  inp.setAttribute("aria-label", "修改這一格,Enter 存、Esc 取消");
+  td.replaceChildren(inp);
+  tip.hidden = true;
+  inp.focus(); inp.select();
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    if (save) {
+      const val = inp.value.trim();
+      if (val === base) delete edits[ek]; else edits[ek] = val;
+    }
+    render();
+    const again = document.querySelector(`td[data-ek="${CSS.escape(ek)}"]`);
+    if (again) again.focus({ preventScroll: true });
+  };
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+  });
+  inp.addEventListener("blur", () => finish(true));
+}
+
+// ── 其他作業 ──
+function adhocRuns() {   // 情境當下已經跑過的,新的在前
+  const sc = SCEN[cur];
+  return ADHOC.filter(a => (!a.failOnly || sc.fail) && (a.day < sc.today || (a.day === sc.today && a.at <= sc.clock)))
+              .sort((a, b) => (b.day + b.at).localeCompare(a.day + a.at));
+}
+function renderAdhoc() {
+  const sc = SCEN[cur];
+  const runs = adhocRuns();
+  const nFail = runs.filter(a => a.failStep).length;
+  stats($("a-summary"), [
+    ["不在清單的作業", String(runs.length), "", "次"],
+    ["失敗", String(nFail), nFail ? "bad" : "good"],
+    ["維運", `${MAINT.length} 項`, "good", "都正常"],
+  ]);
+  const box = $("adhoc");
+  box.replaceChildren();
+  if (!runs.length) box.append(el("p", "hint", "近 7 天沒有清單以外的作業。"));
+  for (const a of runs) {
+    const st = a.failStep ? "fail" : "ok";
+    const row = el("div", "sys wide");
+    row.append(el("i", "dot " + st));
+    const nm = el("div", "name", a.name);
+    nm.append(el("span", "tag fake", "示意"), el("small", null, `${a.code} · ${a.group}`));
+    row.append(nm, stateEl("div", st, a));
+    const steps = el("div", "steps");
+    for (const [n, s] of a.steps) {
+      const sp = el("span", "step" + (s === "fail" ? " failed" : ""));
+      sp.append(dot(s, `${a.code}-${a.name} · ${n}
+${LABEL[s]}`), document.createTextNode(n));
+      steps.append(sp);
+    }
+    row.append(steps, el("div", "when", `收信 ${a.day.slice(5)} ${a.at}`));
+    const info = el("div", "detail soft");
+    info.append(el("code", null, a.data));
+    if (a.writes) info.append(el("span", null, `寫入 ${a.writes.toLocaleString()} 筆`));
+    info.append(el("span", null, "不在系統清單裡,只顯示、不寫 Wiki"));
+    row.append(info);
+    box.append(row);
+  }
+  const m = $("maint");
+  m.replaceChildren();
+  for (const j of MAINT) {
+    const day = j.at <= sc.clock ? sc.today : prevDay(sc.today);
+    m.append(el("span", "t", `${day.slice(5)} ${j.at}`), el("i", "dot ok"), el("span", "s", `${j.code}-${j.name}`), el("span", "hint", "每天"));
+  }
+}
+function prevDay(iso) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// ── 信件與連線 ──
+function mailList() {
+  const sc = SCEN[cur];
+  const upto = sc.today.slice(5);
+  const base = sc.fail ? [...MAIL.filter(x => !(x[0] === "10-02 06:11" && x[2].startsWith("011700"))), ...FAIL_MAIL] : MAIL;
+  const adhoc = adhocRuns().map(a => [`${a.day.slice(5)} ${a.at}`, a.failStep ? "fail" : "ok", `${a.code}-${a.name}`, "其他作業(不在清單)", a.log]);
+  return [...base, ...adhoc].sort((a, b) => b[0].localeCompare(a[0])).filter(x => x[0].slice(0, 5) <= upto);
+}
+function addMin(hhmm, n) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const t = (h * 60 + m + n) % 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}
+function renderConn() {
+  const sc = SCEN[cur];
+  const box = $("conn");
+  box.replaceChildren();
+  const card = (state, title, word, rows, fix, act) => {
+    const c = el("div", "cbox");
+    const h = el("div", "cbox-h");
+    h.append(el("i", "dot " + state), el("b", null, title), el("span", "state" + (BAD.includes(state) ? " bad" : ""), word));
+    const kv = el("dl", "kv");
+    for (const [k, v] of rows) kv.append(el("dt", null, k), el("dd", null, v));
+    c.append(h, kv);
+    if (fix) c.append(el("div", "fix", fix));
+    if (act) c.append(act);
+    return c;
+  };
+  box.append(card(sc.auth ? "fail" : "ok", "Gmail", sc.auth ? "授權已失效" : "正常", [
+    ["帳號", "alicia.huang@innovue.ltd"],
+    ["最後抓信", `${poll.at}(${poll.how})`],
+  ], sc.auth ? "到 flow_check 資料夾雙擊「690授權.bat」,用 alicia.huang@innovue.ltd 重新登入,完成後按上方的「立即更新」。" : null));
+  const w = wikiState;
+  box.append(card(!w ? "pending" : w.ok ? "ok" : "fail", "Wiki", !w ? "還沒登入" : w.ok ? "已登入" : "登入失敗", [
+    ["最後登入", !w ? "—" : `${w.at} ${w.ok ? "成功" : "失敗:" + w.msg}`],
+    ["最後寫入", w && w.wrote ? w.wrote : "還沒寫入過"],
+  ], w && !w.ok ? "檢查 data/config/xfer690_secrets.json 裡的 wiki_user、wiki_password,改好後按下面的「重新登入」。" : null,
+     loginBtn()));
+
   const m = $("mail");
   m.replaceChildren();
-  const upto = SCEN[cur].today.slice(5);
-  for (const [t, s, subj, sys] of MAIL.filter(m => m[0].slice(0, 5) <= upto).slice(0, 12)) {
+  for (const [t, st, subj, sys, log] of mailList().slice(0, 20)) {
     const d = el("span");
-    d.append(el("i", "dot " + s));
+    d.append(el("i", "dot " + st));
     const sub = el("span", "s", subj + " ");
     sub.append(el("span", "hint", sys));
-    m.append(el("span", "t", t), d, sub);
+    let act = el("span");
+    if (log) {
+      act = el("button", "linkbtn", "查看 log");
+      act.type = "button";
+      act.addEventListener("click", () => openLog(log));
+    }
+    m.append(el("span", "t", t), d, sub, act);
   }
-}
-
-function renderFoot() {
-  const sc = SCEN[cur];
-  const f = $("foot");
-  f.replaceChildren();
-  const add = (k, v) => { const s = el("span", null, k + " "); s.append(el("b", null, v)); f.append(s); };
-  add("最後抓信", sc.auth ? "10-02 08:40(已過時)" : `${sc.today.slice(5)} ${sc.clock}`);
-  add("自動抓信", "每 10 分鐘");
-  add("抓信方式", "只讀主旨;失敗信與每段期別的第一封才下載全文");
-  add("Wiki", "乾跑模式");
 }
 
 function render() {
-  renderToday(); renderMatrix(); renderWiki(); renderMail(); renderFoot();
+  const alerts = collectAlerts();
+  const plan = wikiPlan();
+  const counts = planCounts(plan);
+  renderToolbar();
+  renderNav(alerts, counts);
+  $("v-daily").hidden = view !== "daily";
+  $("v-period").hidden = !(view === "twa" || view === "twb");
+  $("v-wiki").hidden = view !== "wiki";
+  $("v-adhoc").hidden = view !== "adhoc";
+  $("v-conn").hidden = view !== "conn";
+  if (view === "daily") renderDaily();
+  else if (view === "adhoc") renderAdhoc();
+  else if (view === "wiki") renderWiki(plan);
+  else if (view === "conn") renderConn();
+  else renderPeriod(view, alerts, plan);
+  $("tabwarn").hidden = !alerts.length;
+  $("connwarn").hidden = !connProblems();
   $("scen-note").textContent = SCEN[cur].note;
 }
 
+function setView(v) { if (v !== "conn") lastView = v; view = v; tip.hidden = true; render(); }
+
+// ── 草圖的狀態:最後更新、Wiki 登入、是否已寫入(正式版由伺服器的 snapshot() 提供)──
+let poll, wikiState, written, wbusy = false, wlogging = false, tick = 0, edits = {}, writtenEdits = {};
+function resetState() {
+  const sc = SCEN[cur];
+  written = false; tick = 0; edits = {}; writtenEdits = {};
+  poll = sc.auth ? { at: "10-02 08:40", how: "自動", err: "之後抓信都失敗:Gmail 授權已失效" }
+                 : { at: `${sc.today.slice(5)} ${sc.clock}`, how: "自動" };
+  wikiState = sc.auth ? { at: "10-02 08:05", ok: false, msg: "帳號或密碼不對" }
+            : cur === "early" ? null : { at: `${sc.today.slice(5)} 08:30`, ok: true };
+}
+// 草圖示意用的「現在時間」:情境時刻往後推
+function stamp() {
+  tick++;
+  const sc = SCEN[cur];
+  return `${sc.today.slice(5)} ${addMin(sc.clock, tick)}:${String((tick * 17) % 60).padStart(2, "0")}`;
+}
+resetState();
+
 document.querySelectorAll(".scen button").forEach(b => b.addEventListener("click", () => {
   cur = b.dataset.s;
+  sel.twa = sel.twb = null;
+  resetState();
+  wlogging = false;
+  $("w-result").hidden = true;
   document.querySelectorAll(".scen button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
   render();
 }));
+document.querySelectorAll(".sn").forEach(b => b.addEventListener("click", () => setView(b.dataset.v)));
+// 主頁籤:回到 690資轉 時停在上次看的分類
+let lastView = "daily";
+$("tab-690").addEventListener("click", () => setView(lastView));
+$("tab-conn").addEventListener("click", () => setView("conn"));
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-sel]");
+  if (!b) return;
+  const key = b.dataset.sel;
+  const [v, rest] = splitSel(key);
+  sel[v] = rest;
+  render();
+  const again = document.querySelector(`[data-sel="${CSS.escape(key)}"]`);
+  if (again) again.focus({ preventScroll: true });
+});
 $("refresh").addEventListener("click", () => {
   const b = $("refresh");
   b.disabled = true; $("spin").hidden = false; b.textContent = "抓信中…";
-  setTimeout(() => { b.disabled = false; $("spin").hidden = true; b.textContent = "立即更新"; }, 900);
+  setTimeout(() => {
+    b.disabled = false; $("spin").hidden = true; b.textContent = "立即更新";
+    const t = stamp();
+    if (SCEN[cur].auth) poll = { ...poll, err: `${t.slice(6)} 手動更新失敗:Gmail 授權已失效` };
+    else poll = { at: t, how: "手動" };
+    render();
+    $("upd").classList.add("flash");
+    setTimeout(() => $("upd").classList.remove("flash"), 1500);
+  }, 900);
+});
+// 草圖示意:登入 wiki(不會真的連線)。帳號密碼由伺服器從設定檔讀;登入後伺服器記住工作階段,之後寫入都用它
+function wikiLogin() {
+  wlogging = true;
+  render();
+  setTimeout(() => {
+    wlogging = false;
+    const t = stamp(), prev = wikiState && wikiState.wrote;
+    wikiState = SCEN[cur].auth ? { at: t, ok: false, msg: "帳號或密碼不對", wrote: prev }
+                               : { at: t, ok: true, wrote: prev };
+    render();
+  }, 900);
+}
+// 草圖示意:寫入 wiki(不會真的連線)。帳號密碼由伺服器從設定檔讀,前端不經手
+// 用信件與連線登入時拿到的工作階段寫入,按鈕本身不登入;還沒登入就帶去信件與連線
+$("w-go").addEventListener("click", () => {
+  if (!(wikiState && wikiState.ok)) { setView("conn"); return; }
+  const res = $("w-result"), go = $("w-go");
+  const c = planCounts(wikiPlan());
+  res.hidden = true;
+  wbusy = true; go.disabled = true; $("w-spin").hidden = false; go.textContent = "寫入中…";
+  render();
+  setTimeout(() => {
+    wbusy = false; $("w-spin").hidden = true;
+    const t = stamp();
+    const ed = c.edit ? `、手改 ${c.edit} 格` : "";
+    wikiState = { ...wikiState, wrote: `${t} · ${c.pages} 頁,填 ${c.fill} 格、新增 ${c.added} 列${ed}` };
+    written = true;
+    writtenEdits = { ...writtenEdits, ...edits };
+    edits = {};
+    res.hidden = false;
+    res.className = "result ok";
+    res.textContent = `(草圖示意)${t} 已寫入 ${c.pages} 頁:填 ${c.fill} 格、新增 ${c.added} 列${ed}。` +
+      (c.hold ? `留空的 ${c.hold} 格等處理好之後,下次寫入會再補上;也可以直接點那幾格手動填。` : "");
+    render();
+  }, 1100);
+});
+document.addEventListener("click", (e) => {
+  const td = e.target.closest && e.target.closest("td[data-ek]");
+  if (td && !e.target.closest("input")) startEdit(td);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.matches && e.target.matches("td[data-ek]")) { e.preventDefault(); startEdit(e.target); }
 });
 
-// 圓點提示(滑鼠移入或鍵盤 focus)
+// log 檢視:正式版由伺服器提供那封信附的 .log;打開時捲到第一個 error 行
+let logUrl = null;
+function openLog(id) {
+  const L = LOGS[id];
+  const body = $("log-body");
+  body.replaceChildren();
+  let first = null;
+  L.lines.forEach((ln, i) => {
+    const cls = /^error:/.test(ln) || /job_failed/.test(ln) ? "err" : /^RUNDECK:DATA:/.test(ln) ? "data" : /job_complete/.test(ln) ? "done" : "";
+    const row = el("div", cls);
+    row.append(el("i", null, String(i + 1)), document.createTextNode(ln));
+    body.append(row);
+    if (cls === "err" && !first) first = row;
+  });
+  $("log-title").textContent = L.file;
+  $("log-meta").textContent = `${L.at} 收到 · 執行 #${L.exec}`;
+  $("log-count").textContent = `${L.lines.length} 行`;
+  if (logUrl) URL.revokeObjectURL(logUrl);
+  logUrl = URL.createObjectURL(new Blob([L.lines.join("\n")], { type: "text/plain;charset=utf-8" }));
+  $("log-raw").href = logUrl;
+  tip.hidden = true;
+  $("logdlg").showModal();
+  if (first) first.scrollIntoView({ block: "center" });
+}
+$("log-close").addEventListener("click", () => $("logdlg").close());
+$("logdlg").addEventListener("click", (e) => { if (e.target === $("logdlg")) $("logdlg").close(); });
+
+// 提示(滑鼠移入或鍵盤 focus)
 const tip = $("tip");
 function showTip(e) {
   const t = e.target.closest && e.target.closest("[data-tip]");
