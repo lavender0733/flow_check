@@ -32,3 +32,10 @@ TRAFFIC_LOG_DIR = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) 
 # 每日用量統計(長期保存,供流量報表)。一天只寫一次,放在同步夾裡沒關係。
 DAILY_STATS_PATH = MACHINE_DATA_DIR / f"daily_stats_{MACHINE_ID}.json"
 
+# 690 資轉監控(program/xfer690)。規則設定進版控;另外三個是機密,不進版控(見 .gitignore)。
+XFER690_CONFIG_PATH = DATA_CONFIG_DIR / "xfer690.json"
+XFER690_SECRETS_PATH = DATA_CONFIG_DIR / "xfer690_secrets.json"   # wiki 帳號密碼
+GMAIL_CREDENTIALS_PATH = DATA_CONFIG_DIR / "gmail_credentials.json"   # GCP 的 OAuth 用戶端
+GMAIL_TOKEN_PATH = MACHINE_DATA_DIR / f"gmail_token_{MACHINE_ID}.json"   # 各機各自授權
+XFER690_CACHE_PATH = MACHINE_DATA_DIR / f"xfer690_{MACHINE_ID}.json"   # 抓過的信(事件)
+

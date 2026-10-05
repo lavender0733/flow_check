@@ -8,6 +8,16 @@ data/*
 data/config/*
 # 機器代號 → 友善名稱對照
 !data/config/machines.json
+# 690 資轉監控的規則設定(不含機密)
+!data/config/xfer690.json
+
+# ── 機密(上面的 data/* 已經排除,這裡再明列一次,免得日後放行時誤放)──
+# Gmail OAuth 用戶端
+data/config/gmail_credentials.json
+# 各機的 Gmail 授權 token
+data/machines/gmail_token_*.json
+# wiki 帳號密碼
+data/config/xfer690_secrets.json
 
 # ── Python ────────────────────────────────────────────────────
 __pycache__/

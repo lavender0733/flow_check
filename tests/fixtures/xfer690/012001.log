@@ -1,0 +1,29 @@
+RUNDECK:DATA:VOL_DATE=1151001
+啟動正式模式：raw-tw-techreport-pdf-trigger-date
+[2026-10-01T02:10:01.671+08:00]  INFO: raw-tw-techreport-pdf-trigger-date/203713 on data-importer-6bfc846c7c-szf5t: Environment variables validated (VOL_DATE=1151001, GCS_BUCKET=s690-patent-data, GCS_KEY_FILENAME=/config/gcs-key.json, POSTGRES_HOST=pgbouncer.s690-citus.svc.cluster.local, POSTGRES_PORT=5432, POSTGRES_DATABASE=postgres, POSTGRES_USER=citus, POSTGRES_PASSWORD="[hidden, length: 12]", TABLE_NAME=raw_tw_um_tech_report)
+[2026-10-01T02:10:01.672+08:00]  INFO: raw-tw-techreport-pdf-trigger-date/203713 on data-importer-6bfc846c7c-szf5t: Processing techreport-pdf from gs://s690-patent-data/tw/techreport-pdf/1151001
+[2026-10-01T02:10:01.678+08:00]  INFO: Runner/203713 on data-importer-6bfc846c7c-szf5t: Starting runner execution
+[2026-10-01T02:10:01.682+08:00]  INFO: factories/input/storage/203713 on data-importer-6bfc846c7c-szf5t: Downloading from GCS (source=gs://s690-patent-data/tw/techreport-pdf/1151001)
+    tempDir: /tmp/data-importer-temp/tmp-dir-f3e181cd-2eb1-41d4-b07a-b044c6cfa361
+72 | 
+73 |   const prefix = folder.endsWith("/") ? folder : `${folder}/`;
+74 |   const [files] = await storage.bucket(bucket).getFiles({ prefix });
+75 | 
+76 |   if (files.length === 0) {
+77 |     throw new Error(`GCS 資料夾無檔案: gs://${bucket}/${folder}`);
+                   ^
+error: GCS 資料夾無檔案: gs://s690-patent-data/tw/techreport-pdf/1151001
+      at /app/src/factories/input/storage.ts:77:15
+      at /app/src/factories/input/storage.ts:209:17
+      at run (/app/src/core/runner.ts:351:9)
+      at processTicksAndRejections (native:7:39)
+
+Bun v1.3.14 (Linux x64)
+[2026-10-01T02:10:01.807+08:00] ERROR: factories/input/storage/203713 on data-importer-6bfc846c7c-szf5t: Failed to download or count files
+    Error: GCS 資料夾無檔案: gs://s690-patent-data/tw/techreport-pdf/1151001
+        at <anonymous> (/app/src/factories/input/storage.ts:77:15)
+        at async <anonymous> (/app/src/factories/input/storage.ts:209:17)
+        at async run (/app/src/core/runner.ts:158:38)
+        at processTicksAndRejections (native:7:39)
+error: Recipe `start` failed on line 31 with exit code 1
+Failed: NonZeroResultCode: Remote command failed with exit status 1
