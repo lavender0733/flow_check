@@ -14,6 +14,7 @@ const X6_VIEWS = { twa: "TWA 公開", twb: "TWB 公告" };
 
 let x6Snap = null;
 let x6View = "daily";
+let x6Back = "daily";      // 從哪個分類點進 Wiki 登記(預覽卡片的「返回」用)
 const x6Sel = { twa: null, twb: null };
 let x6Edits = {};          // 還沒寫入的手動修改,key = 頁|表|列鍵|欄號
 let x6Busy = { refresh: false, login: false, write: false };
@@ -1099,10 +1100,16 @@ function x6showTip(e) {
 
 function x6bind() {
   document.querySelectorAll("#panel-xfer690 .x6-sn").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.v === "wiki" && x6View !== "wiki") x6Back = x6View;   // 「返回」回到這裡
     x6View = b.dataset.v;
     x6$("x6-tip").hidden = true;
     x6render();
   }));
+  x6$("x6-w-back").addEventListener("click", () => {
+    x6View = x6Back || "daily";
+    x6$("x6-tip").hidden = true;
+    x6render();
+  });
   x6$("x6-refresh").addEventListener("click", x6refresh);
   x6$("x6-w-go").addEventListener("click", () => x6wikiWrite());
   x6$("x6-w-undo").addEventListener("click", () => { x6Edits = {}; x6render(); });

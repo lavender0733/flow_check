@@ -34,8 +34,11 @@
 .x6-sn:hover { color: var(--txt); background: var(--btn-weak, var(--accent-soft, #ede7fb)); }
 .x6-sn[aria-pressed="true"] { color: #fff; background: var(--btn); }
 .x6-sn .sub { font-weight: 400; font-size: 12px; opacity: .85; }
-.x6-right { margin-left: auto; }
-@media (max-width: 560px) { .x6-right { margin-left: 0; } }
+/* 「Wiki 登記」放在各內容卡片標題列的右邊;Wiki 預覽卡片的「返回」也靠右 */
+.x6 .card > h2 .x6-wikibtn { margin-left: auto; background: var(--btn-weak, var(--accent-soft, #ede7fb));
+                             color: var(--btn-ink, var(--btn)); font-size: 13px; letter-spacing: 0; }
+.x6 .card > h2 .x6-wikibtn:hover { background: var(--btn); color: #fff; }
+.x6 .card > h2 .x6-back { order: 9; margin-left: auto; }
 .x6-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; font-size: 11px; font-weight: 700;
             display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; }
 .x6-badge.bad { background: var(--danger); color: #fff; }
@@ -243,9 +246,6 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
         <button type="button" class="x6-sn" data-v="twb">TWB<span class="sub">公告</span><span class="x6-badge bad" hidden></span></button>
         <button type="button" class="x6-sn" data-v="adhoc">其他作業<span class="x6-badge bad" hidden></span></button>
       </div>
-      <div class="x6-grp x6-right">
-        <button type="button" class="x6-sn" data-v="wiki">Wiki 登記<span class="x6-badge x6-info" hidden></span></button>
-      </div>
     </nav>
 
     <section class="card" id="x6-v-daily">
@@ -257,7 +257,7 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
           <span><i class="x6-dot missing"></i>該到沒到</span>
           <span><i class="x6-dot pending"></i>今天還沒跑到</span>
           <span><i class="x6-dot none"></i>沒有執行(前一步失敗)</span>
-        </span></span></h2>
+        </span></span><button type="button" class="x6-sn x6-wikibtn" data-v="wiki">Wiki 登記<span class="x6-badge x6-info" hidden></span></button></h2>
       <div class="x6-summary" id="x6-d-summary"></div>
       <div id="x6-systems" style="margin-top:8px"></div>
     </section>
@@ -271,14 +271,14 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
           <span><i class="x6-dot missing"></i>該到沒到</span>
           <span><i class="x6-dot pending"></i>還沒跑到</span>
           <span><i class="x6-dot none"></i>沒有執行 / 沒有紀錄</span>
-        </span></span></h2>
+        </span></span><button type="button" class="x6-sn x6-wikibtn" data-v="wiki">Wiki 登記<span class="x6-badge x6-info" hidden></span></button></h2>
       <div class="x6-summary" id="x6-p-summary"></div>
       <div class="x6-wrap"><table class="x6-pm" id="x6-p-table"></table></div>
       <div class="x6-pd" id="x6-pd" aria-live="polite"></div>
     </section>
 
     <section class="card" id="x6-v-adhoc" hidden>
-      <h2>其他作業 <span class="hint">近 7 天</span></h2>
+      <h2>其他作業 <span class="hint">近 7 天</span><button type="button" class="x6-sn x6-wikibtn" data-v="wiki">Wiki 登記<span class="x6-badge x6-info" hidden></span></button></h2>
       <div class="x6-summary" id="x6-a-summary"></div>
       <h3 style="margin:20px 0 0;font-size:14px">不在清單上的作業</h3>
       <div id="x6-adhoc"></div>
@@ -288,7 +288,7 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
     </section>
 
     <section class="card" id="x6-v-wiki" hidden>
-      <h2>Wiki 登記預覽<span class="x6-lgd"><button type="button" class="x6-lgd-btn" aria-label="圖例" aria-describedby="x6-lgd-wiki"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+      <h2>Wiki 登記預覽<button type="button" class="x6-btn ghost x6-back" id="x6-w-back">← 返回</button><span class="x6-lgd"><button type="button" class="x6-lgd-btn" aria-label="圖例" aria-describedby="x6-lgd-wiki"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
         <span class="x6-lgd-pop" id="x6-lgd-wiki" role="tooltip">
           <span><i class="x6-sw fill">v</i>這次要填進去(無資料那天填 -)</span>
           <span><i class="x6-sw old">07/16</i>頁面上原本就有</span>
