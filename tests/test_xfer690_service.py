@@ -1,6 +1,8 @@
 import json
+import threading
 import unittest
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from _util import TempDataCase
 from core.paths import XFER690_CONFIG_PATH
@@ -295,6 +297,51 @@ class PollTest(ServiceCase):
         self.assertNotIn("GCS 資料夾", (self.tmp / "cache.json").read_text(encoding="utf-8"))
 
 
+class _GatewayHandler(BaseHTTPRequestHandler):
+    """模仿 Cloudflare:User-Agent 是 Python-urllib 就回 403「error code: 1010」(純文字,不是 JSON)。"""
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        type(self).seen_ua.append(self.headers.get("User-Agent", ""))
+        if "python-urllib" in self.headers.get("User-Agent", "").lower() or type(self).block_all:
+            body, code, ctype = b"error code: 1010", 403, "text/plain"
+        else:
+            body, code, ctype = b'{"data":{"users":{"profile":{"name":"A","email":"a@b"}}}}', 200, "application/json"
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *a):
+        pass
+
+
+class GatewayTest(unittest.TestCase):
+    """不開 VPN 時 Wiki 走 Cloudflare:擋掉 Python-urllib,而且擋下來的 403 不是 jwt 失效。"""
+
+    def setUp(self):
+        _GatewayHandler.seen_ua, _GatewayHandler.block_all = [], False
+        self.httpd = HTTPServer(("127.0.0.1", 0), _GatewayHandler)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+
+    def tearDown(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+    def test_real_post_sends_own_user_agent(self):
+        self.assertEqual(WikiClient(self.url, TOKEN).whoami(), {"name": "A", "email": "a@b"})
+        self.assertTrue(_GatewayHandler.seen_ua[0].startswith("flow-check-xfer690"), _GatewayHandler.seen_ua)
+
+    def test_gateway_block_is_not_auth_error(self):
+        _GatewayHandler.block_all = True
+        with self.assertRaises(WikiError) as cm:
+            WikiClient(self.url, TOKEN).whoami()
+        self.assertNotIsInstance(cm.exception, WikiAuthError)
+        self.assertIn("1010", str(cm.exception))
+
+
 class ClientTest(unittest.TestCase):
     def test_client_update_echoes_fields(self):
         post = FakeWikiPost(wiki_pages())
@@ -525,6 +572,30 @@ class WikiFlowTest(ServiceCase):
         self.assertFalse(w["last_login"]["ok"])
         # 失效的 token 也從檔案拿掉,重開後不會再拿它去試
         self.assertNotIn("wiki_jwt", json.loads(svc.secrets_path.read_text(encoding="utf-8")))
+
+    def test_gateway_block_keeps_login(self):
+        # 不開 VPN 時被 Cloudflare 擋(HTTP 403、不是 JSON):是網路問題,不能清掉 jwt、不能登出
+        svc = self.make(FakeGmail(daily_events()), cfg_patch={"wiki": {"dry_run": False}})
+        svc.poll()
+        svc.wiki_login(TOKEN)
+
+        def blocked(url, headers, body):
+            raise WikiError("Wiki 前面的閘道擋下連線(HTTP 403:error code: 1010)")
+        svc.wiki_factory = lambda url, token=None: WikiClient(url, token, post=blocked)
+        res = svc.wiki_write([])                    # 每頁各自失敗(一頁失敗不影響其他頁的既有約定)
+        self.assertTrue(all("1010" in " ".join(p["errors"]) for p in res["pages"].values()))
+        self.assertFalse(any(p["updated"] for p in res["pages"].values()))
+        svc.wiki_factory = lambda url, token=None: WikiClient(url, token, post=blocked)
+        svc.poll()                                  # 預覽讀不到頁面也一樣
+        w = svc.snapshot()["wiki"]
+        self.assertTrue(w["logged_in"])
+        self.assertEqual(json.loads(svc.secrets_path.read_text(encoding="utf-8"))["wiki_jwt"], TOKEN)
+        self.assertIn("1010", w["last_error"])
+        # 登入時被擋:回網路錯誤,也不說成 jwt 不對
+        res = svc.wiki_login(TOKEN)
+        self.assertFalse(res["ok"])
+        self.assertNotIn("不認得", res["message"])
+        self.assertIn("1010", res["message"])
 
     def test_wiki_error_does_not_fail_poll(self):
         svc = self.make(FakeGmail(daily_events()))

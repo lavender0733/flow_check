@@ -71,6 +71,16 @@ EXPIRED_MSG = "Wiki 登入已失效,請重新用 Innovue OAuth 登入 Wiki 後�
 _JWT_RE = re.compile(r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$")
 
 
+def _all_pages_failed(pages: dict):
+    """每一頁都讀失敗(例如被 Cloudflare 擋)時,回傳要顯示的錯誤;否則 None。
+
+    sync 把每頁的錯誤收在 report 裡、不往外拋,全部失敗時畫面上要看得到原因。"""
+    errs = [p["errors"][0] for p in pages.values() if p.get("errors")]
+    if pages and len(errs) == len(pages):
+        return f"讀 Wiki 失敗:{errs[0]}"[:300]
+    return None
+
+
 def _clean_jwt(pasted):
     """接受「值」本身,或連同 jwt= / Bearer 一起複製的;形狀不像 JWT 回 None(不連網)。"""
     if not isinstance(pasted, str):
@@ -390,7 +400,7 @@ class Xfer690Service:
                         self._set_jwt(client.token)
                 self._contents = res["contents"]
                 self.wiki.update(report=res["pages"], tables=res["tables"],
-                                 last_sync=self.now().isoformat(), last_error=None)
+                                 last_sync=self.now().isoformat(), last_error=_all_pages_failed(res["pages"]))
             except WikiAuthError:
                 self._expire(EXPIRED_MSG)
             except Exception as e:

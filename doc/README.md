@@ -96,6 +96,8 @@ Rundeck 在內網連不到,所以只靠信。
    在瀏覽器用 Innovue OAuth 登入 Wiki → F12 → Application → Cookies → 複製 `jwt` 的值 →
    貼到「信件與連線」的 Wiki 卡片按「登入 Wiki」。伺服器先跟 Wiki 確認有效才收下,存進
    `data/config/xfer690_secrets.json` 的 `wiki_jwt`(重開不用重貼;Wiki 續期發的新憑證會自動寫回;失效時清掉、卡片要你重貼)。
+   不開 VPN 也能用:那時 KM 走 Cloudflare,它擋 Python 預設的 User-Agent,程式送自己的
+   `flow-check-xfer690/1`。被閘道擋下(HTTP 401/403)算網路問題,不會清掉 `wiki_jwt`。
 4. 重開 `start_monitor.bat`。第一次會自動安裝 `requirements-690.txt` 的套件;裝不起來只會停用 690,流量監控照常。
 
 > 三個機密檔(`gmail_credentials.json`、`gmail_token_<機器>.json`、`xfer690_secrets.json`)都不在版控內,

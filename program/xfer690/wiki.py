@@ -100,15 +100,28 @@ _UPDATE_Q = ("mutation($id:Int!,$content:String!,$description:String!,$editor:St
              "scriptJs:$scriptJs,tags:$tags,title:$title){responseResult{succeeded errorCode message}}}}")
 
 
+# 不開 VPN 時 km.innovue.ltd 走 Cloudflare,它擋預設的「Python-urllib/x.y」(403 error code: 1010)
+USER_AGENT = "flow-check-xfer690/1"
+
+
 def _urllib_post(url: str, headers: dict, body: bytes) -> tuple:
-    """回傳 (body, 回應標頭)。"""
+    """回傳 (body, 回應標頭)。
+
+    HTTP 層的 401/403 不當成登入失效:Wiki.js 的 token 失效是 HTTP 200 + GraphQL errors
+    (由 _gql 判斷);HTTP 403 幾乎都是前面的閘道(Cloudflare)擋的,清掉 jwt 只會害使用者重貼。"""
+    headers = dict(headers, **{"User-Agent": USER_AGENT})
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return r.read(), {k.lower(): v for k, v in r.headers.items()}
     except urllib.error.HTTPError as e:
+        try:
+            detail = e.read(200).decode("utf-8", "replace").strip()
+        except Exception:
+            detail = ""
         if e.code in (401, 403):
-            raise WikiAuthError(f"Wiki 回 HTTP {e.code}") from e
+            raise WikiError(f"Wiki 前面的閘道擋下連線(HTTP {e.code}"
+                            + (f":{detail}" if detail else "") + ")") from e
         raise WikiError(f"Wiki 回 HTTP {e.code}") from e
     except (urllib.error.URLError, OSError) as e:
         raise WikiError(f"連不上 Wiki:{e}") from e
