@@ -66,6 +66,22 @@ class NotLoggedIn(Exception):
     pass
 
 
+EXPIRED_MSG = "Wiki 登入已失效,請重新用 Innovue OAuth 登入 Wiki 後再貼一次 jwt"
+_JWT_RE = re.compile(r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$")
+
+
+def _clean_jwt(pasted):
+    """接受「值」本身,或連同 jwt= / Bearer 一起複製的;形狀不像 JWT 回 None(不連網)。"""
+    if not isinstance(pasted, str):
+        return None
+    t = pasted.strip().strip('"').strip()
+    for prefix in ("jwt=", "Bearer "):
+        if t[:len(prefix)].lower() == prefix.lower():
+            t = t[len(prefix):].strip()
+    t = t.rstrip(";").strip()
+    return t if len(t) <= 8192 and _JWT_RE.match(t) else None
+
+
 def _default_gmail():
     from xfer690.gmail_client import GmailClient
     return GmailClient(GMAIL_TOKEN_PATH)
@@ -92,7 +108,7 @@ class Xfer690Service:
         self._lock = threading.Lock()         # 整個 poll()
         self._wiki_lock = threading.Lock()    # 登入 / 寫入 / 預覽
         self._stop = threading.Event()
-        self._jwt = None                      # 只放記憶體
+        self._jwt = None                      # Wiki 登入憑證;也存在 secrets 檔(重開不用重貼)
         self._contents = {}                   # 上次讀到的 wiki 頁面(預覽用,只放記憶體)
 
         cache = read_json(cache_path, default={})
@@ -108,7 +124,12 @@ class Xfer690Service:
                         "last_poll_bytes": int(t.get("last_poll_bytes") or 0)}
         w = cache.get("wiki") or {}
         self.wiki = {"last_sync": None, "last_error": None, "report": None, "tables": [],
-                     "last_login": None, "last_write": w.get("last_write")}
+                     "last_login": w.get("last_login"), "last_write": w.get("last_write"),
+                     "account": w.get("account")}
+        secrets = read_json(secrets_path, default={})
+        jwt = secrets.get("wiki_jwt") if isinstance(secrets, dict) else None
+        if isinstance(jwt, str) and _JWT_RE.match(jwt):
+            self._jwt = jwt     # 上次貼的;失效的話第一次讀 wiki 時清掉
 
     # ── 抓信 ────────────────────────────────────────────────
     def _add_bytes(self, n: int) -> None:
@@ -226,7 +247,8 @@ class Xfer690Service:
             write_json_atomic(self.cache_path, {
                 "events": self.events, "last_poll": self.last_poll, "account": self.account,
                 "last_poll_kind": self.last_poll_kind, "traffic": self.traffic,
-                "wiki": {"last_write": self.wiki["last_write"]}})
+                "wiki": {"last_write": self.wiki["last_write"], "last_login": self.wiki["last_login"],
+                         "account": self.wiki["account"]}})
         except OSError as e:
             self.last_error = f"快取寫不進去:{e}"
 
@@ -259,6 +281,7 @@ class Xfer690Service:
             "recent": recent,
             "wiki": {"enabled": bool(w.get("enabled")), "dry_run": bool(w.get("dry_run", True)),
                      "url": w.get("url"), "logged_in": self._jwt is not None,
+                     "account": self.wiki["account"] if self._jwt else None,
                      "last_login": self.wiki["last_login"], "last_write": self.wiki["last_write"],
                      "last_sync": self.wiki["last_sync"], "last_error": self.wiki["last_error"],
                      "report": self.wiki["report"], "tables": self.wiki["tables"]},
@@ -285,43 +308,71 @@ class Xfer690Service:
         self._stop.set()
 
     # ── Wiki ────────────────────────────────────────────────
-    def wiki_login(self) -> dict:
-        """讀 xfer690_secrets.json 登入,JWT 留在記憶體。回應只寫原因,不回顯帳號密碼。"""
-        from xfer690.wiki import WikiError
+    def wiki_login(self, pasted) -> dict:
+        """使用者貼上瀏覽器的 jwt cookie(Innovue OAuth 登入後才有)。
+
+        先問 Wiki「這是誰」確認有效,才存進 secrets 檔(wiki_jwt)。回應不回顯 token。"""
+        from xfer690.wiki import WikiAuthError, WikiError
         with self._lock:        # 改了 xfer690.json(例如打開 wiki.enabled)直接按登入就生效
             self.cfg = load_xfer_config(self.config_path)
         w = self.cfg["wiki"]
-        name = self.secrets_path.name
         with self._wiki_lock:
             if not w.get("enabled"):
                 return self._login_result(False, "Wiki 功能還沒啟用(xfer690.json 的 wiki.enabled)")
-            secrets = read_json(self.secrets_path, default=None)
-            if not isinstance(secrets, dict):
-                return self._login_result(False, f"找不到或讀不了 data/config/{name}")
-            missing = [k for k in ("wiki_user", "wiki_password") if not secrets.get(k)]
-            if missing:
-                return self._login_result(False, f"{name} 缺少欄位:{'、'.join(missing)}")
+            token = _clean_jwt(pasted)
+            if not token:
+                return self._login_result(False, "貼上的不是 jwt:要複製 Cookies 裡名稱是 jwt 的那一列的「值」")
             try:
-                client = self.wiki_factory(w["url"])
-                self._jwt = client.login(secrets["wiki_user"], secrets["wiki_password"],
-                                         secrets.get("wiki_strategy") or "local")
-            except WikiError:
-                self._jwt = None
-                return self._login_result(False, f"登入失敗,請檢查 {name} 的 wiki_user、wiki_password")
+                client = self.wiki_factory(w["url"], token)
+                who = client.whoami()
+            except WikiAuthError:
+                return self._login_result(False, "Wiki 不認得這個 jwt(可能過期或複製不完整),請重新登入 Wiki 後再複製一次")
+            except WikiError as e:
+                return self._login_result(False, f"連不上 Wiki:{e}"[:200])
             except Exception as e:
-                self._jwt = None
                 return self._login_result(False, f"連不上 Wiki:{type(e).__name__}")
+            self.wiki["account"] = (f"{who['name']}({who['email']})" if who["name"] and who["email"]
+                                    else who["name"] or who["email"])
+            self._set_jwt(client.token)
             res = self._login_result(True, "")
+            self._save()
         self._refresh_preview()
         return res
+
+    def wiki_logout(self) -> dict:
+        with self._wiki_lock:
+            self._set_jwt(None)
+            self.wiki.update(tables=[], report=None, account=None)
+            self._contents = {}
+            self._save()
+        return {"ok": True}
+
+    def _set_jwt(self, token) -> None:
+        """換 token(登入、Wiki 續期、失效),同步寫回 secrets 檔;檔裡其他欄位不動。"""
+        self._jwt = token
+        secrets = read_json(self.secrets_path, default={})
+        secrets = secrets if isinstance(secrets, dict) else {}
+        if token:
+            if secrets.get("wiki_jwt") == token:
+                return
+            secrets["wiki_jwt"] = token
+        elif "wiki_jwt" in secrets:
+            del secrets["wiki_jwt"]
+        else:
+            return
+        try:
+            write_json_atomic(self.secrets_path, secrets)
+        except OSError as e:
+            self.wiki["last_error"] = f"登入憑證寫不進 {self.secrets_path.name}:{e}"[:300]
 
     def _login_result(self, ok: bool, message: str) -> dict:
         self.wiki["last_login"] = {"at": self.now().isoformat(), "ok": ok, "message": message}
         return {"ok": ok, "message": message}
 
     def _expire(self, message: str) -> None:
-        self._jwt = None
+        self._set_jwt(None)
         self.wiki["last_login"] = {"at": self.now().isoformat(), "ok": False, "message": message}
+        self._save()
 
     def _refresh_preview(self) -> None:
         """登入狀態下讀頁面、算預覽(不寫)。任何錯誤只記在 wiki.last_error。"""
@@ -331,12 +382,16 @@ class Xfer690Service:
                 return
             try:
                 client = self.wiki_factory(self.cfg["wiki"]["url"], self._jwt)
-                res = sync(client, self.status(), self.cfg["wiki"], write=False)
+                try:
+                    res = sync(client, self.status(), self.cfg["wiki"], write=False)
+                finally:
+                    if client.token != self._jwt:       # Wiki 續期發的新 token
+                        self._set_jwt(client.token)
                 self._contents = res["contents"]
                 self.wiki.update(report=res["pages"], tables=res["tables"],
                                  last_sync=self.now().isoformat(), last_error=None)
             except WikiAuthError:
-                self._expire("登入已失效,請重新登入")
+                self._expire(EXPIRED_MSG)
             except Exception as e:
                 self.wiki["last_error"] = f"讀 Wiki 失敗:{e}"[:300]
 
@@ -349,9 +404,13 @@ class Xfer690Service:
                 raise NotLoggedIn()
             try:
                 client = self.wiki_factory(self.cfg["wiki"]["url"], self._jwt)
-                res = sync(client, self.status(), self.cfg["wiki"], edits=edits, write=True)
+                try:
+                    res = sync(client, self.status(), self.cfg["wiki"], edits=edits, write=True)
+                finally:
+                    if client.token != self._jwt:
+                        self._set_jwt(client.token)
             except WikiAuthError:
-                self._expire("登入已失效,請重新登入")
+                self._expire(EXPIRED_MSG)
                 raise NotLoggedIn()
             except Exception as e:
                 self.wiki["last_error"] = f"寫 Wiki 失敗:{e}"[:300]

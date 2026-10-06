@@ -192,6 +192,15 @@
 .x6-cbox-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .x6-cbox-h b { font-size: 14px; font-weight: 600; }
 .x6-cbox .x6-btn { justify-self: start; }
+.x6-login { display: grid; gap: 8px; }
+.x6-steps { margin: 0; padding-left: 1.4em; font-size: 12.5px; display: grid; gap: 3px; }
+.x6-steps a { color: var(--btn-ink, var(--btn)); }
+.x6-jwt-lab { font-size: 12px; color: var(--muted, var(--dim)); }
+.x6-jwt-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.x6-jwt { font: inherit; font-size: 13px; flex: 1 1 auto; min-width: 0; padding: 5px 10px; border-radius: 8px;
+          border: 1px solid var(--line); background: var(--card); color: var(--txt); }
+.x6-jwt:focus-visible { outline: 2px solid var(--btn); outline-offset: 1px; }
+.x6-login .hint { font-size: 12px; }
 .x6-fix { font-size: 12.5px; border-radius: 10px; padding: 8px 11px; background: var(--danger-bg, #fdecee);
           color: var(--danger-ink, var(--danger)); border: 1px solid var(--danger-line, var(--danger)); }
 .x6-mail { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 5px 12px; font-size: 12.5px; margin-top: 12px; align-items: center; }

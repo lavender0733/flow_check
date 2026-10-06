@@ -2,7 +2,7 @@
 // 兩個頁籤共用 /api/xfer690 的快照(伺服器每 10 分鐘抓一次信;這裡每 60 秒讀一次快照)。
 // 畫面依 doc/plans/2026-10-02-690資轉畫面草圖.html。信件內容一律用 textContent 放進畫面。
 // 相依 API:GET /api/xfer690、POST /api/xfer690/refresh、GET /api/xfer690/log、
-//          POST /api/xfer690/wiki/login、POST /api/xfer690/wiki/write。
+//          POST /api/xfer690/wiki/login({jwt})、POST /api/xfer690/wiki/logout、POST /api/xfer690/wiki/write。
 
 const X6_LABEL = { ok: "成功", nodata: "無資料", fail: "失敗", missing: "該到沒到", pending: "還沒跑到",
                    unknown: "無法判定", none: "沒有執行" };
@@ -626,7 +626,7 @@ function x6renderWiki() {
   const go = x6$("x6-w-go");
   if (!x6Busy.write) {
     go.removeAttribute("aria-busy");
-    go.textContent = !w.logged_in ? (w.last_login ? "Wiki 登入失敗" : "Wiki 還沒登入")
+    go.textContent = !w.logged_in ? (w.last_login && !w.last_login.ok ? "Wiki 登入失敗" : "Wiki 還沒登入")
                    : !c.pages ? "沒有要寫入的"
                    : `寫入 Wiki(${c.pages} 頁${c.edits ? `,含手改 ${c.edits} 格` : ""})${w.dry_run ? " · 乾跑" : ""}`;
     go.disabled = !!w.logged_in && !c.pages;
@@ -831,17 +831,12 @@ function x6renderConn() {
   const state = w.logged_in ? "ok" : ll && !ll.ok ? "fail" : "pending";
   const word = w.logged_in ? "已登入" : ll && !ll.ok ? "登入失敗" : "還沒登入";
   const lw = w.last_write;
-  const wrows = [
-    ["最後登入", ll ? `${x6mdhm(ll.at)} ${ll.ok ? "成功" : "失敗:" + ll.message}` : "—"],
-    ["最後寫入", lw ? `${x6mdhm(lw.at)} · ${lw.dry_run ? "乾跑,沒有真的寫入;" : ""}${lw.pages} 頁,填 ${lw.filled} 格、新增 ${lw.inserted} 列${lw.edited ? `、手改 ${lw.edited} 格` : ""}` : "還沒寫入過"],
-  ];
-  const btn = x6el("button", "x6-btn ghost", x6Busy.login ? "登入中…" : w.logged_in ? "已登入" : ll ? "重新登入" : "登入 Wiki");
-  btn.type = "button";
-  if (x6Busy.login) btn.setAttribute("aria-busy", "true");
-  btn.disabled = x6Busy.login || x6Busy.write || !!w.logged_in;
-  btn.addEventListener("click", x6wikiLogin);
-  const wfix = !w.logged_in && ll && !ll.ok ? `${ll.message}。改好後按下面的「重新登入」。` : null;
-  box.append(card(state, "Wiki", word, wrows, wfix, btn));
+  const wrows = [];
+  if (w.logged_in && w.account) wrows.push(["帳號", w.account]);
+  wrows.push(["最後登入", ll ? `${x6mdhm(ll.at)} ${ll.ok ? "成功" : "失敗"}` : "—"]);
+  wrows.push(["最後寫入", lw ? `${x6mdhm(lw.at)} · ${lw.dry_run ? "乾跑,沒有真的寫入;" : ""}${lw.pages} 頁,填 ${lw.filled} 格、新增 ${lw.inserted} 列${lw.edited ? `、手改 ${lw.edited} 格` : ""}` : "還沒寫入過"]);
+  const wfix = !w.logged_in && ll && !ll.ok ? ll.message : null;
+  box.append(card(state, "Wiki", word, wrows, wfix, x6wikiLoginBox(w)));
 
   const m = x6$("x6-mail");
   m.replaceChildren();
@@ -922,14 +917,68 @@ async function x6refresh() {
   u.classList.add("flash");
   setTimeout(() => u.classList.remove("flash"), 1500);
 }
+// Wiki 只開 Innovue OAuth(GitLab)登入,程式沒辦法自己登:使用者在瀏覽器登入後,
+// 把 Cookies 裡的 jwt 貼過來。伺服器先跟 Wiki 確認有效才收下,畫面不回顯。
+// 卡片每分鐘重畫一次,輸入框放在卡片外保留,重畫時才不會清掉貼到一半的內容。
+const x6jwtInput = (() => {
+  const i = document.createElement("input");
+  i.type = "password"; i.id = "x6-jwt"; i.className = "x6-jwt";
+  i.autocomplete = "off"; i.spellcheck = false;
+  i.placeholder = "貼上 jwt 的值(eyJ 開頭)";
+  i.addEventListener("keydown", (e) => { if (e.key === "Enter") x6wikiLogin(); });
+  return i;
+})();
+function x6wikiLoginBox(w) {
+  const wrap = x6el("div", "x6-login");
+  if (w.logged_in) {
+    const out = x6el("button", "x6-btn ghost", "登出");
+    out.type = "button";
+    out.disabled = x6Busy.write;
+    out.addEventListener("click", x6wikiLogout);
+    wrap.append(out);
+    return wrap;
+  }
+  const ol = x6el("ol", "x6-steps");
+  const li1 = x6el("li");
+  const a = x6el("a", null, "Wiki");
+  a.href = (w.url || "https://km.innovue.ltd") + "/login"; a.target = "_blank"; a.rel = "noopener";
+  li1.append("開 ", a, ",用「Innovue OAuth」登入");
+  ol.append(li1,
+            x6el("li", null, "按 F12 → Application(應用程式)→ Cookies → 這個網站"),
+            x6el("li", null, "點名稱是 jwt 的那一列,複製「值」,貼到下面"));
+  const lab = x6el("label", "x6-jwt-lab", "jwt");
+  lab.htmlFor = "x6-jwt";
+  const btn = x6el("button", "x6-btn", x6Busy.login ? "確認中…" : "登入 Wiki");
+  btn.type = "button";
+  if (x6Busy.login) btn.setAttribute("aria-busy", "true");
+  btn.disabled = x6Busy.login || x6Busy.write;
+  x6jwtInput.disabled = x6Busy.login;
+  btn.addEventListener("click", x6wikiLogin);
+  const row = x6el("div", "x6-jwt-row");
+  row.append(x6jwtInput, btn);
+  wrap.append(ol, lab, row,
+              x6el("div", "hint", "存在本機 data/config/xfer690_secrets.json(不進版控)。Wiki 會自動續期,平常不用重貼;失效時這裡會再出現。"));
+  return wrap;
+}
 async function x6wikiLogin() {
+  if (x6Busy.login) return;
+  const jwt = x6jwtInput.value.trim();
+  if (!jwt) { x6jwtInput.focus(); return; }
   x6Busy.login = true;
   x6render();
   try {
-    await fetch("/api/xfer690/wiki/login", { method: "POST", headers: { "Content-Type": "application/json" },
-                                             body: "{}" });
+    const r = await fetch("/api/xfer690/wiki/login", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                       body: JSON.stringify({ jwt }) });
+    const j = await r.json();
+    if (j.ok) x6jwtInput.value = "";
   } catch (e) { /* 結果看快照的 last_login */ }
   x6Busy.login = false;
+  await x6load();
+}
+async function x6wikiLogout() {
+  try {
+    await fetch("/api/xfer690/wiki/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  } catch (e) { /* 下次載入看快照 */ }
   await x6load();
 }
 async function x6wikiWrite() {

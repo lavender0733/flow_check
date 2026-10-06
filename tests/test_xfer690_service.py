@@ -7,11 +7,12 @@ from core.paths import XFER690_CONFIG_PATH
 from xfer690.gmail_client import AuthError, GmailError
 from xfer690.parser import TPE
 from xfer690.service import NotLoggedIn, Xfer690Service
-from xfer690.wiki import WikiClient, WikiError, sync
+from xfer690.wiki import WikiAuthError, WikiClient, WikiError, sync
 from xfer690_mail import FIX, fixture_log, make_eml, subject
 
 NOW = datetime(2026, 10, 1, 9, 0, tzinfo=TPE)
 REAL_CFG = json.loads(XFER690_CONFIG_PATH.read_text(encoding="utf-8"))
+TOKEN = "eyJhbGciOiJSUzI1NiJ9.eyJpZCI6N30.c2ln"      # 長得像 JWT 的假 token
 
 
 class FakeGmail:
@@ -45,39 +46,49 @@ def mail(code, name, hhmm, status="SUCCESS", day="01 Oct", size=70000, log=None)
 
 
 class FakeWikiPost:
-    """假的 Wiki.js GraphQL 伺服器:頁面放記憶體,記錄每次 update。"""
+    """假的 Wiki.js GraphQL 伺服器:頁面放記憶體,記錄每次 update。
 
-    def __init__(self, pages, fail_pages=(), jwt="JWT1"):
+    只認 self.valid 裡的 token;renew_to 有值時,下一個請求回 new-jwt 標頭(Wiki.js 的續期)。"""
+
+    def __init__(self, pages, fail_pages=(), jwt=None):
         self.pages = dict(pages)        # path 結尾頁名 → content
         self.fail_pages = set(fail_pages)
         self.updates = []
-        self.jwt = jwt
+        self.valid = {jwt or TOKEN}
+        self.renew_to = None
         self.reject_token = False
 
     def __call__(self, url, headers, body):
         req = json.loads(body)
         q, v = req["query"], req["variables"]
-        if "authentication" in q:
-            ok = v["u"] == "me" and v["p"] == "pw"
-            return json.dumps({"data": {"authentication": {"login": {
-                "responseResult": {"succeeded": ok, "message": "" if ok else "bad"},
-                "jwt": self.jwt if ok else None}}}}).encode()
-        if self.reject_token:
+        tok = headers.get("Authorization", "")[len("Bearer "):]
+        if self.reject_token or tok not in self.valid:
+            if "profile" in q:      # Wiki.js 把無效的 token 當訪客:只有要身分的查詢才報錯
+                return json.dumps({"errors": [{"message": "You must be authenticated to access this resource."}],
+                                   "data": {"users": {"profile": None}}}).encode()
             return json.dumps({"errors": [{"message": "Forbidden"}]}).encode()
-        if "singleByPath" in q:
+        out_headers = {}
+        if self.renew_to:
+            self.valid = {self.renew_to}
+            out_headers["new-jwt"] = self.renew_to
+            self.renew_to = None
+        if "profile" in q:
+            data = {"data": {"users": {"profile": {"name": "Alicia", "email": "alicia@innovue.ltd"}}}}
+        elif "singleByPath" in q:
             name = v["p"].rsplit("/", 1)[-1]
             if name in self.fail_pages:
                 return json.dumps({"errors": [{"message": "boom"}]}).encode()
-            return json.dumps({"data": {"pages": {"singleByPath": {
+            data = {"data": {"pages": {"singleByPath": {
                 "id": hash(name) % 9999, "content": self.pages[name], "title": name, "description": "",
                 "editor": "markdown", "isPublished": True, "isPrivate": False, "locale": "zh-tw",
-                "path": v["p"], "tags": [{"tag": "a"}], "scriptCss": "", "scriptJs": ""}}}}).encode()
-        if "update(" in q:
+                "path": v["p"], "tags": [{"tag": "a"}], "scriptCss": "", "scriptJs": ""}}}}
+        elif "update(" in q:
             self.updates.append(v)
             self.pages[v["path"].rsplit("/", 1)[-1]] = v["content"]
-            return json.dumps({"data": {"pages": {"update": {
-                "responseResult": {"succeeded": True}}}}}).encode()
-        raise AssertionError(q)
+            data = {"data": {"pages": {"update": {"responseResult": {"succeeded": True}}}}}
+        else:
+            raise AssertionError(q)
+        return json.dumps(data).encode(), out_headers
 
 
 def wiki_pages():
@@ -97,8 +108,7 @@ class ServiceCase(TempDataCase):
                 cfg[k] = v
         cfgp = self.write_json("xfer690.json", cfg)
         cred = self.write_json("cred.json", {})
-        sec = self.write_json("secrets.json", secrets if secrets is not None else
-                              {"wiki_user": "me", "wiki_password": "pw"})
+        sec = self.write_json("secrets.json", secrets if secrets is not None else {})
         self.wiki_post = wiki or FakeWikiPost(wiki_pages())
         self.clock = [now]
 
@@ -288,7 +298,7 @@ class PollTest(ServiceCase):
 class ClientTest(unittest.TestCase):
     def test_client_update_echoes_fields(self):
         post = FakeWikiPost(wiki_pages())
-        c = WikiClient("https://w", "t", post=post)
+        c = WikiClient("https://w", TOKEN, post=post)
         p = c.get_page("a/TW全文Full", "zh-tw")
         c.update_content(p, "new")
         v = post.updates[0]
@@ -302,7 +312,21 @@ class ClientTest(unittest.TestCase):
             return json.dumps({"data": {"pages": {"update": {
                 "responseResult": {"succeeded": False, "message": "nope"}}}}}).encode()
         with self.assertRaises(WikiError):
-            WikiClient("https://w", "t", post=post).update_content({"id": 1}, "x")
+            WikiClient("https://w", TOKEN, post=post).update_content({"id": 1}, "x")
+
+    def test_whoami_guest_is_auth_error(self):
+        post = FakeWikiPost(wiki_pages())
+        with self.assertRaises(WikiAuthError):
+            WikiClient("https://w", "nope", post=post).whoami()
+        self.assertEqual(WikiClient("https://w", TOKEN, post=post).whoami(),
+                         {"name": "Alicia", "email": "alicia@innovue.ltd"})
+
+    def test_client_picks_up_new_jwt(self):
+        post = FakeWikiPost(wiki_pages())
+        post.renew_to = "eyJh.eyJw.bmV3"
+        c = WikiClient("https://w", TOKEN, post=post)
+        c.get_page("a/TW全文Full", "zh-tw")
+        self.assertEqual(c.token, "eyJh.eyJw.bmV3")
 
     def test_bearer_header(self):
         seen = []
@@ -333,41 +357,85 @@ class WikiFlowTest(ServiceCase):
     def test_login_keeps_jwt_out_of_snapshot_and_cache(self):
         svc = self.make(FakeGmail(daily_events()))
         svc.poll()
-        res = svc.wiki_login()
+        res = svc.wiki_login(TOKEN)
         self.assertTrue(res["ok"])
+        self.assertNotIn(TOKEN, json.dumps(res, ensure_ascii=False))
         snap = json.dumps(svc.snapshot(), ensure_ascii=False)
-        self.assertNotIn("JWT1", snap)
-        self.assertNotIn("pw", json.dumps(svc.snapshot()["wiki"]))
+        self.assertNotIn(TOKEN, snap)
         self.assertTrue(svc.snapshot()["wiki"]["logged_in"])
+        self.assertEqual(svc.snapshot()["wiki"]["account"], "Alicia(alicia@innovue.ltd)")
         svc.poll()
-        self.assertNotIn("JWT1", (self.tmp / "cache.json").read_text(encoding="utf-8"))
+        self.assertNotIn(TOKEN, (self.tmp / "cache.json").read_text(encoding="utf-8"))
 
-    def test_login_failure_message_names_file_not_secret(self):
-        svc = self.make(FakeGmail({}), secrets={"wiki_user": "me", "wiki_password": "wrong"})
-        res = svc.wiki_login()
+    def test_login_saves_jwt_to_secrets_and_survives_restart(self):
+        svc = self.make(FakeGmail(daily_events()), secrets={"note": "keep"})
+        svc.wiki_login(TOKEN)
+        sec = json.loads(svc.secrets_path.read_text(encoding="utf-8"))
+        self.assertEqual(sec["wiki_jwt"], TOKEN)
+        self.assertEqual(sec["note"], "keep")       # 其他欄位不動
+        svc2 = Xfer690Service(config_path=svc.config_path, cache_path=svc.cache_path,
+                              secrets_path=svc.secrets_path, credentials_path=svc.credentials_path,
+                              gmail_factory=svc.gmail_factory, wiki_factory=svc.wiki_factory, now=svc.now)
+        self.assertTrue(svc2.snapshot()["wiki"]["logged_in"])
+        svc2.poll()
+        self.assertTrue(svc2.snapshot()["wiki"]["tables"])
+
+    def test_login_accepts_cookie_paste_forms(self):
+        for pasted in (f"  {TOKEN}\n", f"jwt={TOKEN}", f"Bearer {TOKEN}"):
+            svc = self.make(FakeGmail({}))
+            self.assertTrue(svc.wiki_login(pasted)["ok"], pasted)
+
+    def test_login_rejects_bad_shape_without_network(self):
+        svc = self.make(FakeGmail({}))
+        for bad in ("", None, "abc", "a.b", "<script>.x.y", 123):
+            res = svc.wiki_login(bad)
+            self.assertFalse(res["ok"], bad)
+        self.assertFalse(svc.snapshot()["wiki"]["logged_in"])
+
+    def test_login_rejects_token_wiki_does_not_accept(self):
+        # Wiki.js 把無效 token 當訪客,不會報 401:要用「我是誰」的查詢確認
+        svc = self.make(FakeGmail({}))
+        other = "eyJhbGciOiJSUzI1NiJ9.eyJpZCI6OX0.eHh4"
+        res = svc.wiki_login(other)
         self.assertFalse(res["ok"])
-        self.assertIn("secrets.json", res["message"])
-        self.assertNotIn("wrong", res["message"])
-        self.assertFalse(svc.snapshot()["wiki"]["last_login"]["ok"])
+        self.assertNotIn(other, res["message"])
+        self.assertIn("過期", res["message"])
+        self.assertFalse(svc.snapshot()["wiki"]["logged_in"])
+        self.assertNotIn(other, svc.secrets_path.read_text(encoding="utf-8"))
+
+    def test_renewed_jwt_written_back(self):
+        svc = self.make(FakeGmail(daily_events()))
+        svc.wiki_login(TOKEN)
+        new = "eyJhbGciOiJSUzI1NiJ9.eyJpZCI6N30.bmV3"
+        self.wiki_post.renew_to = new
+        svc.poll()                                  # 預覽讀頁面時拿到 new-jwt
+        self.assertEqual(json.loads(svc.secrets_path.read_text(encoding="utf-8"))["wiki_jwt"], new)
+        svc.wiki_write([])                          # 舊 token 已經不收,要用新的
+        self.assertTrue(svc.snapshot()["wiki"]["logged_in"])
+
+    def test_logout_clears_jwt_everywhere(self):
+        svc = self.make(FakeGmail({}), secrets={"note": "keep"})
+        svc.wiki_login(TOKEN)
+        svc.wiki_logout()
+        self.assertFalse(svc.snapshot()["wiki"]["logged_in"])
+        self.assertEqual(json.loads(svc.secrets_path.read_text(encoding="utf-8")), {"note": "keep"})
+        with self.assertRaises(NotLoggedIn):
+            svc.wiki_write([])
 
     def test_login_rereads_config(self):
         # 使用者改了 xfer690.json 的 wiki.enabled 之後直接按登入:不用等下一次抓信
         svc = self.make(FakeGmail({}), cfg_patch={"wiki": {"enabled": False}})
         svc.poll()
-        self.assertFalse(svc.wiki_login()["ok"])
+        self.assertFalse(svc.wiki_login(TOKEN)["ok"])
         cfg = json.loads(svc.config_path.read_text(encoding="utf-8"))
         cfg["wiki"]["enabled"] = True
         svc.config_path.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
-        self.assertTrue(svc.wiki_login()["ok"])
-
-    def test_login_missing_field(self):
-        res = self.make(FakeGmail({}), secrets={"wiki_user": "me"}).wiki_login()
-        self.assertIn("wiki_password", res["message"])
+        self.assertTrue(svc.wiki_login(TOKEN)["ok"])
 
     def test_dry_run_never_posts_update(self):
         svc = self.make(FakeGmail(daily_events()))
         svc.poll()
-        svc.wiki_login()
+        svc.wiki_login(TOKEN)
         res = svc.wiki_write([])
         self.assertTrue(res["dry_run"])
         self.assertEqual(self.wiki_post.updates, [])
@@ -376,7 +444,7 @@ class WikiFlowTest(ServiceCase):
     def test_wiki_changed_updates_once_per_page(self):
         svc = self.make(FakeGmail(daily_events()), cfg_patch={"wiki": {"dry_run": False}})
         svc.poll()
-        svc.wiki_login()
+        svc.wiki_login(TOKEN)
         res = svc.wiki_write([])
         daily = [u for u in self.wiki_post.updates if u["path"].endswith("每日執行項目")]
         self.assertEqual(len(daily), 1)
@@ -390,7 +458,7 @@ class WikiFlowTest(ServiceCase):
     def test_wiki_unchanged_skips_update(self):
         svc = self.make(FakeGmail(daily_events()), cfg_patch={"wiki": {"dry_run": False}})
         svc.poll()
-        svc.wiki_login()
+        svc.wiki_login(TOKEN)
         svc.wiki_write([])
         n = len(self.wiki_post.updates)
         svc.wiki_write([])
@@ -400,7 +468,7 @@ class WikiFlowTest(ServiceCase):
         post = FakeWikiPost(wiki_pages(), fail_pages={"TW全文Full"})
         svc = self.make(FakeGmail(daily_events()), wiki=post, cfg_patch={"wiki": {"dry_run": False}})
         svc.poll()
-        svc.wiki_login()
+        svc.wiki_login(TOKEN)
         res = svc.wiki_write([])
         self.assertTrue(res["pages"]["TW全文Full"]["errors"])
         self.assertTrue(res["pages"]["每日執行項目"]["updated"])
@@ -408,17 +476,19 @@ class WikiFlowTest(ServiceCase):
     def test_expired_jwt_clears_login(self):
         svc = self.make(FakeGmail(daily_events()))
         svc.poll()
-        svc.wiki_login()
+        svc.wiki_login(TOKEN)
         self.wiki_post.reject_token = True
         with self.assertRaises(NotLoggedIn):
             svc.wiki_write([])
         w = svc.snapshot()["wiki"]
         self.assertFalse(w["logged_in"])
         self.assertFalse(w["last_login"]["ok"])
+        # 失效的 token 也從檔案拿掉,重開後不會再拿它去試
+        self.assertNotIn("wiki_jwt", json.loads(svc.secrets_path.read_text(encoding="utf-8")))
 
     def test_wiki_error_does_not_fail_poll(self):
         svc = self.make(FakeGmail(daily_events()))
-        svc.wiki_login()
+        svc.wiki_login(TOKEN)
         self.wiki_post.fail_pages = set(wiki_pages())
         snap = svc.poll()
         self.assertEqual(snap["auth"], "ok")
@@ -427,7 +497,7 @@ class WikiFlowTest(ServiceCase):
     def test_user_edit_overwrites_only_when_expected(self):
         svc = self.make(FakeGmail({}), cfg_patch={"wiki": {"dry_run": False}})
         svc.poll()
-        svc.wiki_login()
+        svc.wiki_login(TOKEN)
         res = svc.wiki_write([
             {"page": "TW全文Full", "table": "TWA", "key": "2414", "col": "日期", "expect": "07/11", "value": "07/16"},
             {"page": "TW全文Full", "table": "TWA", "key": "2413", "col": "日期", "expect": "06/30", "value": "07/02"},
@@ -441,7 +511,7 @@ class WikiFlowTest(ServiceCase):
     def test_preview_after_login(self):
         svc = self.make(FakeGmail(daily_events()))
         svc.poll()
-        svc.wiki_login()
+        svc.wiki_login(TOKEN)
         tables = svc.snapshot()["wiki"]["tables"]
         daily = next(t for t in tables if t["page"] == "每日執行項目")
         row = next(r for r in daily["rows"] if r["key"] == "2026/10/01")
@@ -454,7 +524,7 @@ class WikiFlowTest(ServiceCase):
         post = FakeWikiPost(wiki_pages())
         svc = self.make(FakeGmail(daily_events()))
         svc.poll()
-        res = sync(WikiClient("https://w", "t", post=post), svc.status(), svc.cfg["wiki"])
+        res = sync(WikiClient("https://w", TOKEN, post=post), svc.status(), svc.cfg["wiki"])
         self.assertEqual(post.updates, [])
         self.assertIn("每日執行項目", res["contents"])
 

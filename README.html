@@ -192,7 +192,7 @@
 <ol class="steps">
   <li>確認 <code>data/config/gmail_credentials.json</code> 在(GCP 的 OAuth 用戶端)。</li>
   <li>雙擊 <code>690授權.bat</code>,用 <code>alicia.huang@innovue.ltd</code> 同意唯讀權限。</li>
-  <li>要寫 Wiki 的話,新增 <code>data/config/xfer690_secrets.json</code>,內容 <code>{"wiki_user": "帳號", "wiki_password": "密碼"}</code>,並把 <code>data/config/xfer690.json</code> 的 <code>wiki.enabled</code> 改成 <code>true</code>。</li>
+  <li>要寫 Wiki 的話,<code>data/config/xfer690.json</code> 的 <code>wiki.enabled</code> 要是 <code>true</code>。在瀏覽器用 Innovue OAuth 登入 Wiki,按 F12 → Application → Cookies 複製 <code>jwt</code> 的值,貼到「信件與連線」的 Wiki 卡片按「登入 Wiki」(存在 <code>data/config/xfer690_secrets.json</code>,重開不用重貼)。</li>
   <li>重開 <code>start_monitor.bat</code>(第一次會自動安裝 690 需要的套件;裝不起來只停用 690,流量監控照常)。</li>
 </ol>
 <p>規則與設定的細節見<a href="doc/進階參考.html">進階參考</a>與 <code>doc/README.md</code> 的「690 資轉監控」一節。</p>

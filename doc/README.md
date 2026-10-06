@@ -92,12 +92,14 @@ Rundeck 在內網連不到,所以只靠信。
 2. 雙擊 **`690授權.bat`** → 瀏覽器跳出 Google 登入,用 `alicia.huang@innovue.ltd` 同意唯讀權限。
    完成後會印出近 30 天每個 job 的統計表(封數、成功失敗、時刻),拿來核對系統清單。
    token 存在 `data/machines/gmail_token_<機器>.json`。
-3. 要寫 Wiki 的話,新增 `data/config/xfer690_secrets.json`,內容是 `{"wiki_user": "帳號", "wiki_password": "密碼"}`
-   (Wiki 用的不是本機帳號而是其他登入方式時,加 `"wiki_strategy": "…"`),並把 `xfer690.json` 的 `wiki.enabled` 改成 `true`。
+3. 要寫 Wiki 的話,`xfer690.json` 的 `wiki.enabled` 要是 `true`。Wiki 只開 **Innovue OAuth** 登入,程式沒辦法自己登入:
+   在瀏覽器用 Innovue OAuth 登入 Wiki → F12 → Application → Cookies → 複製 `jwt` 的值 →
+   貼到「信件與連線」的 Wiki 卡片按「登入 Wiki」。伺服器先跟 Wiki 確認有效才收下,存進
+   `data/config/xfer690_secrets.json` 的 `wiki_jwt`(重開不用重貼;Wiki 續期發的新憑證會自動寫回;失效時清掉、卡片要你重貼)。
 4. 重開 `start_monitor.bat`。第一次會自動安裝 `requirements-690.txt` 的套件;裝不起來只會停用 690,流量監控照常。
 
 > 三個機密檔(`gmail_credentials.json`、`gmail_token_<機器>.json`、`xfer690_secrets.json`)都不在版控內,
-> 也不會同步到 TIPO flow check。Wiki 帳號密碼只存在 `xfer690_secrets.json`,不經過網頁。
+> 也不會同步到 TIPO flow check。Wiki 登入憑證只存在 `xfer690_secrets.json`,網頁送出後不會再回傳或顯示。
 
 ### 畫面
 
@@ -208,7 +210,7 @@ flow_check/
 │  ├─ config/machines.json 機器代號 → 友善名稱對照(如「桌機」;空值則顯示代號)
 │  ├─ config/xfer690.json  690 的系統清單與 wiki 表格設定(版控)
 │  ├─ config/gmail_credentials.json  ★機密:GCP 的 OAuth 用戶端
-│  ├─ config/xfer690_secrets.json    ★機密:wiki 帳號密碼
+│  ├─ config/xfer690_secrets.json    ★機密:wiki 登入憑證(wiki_jwt)
 │  └─ machines/            各電腦執行期資料(檔名含機器代號,同步不互相覆蓋)
 │     ├─ state_<機器>.json        當日用量(跨重啟保留、跨日歸零)
 │     ├─ prefs_<機器>.json        本機偏好:通知 / 暴增預警 / 排除內網開關與門檻、外觀
@@ -287,7 +289,8 @@ flow_check/
 | GET | `/api/xfer690` | 690 快照:各系統狀態、最近 20 封信、Gmail 與 Wiki 的狀態、Wiki 預覽(前端每 60 秒讀) |
 | POST | `/api/xfer690/refresh` | 690「立即更新」:前景抓一次信,回傳新快照 |
 | GET | `/api/xfer690/log?id=<信件 id>` | 那封通知信附的 `.log` 純文字(當下從 Gmail 抓,不存檔) |
-| POST | `/api/xfer690/wiki/login` | 用 `xfer690_secrets.json` 登入 Wiki,憑證留在伺服器記憶體 |
+| POST | `/api/xfer690/wiki/login` | body `{"jwt": "…"}`:使用者從瀏覽器複製的 Wiki jwt。確認有效才存進 `xfer690_secrets.json`,回應不回顯 |
+| POST | `/api/xfer690/wiki/logout` | 清掉 Wiki 登入憑證(記憶體與 `xfer690_secrets.json`) |
 | POST | `/api/xfer690/wiki/write` | 寫入 Wiki(body `{"edits": [...]}` 是使用者手改的格);沒登入回 409 `{"error": "not_logged_in"}` |
 
 ---

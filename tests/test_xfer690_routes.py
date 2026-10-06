@@ -23,9 +23,13 @@ class FakeService:
             raise KeyError(msg_id)
         return "error: x\n"
 
-    def wiki_login(self):
-        self.calls.append("login")
+    def wiki_login(self, jwt):
+        self.calls.append(("login", jwt))
         return {"ok": True, "message": ""}
+
+    def wiki_logout(self):
+        self.calls.append("logout")
+        return {"ok": True}
 
     def wiki_write(self, edits):
         from xfer690.service import NotLoggedIn
@@ -50,7 +54,7 @@ class RoutesTest(unittest.TestCase):
     def test_routes_registered(self):
         for key in [("GET", "/api/xfer690"), ("POST", "/api/xfer690/refresh"),
                     ("GET", "/api/xfer690/log"), ("POST", "/api/xfer690/wiki/login"),
-                    ("POST", "/api/xfer690/wiki/write")]:
+                    ("POST", "/api/xfer690/wiki/logout"), ("POST", "/api/xfer690/wiki/write")]:
             self.assertIn(key, self.routes)
 
     def test_status_delegates(self):
@@ -69,13 +73,17 @@ class RoutesTest(unittest.TestCase):
         self.assertEqual(cm.exception.code, 404)
 
     def test_wiki_login_and_write(self):
-        self.assertTrue(self.call("POST", "/api/xfer690/wiki/login")["ok"])
+        self.assertTrue(self.call("POST", "/api/xfer690/wiki/login", body={"jwt": "a.b.c"})["ok"])
+        self.assertIn(("login", "a.b.c"), self.svc.calls)
+        self.assertTrue(self.call("POST", "/api/xfer690/wiki/logout")["ok"])
+        self.assertIn("logout", self.svc.calls)
         self.call("POST", "/api/xfer690/wiki/write", body={"edits": [{"key": "1"}]})
         self.assertIn(("write", [{"key": "1"}]), self.svc.calls)
 
     def test_post_requires_json_content_type(self):
         # 別的網站的頁面不經預檢只能送 text/plain / 表單:690 的 POST 一律要 application/json
-        for path in ("/api/xfer690/refresh", "/api/xfer690/wiki/login", "/api/xfer690/wiki/write"):
+        for path in ("/api/xfer690/refresh", "/api/xfer690/wiki/login", "/api/xfer690/wiki/logout",
+                     "/api/xfer690/wiki/write"):
             for ctype in ("", "text/plain", "application/x-www-form-urlencoded", "multipart/form-data"):
                 with self.assertRaises(HttpError, msg=f"{path} {ctype}") as cm:
                     self.call("POST", path, body={"edits": [{"key": "1"}]}, ctype=ctype)

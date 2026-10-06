@@ -234,8 +234,13 @@ def xfer690_log(app, msg_id) -> Raw:
     return Raw(text.encode("utf-8"), "text/plain; charset=utf-8")
 
 
-def xfer690_wiki_login(app) -> dict:
-    return app.xfer690.wiki_login() if app.xfer690 else dict(_XFER_OFF)
+def xfer690_wiki_login(app, body: dict) -> dict:
+    """使用者貼上的 Wiki jwt(Innovue OAuth 登入後從瀏覽器 Cookies 複製)。"""
+    return app.xfer690.wiki_login(body.get("jwt")) if app.xfer690 else dict(_XFER_OFF)
+
+
+def xfer690_wiki_logout(app) -> dict:
+    return app.xfer690.wiki_logout() if app.xfer690 else dict(_XFER_OFF)
 
 
 def xfer690_wiki_write(app, body: dict) -> dict:
@@ -265,6 +270,7 @@ def build_routes(app: App) -> dict:
         ("GET",  "/api/xfer690"):            lambda req: xfer690_status(app),
         ("POST", "/api/xfer690/refresh"):    _json_only(lambda req: xfer690_refresh(app)),
         ("GET",  "/api/xfer690/log"):        lambda req: xfer690_log(app, req.query.get("id")),
-        ("POST", "/api/xfer690/wiki/login"): _json_only(lambda req: xfer690_wiki_login(app)),
+        ("POST", "/api/xfer690/wiki/login"):  _json_only(lambda req: xfer690_wiki_login(app, req.body)),
+        ("POST", "/api/xfer690/wiki/logout"): _json_only(lambda req: xfer690_wiki_logout(app)),
         ("POST", "/api/xfer690/wiki/write"): _json_only(lambda req: xfer690_wiki_write(app, req.body)),
     }

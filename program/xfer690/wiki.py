@@ -76,14 +76,15 @@ class WikiAuthError(WikiError):
     """憑證過期、被拒或權限不足:要重新登入。"""
 
 
+# 「must be authenticated」:Wiki.js 把無效 / 過期太久的 token 當訪客,要身分的查詢回這句
 _AUTH_RE = re.compile(
-    r"forbidden|unauthori[sz]ed|unauthenticated|not authenticated|invalid token|jwt", re.I)
+    r"forbidden|unauthori[sz]ed|unauthenticated|not authenticated|must be authenticated"
+    r"|invalid token|jwt", re.I)
 
 _PAGE_FIELDS = ("id content title description editor isPublished isPrivate locale path "
                 "tags { tag } scriptCss scriptJs")
 
-_LOGIN_Q = ("mutation($u:String!,$p:String!,$s:String!){authentication{login(username:$u,"
-            "password:$p,strategy:$s){responseResult{succeeded errorCode message} jwt}}}")
+_WHOAMI_Q = "{users{profile{name email}}}"
 _PAGE_Q = ("query($p:String!,$l:String!){pages{singleByPath(path:$p,locale:$l){"
            + _PAGE_FIELDS + "}}}")
 _UPDATE_Q = ("mutation($id:Int!,$content:String!,$description:String!,$editor:String!,"
@@ -94,11 +95,12 @@ _UPDATE_Q = ("mutation($id:Int!,$content:String!,$description:String!,$editor:St
              "scriptJs:$scriptJs,tags:$tags,title:$title){responseResult{succeeded errorCode message}}}}")
 
 
-def _urllib_post(url: str, headers: dict, body: bytes) -> bytes:
+def _urllib_post(url: str, headers: dict, body: bytes) -> tuple:
+    """回傳 (body, 回應標頭)。"""
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
-            return r.read()
+            return r.read(), {k.lower(): v for k, v in r.headers.items()}
     except urllib.error.HTTPError as e:
         if e.code in (401, 403):
             raise WikiAuthError(f"Wiki 回 HTTP {e.code}") from e
@@ -108,6 +110,12 @@ def _urllib_post(url: str, headers: dict, body: bytes) -> bytes:
 
 
 class WikiClient:
+    """token 是使用者從瀏覽器貼上的 jwt cookie(Innovue OAuth 登入後才有)。
+
+    Wiki.js 2.x 在 token 過期、但還在續期期限內時,自動發新 token:Content-Type 是
+    application/json 的請求放在 new-jwt 回應標頭。這裡收下來換掉 self.token,呼叫端
+    比對前後的 token 決定要不要存回檔案。"""
+
     def __init__(self, url: str, token: str = None, post=None):
         self.url = url.rstrip("/") + "/graphql"
         self.token = token
@@ -117,8 +125,12 @@ class WikiClient:
         headers = {"Content-Type": "application/json"}
         if self.token:
             headers["Authorization"] = "Bearer " + self.token
-        raw = self._post(self.url, headers,
+        res = self._post(self.url, headers,
                          json.dumps({"query": query, "variables": variables}).encode("utf-8"))
+        raw, resp_headers = res if isinstance(res, tuple) else (res, {})
+        renewed = {k.lower(): v for k, v in (resp_headers or {}).items()}.get("new-jwt")
+        if renewed:
+            self.token = renewed
         try:
             data = json.loads(raw)
         except ValueError as e:
@@ -132,14 +144,12 @@ class WikiClient:
             raise WikiError(msg)
         return data.get("data") or {}
 
-    def login(self, username: str, password: str, strategy: str = "local") -> str:
-        r = self._gql(_LOGIN_Q, {"u": username, "p": password, "s": strategy})
-        res = (r.get("authentication") or {}).get("login") or {}
-        rr = res.get("responseResult") or {}
-        if not rr.get("succeeded") or not res.get("jwt"):
-            raise WikiAuthError(rr.get("message") or "登入失敗")
-        self.token = res["jwt"]
-        return self.token
+    def whoami(self) -> dict:
+        """token 對應的帳號 {name, email}。無效的 token 在 Wiki.js 是訪客 → WikiAuthError。"""
+        p = (self._gql(_WHOAMI_Q, {}).get("users") or {}).get("profile")
+        if not p:
+            raise WikiAuthError("Wiki 不認得這個登入憑證")
+        return {"name": p.get("name") or "", "email": p.get("email") or ""}
 
     def get_page(self, path: str, locale: str) -> dict:
         page = (self._gql(_PAGE_Q, {"p": path, "l": locale}).get("pages") or {}).get("singleByPath")
