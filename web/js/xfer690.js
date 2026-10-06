@@ -605,7 +605,8 @@ function x6cell(tb, row, c) {
     const was = out.k === "hold" || out.k === "wait" ? out.existing : (out.k === "fill" ? out.existing : out.v);
     out = { v: x6Edits[ek].value, k: "edit", was, existing: out.existing, auto: out.auto,
             overwrite: !!out.existing && !/^\d{4}x{4}$/.test(out.existing),
-            tip: `你改的,原本 ${was || "(空白)"}` };
+            tip: `你改的,原本 ${was || "(空白)"}`
+                 + (out.existing && !/^\d{4}x{4}$/.test(out.existing) ? `\n會覆寫頁面上人填的 ${out.existing};寫入前會先確認頁面上還是這個值` : "") };
   }
   return out;
 }
@@ -759,34 +760,12 @@ function x6wtable(tb, rows) {
   wrap.append(t);
   return wrap;
 }
-// 改過的格列在表格上方,可以一格一格還原
+// 改過的格本身有底色、刪除線和提示,這裡只放「全部還原」(有改才出現)
 function x6renderEdits() {
-  const box = x6$("x6-w-edits");
-  box.replaceChildren();
-  const list = Object.entries(x6Edits);
-  if (!list.length) return;
-  const w = x6el("div", "x6-edits");
-  const h = x6el("div", "row");
-  const nOver = list.filter(([, e]) => e.expect && !/^\d{4}x{4}$/.test(e.expect)).length;
-  h.append(x6el("b", null, `你改了 ${list.length} 格`),
-           x6el("span", null, nOver ? `其中 ${nOver} 格會覆寫頁面上人填的值;寫入前會先確認頁面上還是你看到的那個值` : "寫入時一起送出"));
-  const all = x6el("button", "x6-link", "全部還原");
-  all.type = "button";
-  all.addEventListener("click", () => { x6Edits = {}; x6render(); });
-  h.append(all);
-  w.append(h);
-  for (const [ek, e] of list) {
-    const line = x6el("div", "row");
-    const title = (x6wikiTables().find(t => t.page === e.page && t.table === e.table) || {}).title || e.page;
-    line.append(x6el("span", null, `${title} · ${e.key} · ${e.col}`),
-                x6el("span", "chg", `${e.expect || "(空白)"} → ${e.value || "(空白)"}`));
-    const undo = x6el("button", "x6-link", "還原");
-    undo.type = "button";
-    undo.addEventListener("click", () => { delete x6Edits[ek]; x6render(); });
-    line.append(undo);
-    w.append(line);
-  }
-  box.append(w);
+  const n = Object.keys(x6Edits).length;
+  const all = x6$("x6-w-undo");
+  all.hidden = !n;
+  all.textContent = `全部還原(${n} 格)`;
 }
 function x6startEdit(td) {
   if (td.querySelector("input")) return;
@@ -1081,6 +1060,7 @@ function x6bind() {
   }));
   x6$("x6-refresh").addEventListener("click", x6refresh);
   x6$("x6-w-go").addEventListener("click", () => x6wikiWrite());
+  x6$("x6-w-undo").addEventListener("click", () => { x6Edits = {}; x6render(); });
   x6$("x6-log-close").addEventListener("click", () => x6$("x6-logdlg").close());
   document.addEventListener("click", (e) => {
     const b = e.target.closest && e.target.closest("#panel-xfer690 [data-sel]");

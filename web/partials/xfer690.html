@@ -166,11 +166,9 @@
 .x6-wt td.flag { text-decoration: underline wavy var(--warn); text-underline-offset: 4px; }
 .x6-wt td input { font: inherit; width: 100%; min-width: 5.5em; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--btn);
                   background: var(--card); color: var(--txt); text-align: center; }
-.x6-edits { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--warn-bg, #fff4e0);
-            border: 1px solid var(--warn-line, var(--warn)); color: var(--warn-ink); display: grid; gap: 6px; font-size: 13px; }
-.x6-edits .row { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
-.x6-edits .row .x6-link { margin-left: auto; }
-.x6-edits .chg { font-family: var(--ff-mono, monospace); font-size: 12px; }
+/* 有手改時「全部還原」靠右、寫入按鈕緊接在後 */
+.x6 .card > h2 .x6-undo:not([hidden]) { margin-left: auto; }
+.x6 .card > h2 .x6-undo:not([hidden]) ~ .x6-btn { margin-left: 0; }
 .x6-sw { display: inline-grid; place-items: center; min-width: 22px; height: 18px; padding: 0 4px; border-radius: 4px; font-size: 11px; font-weight: 700; }
 .x6-sw.fill { background: var(--btn-weak, var(--accent-soft, #ede7fb)); color: var(--btn-ink, var(--btn)); }
 .x6-sw.old { color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); font-weight: 400; }
@@ -296,14 +294,14 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
           <span><i class="x6-sw old">07/16</i>頁面上原本就有</span>
           <span><i class="x6-sw hold">留空</i>失敗或沒到,不填</span>
           <span><i class="x6-sw wait">待跑</i>還沒跑到,之後再填</span>
-          <span><i class="x6-sw edit">07/16</i>你手動改的,寫入時一起送出</span>
+          <span><i class="x6-sw edit">07/16</i>你手動改的,寫入時一起送出;點一下可以再改,上方「全部還原」一次取消</span>
           <span><i class="x6-sw old flag">07/11</i>值跟 log 不一樣,點一下可以改</span>
           <span><span class="x6-tag add">新增</span>表格原本沒有這一列</span>
         </span></span>
+        <button type="button" class="x6-link x6-undo" id="x6-w-undo" hidden></button>
         <span class="x6-spin" id="x6-w-spin" hidden></span>
         <button type="button" class="x6-btn" id="x6-w-go"></button></h2>
       <div class="x6-summary" id="x6-w-summary"></div>
-      <div id="x6-w-edits"></div>
       <p class="x6-result" id="x6-w-result" role="status" hidden></p>
       <div id="x6-wikipages" style="margin-top:20px"></div>
     </section>
