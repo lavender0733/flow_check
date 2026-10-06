@@ -239,6 +239,15 @@ def xfer690_wiki_logout(app) -> dict:
     return app.xfer690.wiki_logout() if app.xfer690 else dict(_XFER_OFF)
 
 
+def xfer690_gmail_authorize(app) -> dict:
+    """開瀏覽器到 Google 同意頁(在伺服器背景等,請求馬上回來)。"""
+    return app.xfer690.gmail_authorize() if app.xfer690 else dict(_XFER_OFF)
+
+
+def xfer690_gmail_logout(app) -> dict:
+    return app.xfer690.gmail_logout() if app.xfer690 else dict(_XFER_OFF)
+
+
 def xfer690_wiki_write(app, body: dict) -> dict:
     """用伺服器記憶體裡的登入寫入 Wiki。沒登入回 409,不會自己登入。"""
     if not app.xfer690:
@@ -268,5 +277,7 @@ def build_routes(app: App) -> dict:
         ("GET",  "/api/xfer690/log"):        lambda req: xfer690_log(app, req.query.get("id")),
         ("POST", "/api/xfer690/wiki/login"):  _json_only(lambda req: xfer690_wiki_login(app, req.body)),
         ("POST", "/api/xfer690/wiki/logout"): _json_only(lambda req: xfer690_wiki_logout(app)),
+        ("POST", "/api/xfer690/gmail/authorize"): _json_only(lambda req: xfer690_gmail_authorize(app)),
+        ("POST", "/api/xfer690/gmail/logout"):    _json_only(lambda req: xfer690_gmail_logout(app)),
         ("POST", "/api/xfer690/wiki/write"): _json_only(lambda req: xfer690_wiki_write(app, req.body)),
     }

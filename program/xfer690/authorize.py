@@ -31,14 +31,21 @@ SETUP = """找不到 {path}
 """
 
 
-def authorize() -> None:
+def run_consent(credentials_path=GMAIL_CREDENTIALS_PATH, token_path=GMAIL_TOKEN_PATH) -> None:
+    """開瀏覽器到 Google 同意頁(唯讀),等使用者同意後把 token 存起來。最多等 10 分鐘。
+
+    690授權.bat 和網頁「信件與連線」的「授權」按鈕都走這裡。"""
     from google_auth_oauthlib.flow import InstalledAppFlow
-    flow = InstalledAppFlow.from_client_secrets_file(str(GMAIL_CREDENTIALS_PATH), SCOPES)
+    flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
     creds = flow.run_local_server(
         port=0, open_browser=True, timeout_seconds=600,
         authorization_prompt_message="授權網址(瀏覽器沒自動開就手動貼上):\n{url}\n",
         success_message="授權完成,可以關掉這個分頁。")
-    write_json_atomic(GMAIL_TOKEN_PATH, json.loads(creds.to_json()))
+    write_json_atomic(token_path, json.loads(creds.to_json()))
+
+
+def authorize() -> None:
+    run_consent()
     print(f"授權完成,token 存在 {GMAIL_TOKEN_PATH}")
 
 

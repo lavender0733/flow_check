@@ -89,7 +89,8 @@ Rundeck 在內網連不到,所以只靠信。
 ### 第一次設定(每台電腦一次)
 
 1. `data/config/gmail_credentials.json`:GCP 的 OAuth 用戶端(電腦版應用程式,範圍只要 `gmail.readonly`)。已經放好就跳過。
-2. 雙擊 **`690授權.bat`** → 瀏覽器跳出 Google 登入,用 `alicia.huang@innovue.ltd` 同意唯讀權限。
+2. 在「信件與連線」的 Gmail 卡片按 **授權**(或雙擊 **`690授權.bat`**)→ 瀏覽器跳出 Google 登入,用 `alicia.huang@innovue.ltd` 同意唯讀權限。
+   已授權時卡片顯示 **登出**(刪掉 token、停止抓信)。
    完成後會印出近 30 天每個 job 的統計表(封數、成功失敗、時刻),拿來核對系統清單。
    token 存在 `data/machines/gmail_token_<機器>.json`。
 3. 要寫 Wiki 的話,`xfer690.json` 的 `wiki.enabled` 要是 `true`。Wiki 只開 **Innovue OAuth** 登入,程式沒辦法自己登入:
@@ -293,6 +294,8 @@ flow_check/
 | GET | `/api/xfer690/log?id=<信件 id>` | 那封通知信附的 `.log` 純文字(當下從 Gmail 抓,不存檔) |
 | POST | `/api/xfer690/wiki/login` | body `{"jwt": "…"}`:使用者從瀏覽器複製的 Wiki jwt。確認有效才存進 `xfer690_secrets.json`,回應不回顯 |
 | POST | `/api/xfer690/wiki/logout` | 清掉 Wiki 登入憑證(記憶體與 `xfer690_secrets.json`) |
+| POST | `/api/xfer690/gmail/authorize` | 開瀏覽器到 Google 同意頁(伺服器背景等,最多 10 分鐘),同意後存 token、抓一次信 |
+| POST | `/api/xfer690/gmail/logout` | 刪掉這台電腦的 Gmail token,停止抓信 |
 | POST | `/api/xfer690/wiki/write` | 寫入 Wiki(body `{"edits": [...]}` 是使用者手改的格);沒登入回 409 `{"error": "not_logged_in"}` |
 
 ---

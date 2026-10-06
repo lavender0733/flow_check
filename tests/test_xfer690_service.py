@@ -234,7 +234,7 @@ class PollTest(ServiceCase):
         g.fail = AuthError("revoked")
         snap = svc.poll()
         self.assertEqual(snap["auth"], "needs_auth")
-        self.assertIn("690授權.bat", snap["last_error"])
+        self.assertIn("重新授權", snap["last_error"])
         self.assertIn("a", svc.events)
         self.assertEqual(snap["last_poll"], before)
 
@@ -393,6 +393,89 @@ def daily_events():
     for code in ["0119%02d" % i for i in range(0, 15)]:
         out["l" + code] = mail(code, f"posted-legal-{code}", "06:10")
     return out
+
+
+class GmailAuthTest(ServiceCase):
+    """信件與連線的 Gmail 卡片:沒授權時「授權」,已授權時「登出」。"""
+
+    def make_auth(self, gmail):
+        svc = self.make(gmail)
+        svc.token_path = self.tmp / "gmail_token.json"
+        self.release = threading.Event()
+        self.consent_calls = []
+
+        def consent(cred_path, token_path):
+            self.consent_calls.append((cred_path, token_path))
+            self.release.wait(5)                    # 使用者在瀏覽器按同意之前,一直等
+            token_path.write_text('{"token": "t"}', encoding="utf-8")
+        svc.consent_fn = consent
+        return svc
+
+    def test_authorize_runs_in_background_then_polls(self):
+        g = FakeGmail({"a": mail("012001", "techreport-pdf-step1-raw", "02:10")})
+        svc = self.make_auth(g)
+        res = svc.gmail_authorize()                 # 不能卡住請求:馬上回來
+        self.assertTrue(res["ok"])
+        self.assertTrue(svc.snapshot()["gmail_authorizing"])
+        self.assertEqual(svc.gmail_authorize()["message"], "正在等瀏覽器授權")   # 不重複開
+        self.release.set()
+        svc._auth_thread.join(5)
+        snap = svc.snapshot()
+        self.assertFalse(snap["gmail_authorizing"])
+        self.assertTrue(svc.token_path.exists())
+        self.assertEqual(snap["auth"], "ok")        # 授權完馬上抓一次信
+        self.assertEqual(len(self.consent_calls), 1)
+
+    def test_authorize_failure_reported(self):
+        svc = self.make_auth(FakeGmail({}))
+
+        def boom(cred_path, token_path):
+            raise RuntimeError("使用者關掉了瀏覽器")
+        svc.consent_fn = boom
+        svc.gmail_authorize()
+        svc._auth_thread.join(5)
+        snap = svc.snapshot()
+        self.assertFalse(snap["gmail_authorizing"])
+        self.assertIn("授權沒有完成", snap["last_error"])
+
+    def test_authorize_without_credentials_file(self):
+        svc = self.make_auth(FakeGmail({}))
+        svc.credentials_path.unlink()
+        res = svc.gmail_authorize()
+        self.assertFalse(res["ok"])
+        self.assertIn(svc.credentials_path.name, res["message"])
+        self.assertEqual(self.consent_calls, [])
+
+    def test_logout_removes_token(self):
+        svc = self.make_auth(FakeGmail({}))
+        svc.token_path.write_text('{"token": "t"}', encoding="utf-8")
+        svc.poll()
+        svc.account = "a@b"
+        svc.gmail_logout()
+        self.assertFalse(svc.token_path.exists())
+        snap = svc.snapshot()
+        self.assertEqual(snap["auth"], "needs_auth")
+        self.assertIsNone(snap["gmail_account"])
+        self.assertFalse(snap["gmail_authorized"])
+
+    def test_poll_after_logout_stays_logged_out(self):
+        # 登出後自動抓信:真的 GmailClient 找不到 token → AuthError → 維持未授權,不會又變成已授權
+        from xfer690.gmail_client import GmailClient
+        svc = self.make_auth(FakeGmail({}))
+        svc.gmail_factory = lambda: GmailClient(svc.token_path)
+        svc.gmail_logout()
+        snap = svc.poll()
+        self.assertEqual(snap["auth"], "needs_auth")
+        self.assertFalse(snap["gmail_authorized"])
+
+    def test_authorized_flag(self):
+        svc = self.make_auth(FakeGmail({}))
+        self.assertFalse(svc.snapshot()["gmail_authorized"])       # 沒有 token
+        svc.token_path.write_text('{"token": "t"}', encoding="utf-8")
+        svc.poll()
+        self.assertTrue(svc.snapshot()["gmail_authorized"])
+        svc.auth = "needs_auth"                                      # token 在、但被撤銷
+        self.assertFalse(svc.snapshot()["gmail_authorized"])
 
 
 class WikiFlowTest(ServiceCase):

@@ -823,10 +823,15 @@ function x6renderConn() {
   const rows = [];
   if (s.gmail_account) rows.push(["帳號", s.gmail_account]);
   rows.push(["最後抓信", s.last_poll ? `${x6mdhm(s.last_poll)}(${s.last_poll_kind === "manual" ? "手動" : "自動"})` : "還沒抓過"]);
-  const fix = s.auth === "needs_auth" || s.auth === "missing_credentials"
-    ? `到 flow_check 資料夾雙擊「690授權.bat」${s.gmail_account ? `,用 ${s.gmail_account} ` : ""}重新登入,完成後按 690資轉 上方的「立即更新」。`
+  if (s.gmail_authorizing) [gs, gw] = ["pending", "等待授權"];
+  else if (!s.gmail_authorized && s.auth !== "unknown") [gs, gw] = ["fail", s.auth === "missing_credentials" ? "還沒設定" : "還沒授權"];
+  const fix = s.gmail_authorizing ? null
+    : s.auth === "missing_credentials" ? s.last_error
+    : !s.gmail_authorized ? `按下面的「${s.gmail_account || s.auth === "needs_auth" ? "重新授權" : "授權"}」,在瀏覽器用 Google 帳號同意唯讀權限。`
     : s.last_error;
-  box.append(card(gs, "Gmail", gw, rows, gs === "ok" ? null : fix));
+  // 缺 GCP 用戶端檔時按鈕幫不上忙(要先照 690授權.bat 的說明設定),不顯示
+  const act = s.auth === "missing_credentials" ? null : x6gmailBox(s);
+  box.append(card(gs, "Gmail", gw, rows, gs === "ok" ? null : fix, act));
 
   const w = s.wiki || {};
   const ll = w.last_login;
@@ -902,7 +907,9 @@ async function x6load() {
   x6render();
   // 第一次抓信還沒完成:每 3 秒再讀一次,抓完畫面馬上更新(平常每 60 秒)
   clearTimeout(x6Soon);
-  if (x6Snap && x6Snap.ok !== false && x6Snap.auth === "unknown") x6Soon = setTimeout(x6load, 3000);
+  // 等瀏覽器授權時也一樣:使用者按完同意,卡片馬上變成已授權
+  if (x6Snap && x6Snap.ok !== false && (x6Snap.auth === "unknown" || x6Snap.gmail_authorizing))
+    x6Soon = setTimeout(x6load, 3000);
 }
 async function x6refresh() {
   if (x6Busy.refresh) return;
@@ -962,8 +969,7 @@ function x6wikiLoginBox(w) {
   btn.addEventListener("click", x6wikiLogin);
   const row = x6el("div", "x6-jwt-row");
   row.append(x6jwtInput, btn);
-  wrap.append(ol, lab, row,
-              x6el("div", "hint", "存在本機 data/config/xfer690_secrets.json(不進版控)。Wiki 會自動續期,平常不用重貼;失效時這裡會再出現。"));
+  wrap.append(ol, lab, row);
   return wrap;
 }
 async function x6wikiLogin() {
@@ -984,6 +990,44 @@ async function x6wikiLogin() {
 async function x6wikiLogout() {
   try {
     await fetch("/api/xfer690/wiki/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  } catch (e) { /* 下次載入看快照 */ }
+  await x6load();
+}
+
+// ── Gmail 授權:沒授權顯示「授權」,已授權顯示「登出」(跟 Wiki 卡片一樣) ──
+function x6gmailBox(s) {
+  const wrap = x6el("div", "x6-login");
+  const btn = x6el("button", "x6-btn" + (s.gmail_authorized ? " ghost" : ""));
+  btn.type = "button";
+  if (s.gmail_authorizing) {
+    btn.textContent = "等待授權…";
+    btn.disabled = true;
+    btn.setAttribute("aria-busy", "true");
+    wrap.append(btn, x6el("div", "hint", "已開啟瀏覽器:在 Google 頁面選帳號、按同意,完成後這裡會自動更新。"));
+    return wrap;
+  }
+  if (s.gmail_authorized) {
+    btn.textContent = "登出";
+    btn.addEventListener("click", x6gmailLogout);
+  } else {
+    btn.textContent = s.gmail_account || s.auth === "needs_auth" ? "重新授權" : "授權";
+    btn.addEventListener("click", x6gmailAuthorize);
+  }
+  wrap.append(btn);
+  return wrap;
+}
+async function x6gmailAuthorize() {
+  try {
+    const r = await fetch("/api/xfer690/gmail/authorize", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const j = await r.json();
+    if (!j.ok && x6Snap) x6Snap.last_error = j.message;
+  } catch (e) { /* 下次載入看快照 */ }
+  await x6load();
+}
+async function x6gmailLogout() {
+  if (!confirm("登出 Gmail?\n這台電腦會停止抓信,直到重新授權。")) return;
+  try {
+    await fetch("/api/xfer690/gmail/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   } catch (e) { /* 下次載入看快照 */ }
   await x6load();
 }

@@ -31,6 +31,14 @@ class FakeService:
         self.calls.append("logout")
         return {"ok": True}
 
+    def gmail_authorize(self):
+        self.calls.append("gmail_authorize")
+        return {"ok": True, "message": ""}
+
+    def gmail_logout(self):
+        self.calls.append("gmail_logout")
+        return {"ok": True}
+
     def wiki_write(self, edits, only=None):
         from xfer690.service import NotLoggedIn
         self.calls.append(("write", edits, only) if only else ("write", edits))
@@ -54,7 +62,8 @@ class RoutesTest(unittest.TestCase):
     def test_routes_registered(self):
         for key in [("GET", "/api/xfer690"), ("POST", "/api/xfer690/refresh"),
                     ("GET", "/api/xfer690/log"), ("POST", "/api/xfer690/wiki/login"),
-                    ("POST", "/api/xfer690/wiki/logout"), ("POST", "/api/xfer690/wiki/write")]:
+                    ("POST", "/api/xfer690/wiki/logout"), ("POST", "/api/xfer690/wiki/write"),
+                    ("POST", "/api/xfer690/gmail/authorize"), ("POST", "/api/xfer690/gmail/logout")]:
             self.assertIn(key, self.routes)
 
     def test_status_delegates(self):
@@ -86,7 +95,7 @@ class RoutesTest(unittest.TestCase):
     def test_post_requires_json_content_type(self):
         # 別的網站的頁面不經預檢只能送 text/plain / 表單:690 的 POST 一律要 application/json
         for path in ("/api/xfer690/refresh", "/api/xfer690/wiki/login", "/api/xfer690/wiki/logout",
-                     "/api/xfer690/wiki/write"):
+                     "/api/xfer690/wiki/write", "/api/xfer690/gmail/authorize", "/api/xfer690/gmail/logout"):
             for ctype in ("", "text/plain", "application/x-www-form-urlencoded", "multipart/form-data"):
                 with self.assertRaises(HttpError, msg=f"{path} {ctype}") as cm:
                     self.call("POST", path, body={"edits": [{"key": "1"}]}, ctype=ctype)
@@ -94,6 +103,12 @@ class RoutesTest(unittest.TestCase):
         self.assertEqual(self.svc.calls, [])
         self.call("POST", "/api/xfer690/refresh", ctype="application/json; charset=utf-8")
         self.assertIn(("poll", "manual"), self.svc.calls)
+
+    def test_gmail_authorize_and_logout(self):
+        self.assertTrue(self.call("POST", "/api/xfer690/gmail/authorize")["ok"])
+        self.assertTrue(self.call("POST", "/api/xfer690/gmail/logout")["ok"])
+        self.assertEqual([c for c in self.svc.calls if str(c).startswith("gmail")],
+                         ["gmail_authorize", "gmail_logout"])
 
     def test_write_without_login_is_409(self):
         with self.assertRaises(HttpError) as cm:

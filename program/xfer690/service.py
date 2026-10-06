@@ -45,7 +45,7 @@ DEFAULT_XFER_CONFIG = {
 
 META_BYTES = 2048           # 一封 metadata 的流量估算
 RECENT = 20
-AUTH_MSG = "Gmail 授權已失效或被管理員封鎖,請雙擊 690授權.bat"
+AUTH_MSG = "Gmail 授權已失效或被管理員封鎖,請在「信件與連線」按「重新授權」"
 _MSG_ID_RE = re.compile(r"^[0-9a-fA-F]{6,32}$")
 
 
@@ -98,6 +98,11 @@ def _default_gmail():
     return GmailClient(GMAIL_TOKEN_PATH)
 
 
+def _default_consent(credentials_path, token_path):
+    from xfer690.authorize import run_consent
+    run_consent(credentials_path, token_path)
+
+
 def _default_wiki(url, token=None):
     from xfer690.wiki import WikiClient
     return WikiClient(url, token)
@@ -114,6 +119,9 @@ class Xfer690Service:
         self.credentials_path = credentials_path
         self.gmail_factory = gmail_factory
         self.wiki_factory = wiki_factory
+        self.token_path = GMAIL_TOKEN_PATH    # 測試可換
+        self.consent_fn = _default_consent    # 開瀏覽器授權(測試可換)
+        self._auth_thread = None              # 網頁按「授權」時,在背景等瀏覽器同意
         self.now = now
         self.cfg = load_xfer_config(config_path)
         self._lock = threading.Lock()         # 整個 poll()
@@ -283,6 +291,9 @@ class Xfer690Service:
         return {
             "ok": True, "enabled": bool(self.cfg.get("enabled", True)),
             "auth": self.auth, "gmail_account": self.account,
+            # 有 token、而且沒被判定失效 = 已授權(卡片顯示「登出」;否則顯示「授權」)
+            "gmail_authorized": self.token_path.exists() and self.auth != "needs_auth",
+            "gmail_authorizing": bool(self._auth_thread and self._auth_thread.is_alive()),
             "last_poll": self.last_poll, "last_poll_kind": self.last_poll_kind,
             "last_error": self.last_error, "stale": stale,
             "poll_interval_min": int(self.cfg["poll_interval_min"]),
@@ -317,6 +328,41 @@ class Xfer690Service:
 
     def stop(self) -> None:
         self._stop.set()
+
+    # ── Gmail 授權(信件與連線的按鈕;690授權.bat 走同一個 run_consent) ──
+    def gmail_authorize(self) -> dict:
+        """開瀏覽器到 Google 同意頁。在背景等(最多 10 分鐘),請求馬上回來;授權完抓一次信。"""
+        if self._auth_thread and self._auth_thread.is_alive():
+            return {"ok": True, "message": "正在等瀏覽器授權"}
+        if not self.credentials_path.exists():
+            return {"ok": False, "message": f"找不到 {self.credentials_path.name},請照 690授權.bat 的說明設定"}
+
+        def run():
+            try:
+                self.consent_fn(self.credentials_path, self.token_path)
+            except Exception as e:
+                self.last_error = f"Gmail 授權沒有完成:{e}"[:300]
+                return
+            self.auth = "unknown"
+            self.account = None             # 可能換了帳號,下次抓信重讀
+            self.poll("manual")
+
+        self._auth_thread = threading.Thread(target=run, daemon=True)
+        self._auth_thread.start()
+        return {"ok": True, "message": "已開啟瀏覽器,請在 Google 頁面按同意"}
+
+    def gmail_logout(self) -> dict:
+        """刪掉這台電腦的 Gmail token,停止抓信,直到重新授權。"""
+        with self._lock:
+            try:
+                self.token_path.unlink()
+            except FileNotFoundError:
+                pass
+            self.auth = "needs_auth"
+            self.account = None
+            self.last_error = None
+            self._save()
+        return {"ok": True}
 
     # ── Wiki ────────────────────────────────────────────────
     def wiki_login(self, pasted) -> dict:
