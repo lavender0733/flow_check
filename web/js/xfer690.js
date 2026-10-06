@@ -674,7 +674,6 @@ function x6renderWiki() {
     }));
     if (rows.length) sec.append(x6wtable(tb, rows));
     const notes = [];
-    if (tb.skipped && tb.skipped.length) notes.push(`${tb.skipped.join("、")} 比表格最舊的一列還舊,不插入`);
     if (!rows.length && !tb.error) notes.push(tb.table === "TWB" && tb.page === "TW全文Full" && !(tb.rows || []).length
                                               ? "還沒收到過全文 TWB 的信,沒有要登記的" : "沒有要登記的");
     if (notes.length) sec.append(x6el("div", "x6-wnote", notes.join(";") + "。"));
