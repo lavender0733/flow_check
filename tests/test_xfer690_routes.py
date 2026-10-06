@@ -31,9 +31,9 @@ class FakeService:
         self.calls.append("logout")
         return {"ok": True}
 
-    def wiki_write(self, edits):
+    def wiki_write(self, edits, only=None):
         from xfer690.service import NotLoggedIn
-        self.calls.append(("write", edits))
+        self.calls.append(("write", edits, only) if only else ("write", edits))
         if edits == "nologin":
             raise NotLoggedIn()
         return {"ok": True}
@@ -77,6 +77,9 @@ class RoutesTest(unittest.TestCase):
         self.assertIn(("login", "a.b.c"), self.svc.calls)
         self.assertTrue(self.call("POST", "/api/xfer690/wiki/logout")["ok"])
         self.assertIn("logout", self.svc.calls)
+        only = {"page": "每日執行項目", "table": "", "key": "2026/10/01"}
+        self.call("POST", "/api/xfer690/wiki/write", body={"edits": [], "only": only})
+        self.assertIn(("write", [], only), self.svc.calls)
         self.call("POST", "/api/xfer690/wiki/write", body={"edits": [{"key": "1"}]})
         self.assertIn(("write", [{"key": "1"}]), self.svc.calls)
 

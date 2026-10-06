@@ -248,7 +248,7 @@ def xfer690_wiki_write(app, body: dict) -> dict:
     if not app.xfer690:
         raise HttpError(404, _XFER_OFF["message"])
     try:
-        return app.xfer690.wiki_write(body.get("edits") or [])
+        return app.xfer690.wiki_write(body.get("edits") or [], only=body.get("only"))
     except Exception as e:
         if type(e).__name__ == "NotLoggedIn":
             raise HttpError(409, {"ok": False, "error": "not_logged_in"})

@@ -222,7 +222,7 @@ def _new_report():
     return {"filled": 0, "inserted": 0, "edited": 0, "conflicts": [], "errors": [], "skipped": []}
 
 
-def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edits=()) -> tuple:
+def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edits=(), only_key=None) -> tuple:
     """一頁的所有 target:先套使用者的編輯,再自動填空格。
 
     回傳 (新內容, report, tables)。tables 是預覽用的表格(同一張表的多個 target 合併)。
@@ -294,6 +294,8 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
 
         for t in ts:
             plan = plan_fills(status, t, wiki_cfg)
+            if only_key is not None:        # 「只寫這一列」:其他列不填、不插
+                plan = {k: v for k, v in plan.items() if str(k) == str(only_key)}
             # 使用者這次改過(包括清空)的格,不再自動填回去
             for key, spec in plan.items():
                 spec["cells"] = {c: v for c, v in spec["cells"].items() if (str(key), c) not in edited}
@@ -348,15 +350,22 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
     return content, report, tables
 
 
-def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True) -> dict:
+def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True, only=None) -> dict:
     """依頁分組,每頁讀一次、處理完內容有變才更新(dry_run 或 write=False 時不更新)。
     一頁失敗不影響其他頁;WikiAuthError 往外拋,讓呼叫端清掉登入狀態。
+
+    only={"page", "table", "key"}:只處理那一頁那張表的那一列(第一次正式寫入先試一列),
+    其他頁不讀不寫,使用者的手改也不送。
 
     回傳 {"pages": {頁名: report + updated/id}, "tables": [...], "contents": {頁名: 目前內容}}。
     """
     pages = {}
     for t in wiki_cfg.get("tables", []):
+        if only and (t["page"] != only["page"] or (t.get("table") or "") != only["table"]):
+            continue
         pages.setdefault(t["page"], []).append(t)
+    if only:
+        edits = ()
     out = {"pages": {}, "tables": [], "contents": {}}
     for page, targets in pages.items():
         rep = dict(_new_report(), updated=False, id=None)
@@ -366,7 +375,8 @@ def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True) -> 
             p = client.get_page(page_path(wiki_cfg, page), wiki_cfg.get("locale", "zh-tw"))
             rep["id"] = p.get("id")
             old = p.get("content") or ""
-            new, r, tables = process_page(old, targets, status, wiki_cfg, mine)
+            new, r, tables = process_page(old, targets, status, wiki_cfg, mine,
+                                          only_key=only["key"] if only else None)
             rep.update(r)
             out["contents"][page] = old
             if new != old and write and not wiki_cfg.get("dry_run", True):

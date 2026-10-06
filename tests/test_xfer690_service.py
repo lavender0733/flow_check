@@ -433,7 +433,7 @@ class WikiFlowTest(ServiceCase):
         self.assertTrue(svc.wiki_login(TOKEN)["ok"])
 
     def test_dry_run_never_posts_update(self):
-        svc = self.make(FakeGmail(daily_events()))
+        svc = self.make(FakeGmail(daily_events()), cfg_patch={"wiki": {"dry_run": True}})
         svc.poll()
         svc.wiki_login(TOKEN)
         res = svc.wiki_write([])
@@ -454,6 +454,46 @@ class WikiFlowTest(ServiceCase):
         self.assertEqual(cells[5:8], ["v", "v", "v"])
         self.assertEqual(cells[9:12], ["v", "v", "v"])
         self.assertEqual(svc.snapshot()["wiki"]["last_write"]["pages"], 1)
+
+    def test_write_only_one_row(self):
+        # 第一次正式寫入先試一列:只動那一頁那一列,其他頁、其他列、其他格都不碰
+        evs = daily_events()
+        evs.update({"s" + c: mail(c, f"posted-status-{c}", "07:10", day="30 Sep")
+                    for c in ["0117%02d" % i for i in range(0, 17)]})
+        svc = self.make(FakeGmail(evs), cfg_patch={"wiki": {"dry_run": False}})
+        svc.poll()
+        svc.wiki_login(TOKEN)
+        before = dict(self.wiki_post.pages)
+        res = svc.wiki_write([], only={"page": "每日執行項目", "table": "", "key": "2026/10/01"})
+        self.assertTrue(res["ok"])
+        self.assertEqual([u["path"].rsplit("/", 1)[-1] for u in self.wiki_post.updates], ["每日執行項目"])
+        old = before["每日執行項目"].splitlines(keepends=True)
+        new = self.wiki_post.pages["每日執行項目"].splitlines(keepends=True)
+        added = [l for l in new if l not in old]
+        self.assertEqual(len(new), len(old) + 1)                 # 只多一列
+        self.assertEqual(len(added), 1)
+        self.assertTrue(added[0].startswith("| 2026/10/01"))
+        self.assertNotIn("2026/09/30", self.wiki_post.pages["每日執行項目"])   # 別的新列沒插
+        p = res["pages"]["每日執行項目"]
+        self.assertEqual(p["inserted"], 1)
+        self.assertEqual(res["last_write"]["only"], "每日執行項目 2026/10/01")
+        for page in ("TW全文Full", "TW書目Biblio及雜項"):
+            self.assertEqual(self.wiki_post.pages[page], before[page])
+
+    def test_write_only_ignores_edits_and_bad_target(self):
+        svc = self.make(FakeGmail(daily_events()), cfg_patch={"wiki": {"dry_run": False}})
+        svc.poll()
+        svc.wiki_login(TOKEN)
+        res = svc.wiki_write(
+            [{"page": "TW全文Full", "table": "TWA", "key": "2414", "col": "日期", "expect": "07/11", "value": "07/16"}],
+            only={"page": "每日執行項目", "table": "", "key": "2026/10/01"})
+        self.assertEqual(res["pages"]["每日執行項目"]["edited"], 0)
+        self.assertNotIn("07/16", self.wiki_post.pages["TW全文Full"])
+        n = len(self.wiki_post.updates)
+        for bad in ({"page": "不存在", "table": "", "key": "x"}, {"page": "每日執行項目"}, "x"):
+            r = svc.wiki_write([], only=bad)
+            self.assertFalse(r["ok"], bad)
+        self.assertEqual(len(self.wiki_post.updates), n)
 
     def test_wiki_unchanged_skips_update(self):
         svc = self.make(FakeGmail(daily_events()), cfg_patch={"wiki": {"dry_run": False}})
@@ -522,7 +562,7 @@ class WikiFlowTest(ServiceCase):
 
     def test_sync_function_dry(self):
         post = FakeWikiPost(wiki_pages())
-        svc = self.make(FakeGmail(daily_events()))
+        svc = self.make(FakeGmail(daily_events()), cfg_patch={"wiki": {"dry_run": True}})
         svc.poll()
         res = sync(WikiClient("https://w", TOKEN, post=post), svc.status(), svc.cfg["wiki"])
         self.assertEqual(post.updates, [])
