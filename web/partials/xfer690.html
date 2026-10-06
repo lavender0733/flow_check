@@ -4,7 +4,7 @@
 <style>
 .x6 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
 .x6 > * { min-width: 0; }
-.x6-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 12px;
+.x6-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 12px; margin-left: auto;
               font-size: 12px; color: var(--muted, var(--dim)); }
 .x6-upd b { color: var(--txt); font-weight: 600; font-variant-numeric: tabular-nums; transition: color .3s; }
 .x6-upd.flash b { color: var(--ok-ink, var(--ok)); }
@@ -233,11 +233,6 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
 </style>
 
   <div class="panel hidden x6" id="panel-xfer690">
-    <div class="x6-toolbar">
-      <span class="x6-upd" id="x6-upd" role="status"></span>
-      <span class="x6-spin" id="x6-spin" hidden></span>
-      <button type="button" class="x6-btn" id="x6-refresh">立即更新</button>
-    </div>
     <nav class="x6-subnav" aria-label="690資轉分類">
       <div class="x6-grp" role="group" aria-label="台灣">
         <span class="x6-cc">TW</span>
@@ -245,6 +240,12 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
         <button type="button" class="x6-sn" data-v="twa">TWA<span class="sub">公開</span><span class="x6-badge bad" hidden></span></button>
         <button type="button" class="x6-sn" data-v="twb">TWB<span class="sub">公告</span><span class="x6-badge bad" hidden></span></button>
         <button type="button" class="x6-sn" data-v="adhoc">其他作業<span class="x6-badge bad" hidden></span></button>
+      </div>
+      <!-- 最後更新 + 立即更新:跟分類列同一列、靠右 -->
+      <div class="x6-toolbar">
+        <span class="x6-upd" id="x6-upd" role="status"></span>
+        <span class="x6-spin" id="x6-spin" hidden></span>
+        <button type="button" class="x6-btn" id="x6-refresh">立即更新</button>
       </div>
     </nav>
 
