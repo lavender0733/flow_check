@@ -267,8 +267,12 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
 
         # 使用者在畫面上明確改過的格(唯一會覆寫非空值的路徑)
         edited = set()
+        new_row_edits = {}      # {列鍵: {欄號: 值}}:頁面上還沒有的列,改的值直接當成插入那列的內容
+        counted = set()
         mine = [e for e in edits if (e.get("table") or "") == code]
         if mine:
+            present = set(read_rows(content, ts[0])["rows"])
+            key_col = int(ts[0].get("key_col", 0))
             resolved = []
             for e in mine:
                 if _BAD_VALUE_RE.search(str(e.get("value", ""))):
@@ -281,6 +285,14 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
                     report["conflicts"].append({"table": title, "key": e.get("key"), "col": e.get("col"),
                                                 "existing": None, "wanted": e.get("value"),
                                                 "reason": "找不到這一欄"})
+                    continue
+                if str(e.get("key")) not in present:
+                    if ci == key_col:
+                        report["conflicts"].append({"table": title, "key": e.get("key"), "col": e.get("col"),
+                                                    "existing": None, "wanted": e.get("value"),
+                                                    "reason": "列鍵不能改"})
+                        continue
+                    new_row_edits.setdefault(str(e["key"]), {})[ci] = str(e.get("value", "")).strip()
                     continue
                 resolved.append(dict(e, col=ci))
             try:
@@ -317,6 +329,19 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
             # 使用者這次改過(包括清空)的格,不再自動填回去
             for key, spec in plan.items():
                 spec["cells"] = {c: v for c, v in spec["cells"].items() if (str(key), c) not in edited}
+            # 新增的列:改的值蓋掉這個系統要填的格與新列範本(每個系統都套,誰先插列都一樣)
+            owned = {int(c) for c in (t.get("cols") or {})}
+            for key, cells in new_row_edits.items():
+                spec = plan.get(key)
+                if spec is None:
+                    continue
+                for ci, val in cells.items():
+                    if ci in owned:
+                        if val:
+                            spec["cells"][ci] = val
+                        else:
+                            spec["cells"].pop(ci, None)     # 清空 = 這格不要填
+                    spec["new"][ci] = val
             try:
                 content, rep = apply_fills(content, t, plan, ph)
             except (TableNotFound, LabelMismatch) as e:
@@ -333,6 +358,11 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
                 if (str(c["key"]), int(c["col"])) not in edited:
                     report["conflicts"].append(dict(c, table=title, reason="頁面上已經有不同的值"))
             for r in rep["rows"]:
+                # 新增的列真的插進去了:手改的格算進 edited(只算一次;new_row_edits 留著,
+                # 後面的系統還要靠它跳過被清空的格)
+                if r["new"] and r["key"] in new_row_edits and r["key"] not in counted:
+                    counted.add(r["key"])
+                    report["edited"] += len(new_row_edits[r["key"]])
                 row = tb["rows"].setdefault(r["key"], {"key": r["key"], "new": r["new"], "cells": {}})
                 row["new"] = row["new"] or r["new"]
                 row["cells"].update({int(c): v for c, v in r["cells"].items()})
@@ -373,7 +403,7 @@ def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True, onl
     一頁失敗不影響其他頁;WikiAuthError 往外拋,讓呼叫端清掉登入狀態。
 
     only={"page", "table", "key"}:只處理那一頁那張表的那一列(第一次正式寫入先試一列),
-    其他頁不讀不寫,使用者的手改也不送。
+    其他頁不讀不寫;手改只送那一列的。
 
     回傳 {"pages": {頁名: report + updated/id}, "tables": [...], "contents": {頁名: 目前內容}}。
     """
@@ -383,7 +413,8 @@ def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True, onl
             continue
         pages.setdefault(t["page"], []).append(t)
     if only:
-        edits = ()
+        edits = [e for e in edits if e.get("page") == only["page"]
+                 and (e.get("table") or "") == only["table"] and str(e.get("key")) == only["key"]]
     out = {"pages": {}, "tables": [], "contents": {}}
     for page, targets in pages.items():
         rep = dict(_new_report(), updated=False, id=None)

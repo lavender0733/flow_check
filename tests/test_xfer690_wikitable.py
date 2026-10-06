@@ -315,5 +315,79 @@ class EditValidationTest(unittest.TestCase):
         self.assertEqual(row_of(out, "2414")[1], "07/16")
 
 
+def full_2415():
+    """全文 TWA 2415 六步都成功:頁面上沒有 2415,會新增一列(RAW/L1/L2 打 v)。"""
+    codes = ["011601", "011602", "011603", "011604", "011605", "011606"]
+    evs = [ev(c, "09-30 14:30") for c in codes[1:]]
+    return [ev("011601", "09-30 14:30", data={"VOL": "2415", "TAG": "20260930"})] + evs
+
+
+class NewRowEditTest(unittest.TestCase):
+    """新增的列(頁面上還沒有)也能手改:改的值直接當成插入那列的內容。"""
+    TS = [T_FULL_A, T_FULL_B]
+
+    def setUp(self):
+        self.st = build_status(full_2415(), CFG["systems"], datetime(2026, 10, 1, 9, 0, tzinfo=TPE), 14)
+
+    def run_edits(self, edits, content=FULL):
+        return process_page(content, self.TS, self.st, WIKI, edits)
+
+    def test_plain_insert_without_edits(self):
+        out, rep, _ = self.run_edits([])
+        self.assertEqual(rep["inserted"], 1)
+        self.assertEqual(row_of(out, "2415")[:7], ["20260801", "08/01", "2415", "20260930", "v", "v", "v"])
+
+    def test_edit_planned_cell_on_new_row(self):
+        out, rep, _ = self.run_edits([
+            {"table": "TWA", "key": "2415", "col": "RAW", "system": "twa-full", "expect": "", "value": "-"},
+            {"table": "TWA", "key": "2415", "col": "L1", "system": "twa-full", "expect": "", "value": ""}])
+        self.assertEqual(rep["inserted"], 1)
+        self.assertEqual(rep["edited"], 2)
+        self.assertEqual(row_of(out, "2415")[4:7], ["-", "", "v"])      # L2 照樣自動填
+
+    def test_edit_template_cell_on_new_row(self):
+        # 日期、資料日期是新列範本產生的:也可以改
+        out, rep, _ = self.run_edits([
+            {"table": "TWA", "key": "2415", "col": "日期", "expect": "", "value": "08/01"},
+            {"table": "TWA", "key": "2415", "col": "資料日期", "expect": "", "value": "20260801"}])
+        self.assertEqual(row_of(out, "2415")[:3], ["20260801", "08/01", "2415"])
+        self.assertEqual(rep["edited"], 2)
+
+    def test_edit_on_new_row_someone_already_added(self):
+        # 寫入前別人已經手動加了 2415、RAW 填了 x:照一般列比對,不蓋掉別人的值
+        lines = FULL.split("\n")
+        i = next(n for n, l in enumerate(lines) if "| 2414 |" in l)
+        lines.insert(i, "| 20260930 | 09/30 | 2415 | 20260930 | x |  |  |  |")
+        added = "\n".join(lines)
+        out, rep, _ = self.run_edits(
+            [{"table": "TWA", "key": "2415", "col": "RAW", "system": "twa-full", "expect": "", "value": "-"}],
+            content=added)
+        self.assertEqual(row_of(out, "2415")[4], "x")
+        self.assertEqual(rep["inserted"], 0)
+        self.assertTrue(any(c.get("reason") == "頁面上的值已經被改過" for c in rep["conflicts"]))
+
+    def test_daily_new_row_edit_on_second_system(self):
+        # 每日表四個系統共用一列:先處理的系統插了列,後面系統的手改也要套到(不能被自動填回 v)
+        codes = ["011700"] + ["0117%02d" % i for i in range(1, 17)] + \
+                ["012000"] + ["0120%02d" % i for i in range(1, 9)]
+        st = build_status([ev(c, "10-01 07:10") for c in codes], CFG["systems"], NOW, 14)
+        daily = [t for t in WIKI["tables"] if t["page"] == "每日執行項目"]
+        out, rep, _ = process_page(DAILY, daily, st, WIKI, [
+            {"table": "", "key": "2026/10/01", "col": "RAW", "system": "techreport", "expect": "", "value": ""},
+            {"table": "", "key": "2026/10/01", "col": "OS", "system": "techreport", "expect": "", "value": "x"}])
+        row = row_of(out, "2026/10/01", 0)
+        self.assertEqual(row[1:4], ["v", "v", "v"])           # 案件狀態 照填
+        self.assertEqual(row[9:12], ["", "v", "x"])           # 技術報告:RAW 清空、L3 照填、OS 用手改的
+        self.assertEqual(rep["inserted"], 1)
+        self.assertEqual(rep["edited"], 2)
+
+    def test_new_row_edit_on_key_col_refused(self):
+        # 列鍵不能改(改了就變成另一列)
+        out, rep, _ = self.run_edits([{"table": "TWA", "key": "2415", "col": "公告期數", "expect": "", "value": "9999"}])
+        self.assertEqual(row_of(out, "2415")[2], "2415")
+        self.assertIsNone(row_of(out, "9999"))
+        self.assertTrue(any(c.get("reason") == "列鍵不能改" for c in rep["conflicts"]))
+
+
 if __name__ == "__main__":
     unittest.main()

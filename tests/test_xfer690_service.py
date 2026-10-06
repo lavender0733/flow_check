@@ -527,6 +527,21 @@ class WikiFlowTest(ServiceCase):
         for page in ("TW全文Full", "TW書目Biblio及雜項"):
             self.assertEqual(self.wiki_post.pages[page], before[page])
 
+    def test_write_only_sends_that_rows_edits(self):
+        # 「只寫這一列」:那一列的手改一起送(新增的列也能改),別列的手改不送
+        svc = self.make(FakeGmail(daily_events()), cfg_patch={"wiki": {"dry_run": False}})
+        svc.poll()
+        svc.wiki_login(TOKEN)
+        res = svc.wiki_write([
+            {"page": "每日執行項目", "table": "", "key": "2026/10/01", "col": "RAW", "system": "techreport",
+             "expect": "", "value": "x"},
+            {"page": "TW全文Full", "table": "TWA", "key": "2414", "col": "日期", "expect": "07/11", "value": "07/16"}],
+            only={"page": "每日執行項目", "table": "", "key": "2026/10/01"})
+        self.assertEqual(res["pages"]["每日執行項目"]["edited"], 1)
+        row = next(l for l in self.wiki_post.pages["每日執行項目"].splitlines() if l.startswith("| 2026/10/01"))
+        self.assertEqual([c.strip() for c in row.strip().strip("|").split("|")][9], "x")
+        self.assertNotIn("07/16", self.wiki_post.pages["TW全文Full"])
+
     def test_write_only_ignores_edits_and_bad_target(self):
         svc = self.make(FakeGmail(daily_events()), cfg_patch={"wiki": {"dry_run": False}})
         svc.poll()

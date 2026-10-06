@@ -736,22 +736,18 @@ function x6wtable(tb, rows) {
       const shown = x.k === "edit" && !x.v ? "(空白)" : x.v;
       if ((x.k === "edit" || x.k === "fill") && x.was && x.was !== x.v) td.append(x6el("s", null, x.was), document.createTextNode(shown));
       else td.textContent = shown;
-      if (row.new) {
-        td.dataset.tip = [x.tip, "新增的列寫入以後才能改"].filter(Boolean).join("\n");
-        td.tabIndex = 0;
-      } else {
-        td.dataset.tip = [x.tip, "點一下可以修改"].filter(Boolean).join("\n");
-        td.tabIndex = 0;
-        td.dataset.ek = x6ek(tb, row, c.col);
-        td.dataset.expect = x.existing || "";
-        td.dataset.cur = x.k === "hold" || x.k === "wait" ? "" : x.v;
-        td.dataset.auto = x.auto || "";
-        td.dataset.label = c.label || String(c.col);
-        td.dataset.system = c.system || "";
-        td.dataset.page = tb.page;
-        td.dataset.table = tb.table;
-        td.dataset.key = row.key;
-      }
+      td.dataset.tip = [x.tip, "點一下可以修改"].filter(Boolean).join("\n");
+      td.tabIndex = 0;
+      td.dataset.ek = x6ek(tb, row, c.col);
+      // 新增的列頁面上還沒有:原值是空白,改的值直接當成插入那列的內容
+      td.dataset.expect = row.new ? "" : (x.existing || "");
+      td.dataset.cur = x.k === "hold" || x.k === "wait" ? "" : x.v;
+      td.dataset.auto = x.auto || "";
+      td.dataset.label = c.label || String(c.col);
+      td.dataset.system = c.system || "";
+      td.dataset.page = tb.page;
+      td.dataset.table = tb.table;
+      td.dataset.key = row.key;
       tr.append(td);
     }
     body.append(tr);
@@ -997,12 +993,16 @@ async function x6wikiWrite(only) {
   const w = (x6Snap && x6Snap.wiki) || {};
   if (!w.logged_in) { showTab("xfer690conn"); return; }
   if (x6Busy.write) return;
-  if (only && !w.dry_run && !confirm(`只把「${only.title} ${only.key}」這一列寫進 Wiki?\n其他列、其他頁都不會動,你手改的格也不會一起送。`)) return;
+  // 「只寫這一列」:那一列的手改一起送,別列的手改留著
+  const mine = (e) => only && e.page === only.page && e.table === only.table && String(e.key) === String(only.key);
+  const rowEdits = only ? Object.values(x6Edits).filter(mine) : [];
+  if (only && !w.dry_run && !confirm(`只把「${only.title} ${only.key}」這一列寫進 Wiki?\n其他列、其他頁都不會動`
+      + (rowEdits.length ? `;這一列你手改的 ${rowEdits.length} 格會一起寫入。` : "。"))) return;
   const go = x6$("x6-w-go");
   x6Busy.write = true; x6Result = null;
   go.disabled = true; go.textContent = "寫入中…"; go.setAttribute("aria-busy", "true"); x6$("x6-w-spin").hidden = false;
   x6render();
-  const edits = only ? [] : Object.values(x6Edits);
+  const edits = only ? rowEdits : Object.values(x6Edits);
   const body = only ? { edits, only: { page: only.page, table: only.table, key: only.key } } : { edits };
   try {
     const r = await fetch("/api/xfer690/wiki/write", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -1023,10 +1023,12 @@ async function x6wikiWrite(only) {
       if (conf.length) text += ` ${conf.length} 格沒有改:頁面上的值已經被別人改過,請重新看過。`;
       if (errs.length) text += ` 有錯誤:${errs.join(";")}`;
       x6Result = { ok: !errs.length, text };
-      if (!j.dry_run && !only) {
-        // 衝突的格留著讓使用者重看;其他的已經寫進去了
+      if (!j.dry_run) {
+        // 衝突的格留著讓使用者重看;其他送出的已經寫進去了。只寫一列時,別列的手改不動
         const keep = {};
-        for (const c of conf) for (const [ek, e] of Object.entries(x6Edits)) if (String(e.key) === String(c.key)) keep[ek] = e;
+        for (const [ek, e] of Object.entries(x6Edits)) {
+          if (!(!only || mine(e)) || conf.some(c => String(e.key) === String(c.key))) keep[ek] = e;
+        }
         x6Edits = keep;
       }
     }
