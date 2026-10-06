@@ -286,7 +286,7 @@ function x6renderDaily() {
     const row = x6el("div", "x6-sys");
     row.append(x6el("i", "x6-dot " + p.state));
     const nm = x6el("div", "name", s.label);
-    nm.append(x6el("small", null, `最晚 ${s.expect_by} · ${(s.auto || []).join(" · ")}`));
+    nm.append(x6el("small", null, (s.auto || []).join(" · ")));
     row.append(nm, x6stateEl("div", p.state, fail));
     const steps = x6el("div", "x6-steps");
     for (const pr of s.pairs || []) {

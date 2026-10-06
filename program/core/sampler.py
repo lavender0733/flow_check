@@ -186,9 +186,9 @@ class Monitor:
         self._resume_gap_from = None
 
         # ── 排除內網流量 ──
-        # exclude_lan 以本機 prefs 為準(頁面可切);內網/強制計入網段清單讀 config。
-        el = prefs.get("exclude_lan")
-        self.exclude_lan_enabled = bool(el) if el is not None else bool(cfg.get("exclude_lan", True))
+        # 一律排除(8.1.0 起拿掉開關;舊 prefs / config 的 exclude_lan 不再理會)。
+        # 實際能不能排除看 ESTATS(需管理員身分),啟動訊息會提醒。內網/強制計入網段清單讀 config。
+        self.exclude_lan_enabled = True
         self.lan_nets = []
         for c in cfg.get("lan_ranges", []):
             try:

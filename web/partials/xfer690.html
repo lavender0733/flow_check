@@ -166,9 +166,10 @@
 .x6-wt td.flag { text-decoration: underline wavy var(--warn); text-underline-offset: 4px; }
 .x6-wt td input { font: inherit; width: 100%; min-width: 5.5em; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--btn);
                   background: var(--card); color: var(--txt); text-align: center; }
-/* 有手改時「全部還原」靠右、寫入按鈕緊接在後 */
-.x6 .card > h2 .x6-undo:not([hidden]) { margin-left: auto; }
-.x6 .card > h2 .x6-undo:not([hidden]) ~ #x6-w-go { margin-left: 0; }
+/* 卡片最下面的寫入列:結果訊息佔左邊,按鈕靠右 */
+.x6-w-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px;
+                margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.x6-w-actions .x6-result { flex: 1 1 260px; margin: 0; }
 .x6-sw { display: inline-grid; place-items: center; min-width: 22px; height: 18px; padding: 0 4px; border-radius: 4px; font-size: 11px; font-weight: 700; }
 .x6-sw.fill { background: var(--btn-weak, var(--accent-soft, #ede7fb)); color: var(--btn-ink, var(--btn)); }
 .x6-sw.old { color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); font-weight: 400; }
@@ -294,16 +295,19 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
           <span><i class="x6-sw old">07/16</i>頁面上原本就有</span>
           <span><i class="x6-sw hold">留空</i>失敗或沒到,不填</span>
           <span><i class="x6-sw wait">待跑</i>還沒跑到,之後再填</span>
-          <span><i class="x6-sw edit">07/16</i>你手動改的,寫入時一起送出;點一下可以再改,上方「全部還原」按鈕一次取消</span>
+          <span><i class="x6-sw edit">07/16</i>你手動改的,寫入時一起送出;點一下可以再改,下方「全部還原」按鈕一次取消</span>
           <span><i class="x6-sw old flag">07/11</i>值跟 log 不一樣,點一下可以改</span>
           <span><span class="x6-tag add">新增</span>表格原本沒有這一列</span>
-        </span></span>
-        <button type="button" class="x6-btn ghost x6-undo" id="x6-w-undo" hidden></button>
-        <span class="x6-spin" id="x6-w-spin" hidden></span>
-        <button type="button" class="x6-btn" id="x6-w-go"></button></h2>
+        </span></span></h2>
       <div class="x6-summary" id="x6-w-summary"></div>
-      <p class="x6-result" id="x6-w-result" role="status" hidden></p>
       <div id="x6-wikipages" style="margin-top:20px"></div>
+      <!-- 看完預覽再寫:寫入按鈕放在卡片最下面 -->
+      <div class="x6-w-actions">
+        <p class="x6-result" id="x6-w-result" role="status" hidden></p>
+        <span class="x6-spin" id="x6-w-spin" hidden></span>
+        <button type="button" class="x6-btn ghost" id="x6-w-undo" hidden></button>
+        <button type="button" class="x6-btn" id="x6-w-go"></button>
+      </div>
     </section>
   </div>
 

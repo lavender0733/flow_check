@@ -30,7 +30,6 @@ OLD_TIPO_CONFIG = {
     "sample_interval_sec": 60,
     "lan_probe_interval_sec": 1,
     "exclude_nics": ["Loopback", "isatap", "Teredo"],
-    "exclude_lan": True,
     "lan_ranges": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"],
     "count_ranges": ["10.65.0.0/16"],
     "local_ranges": ["127.0.0.0/8", "::1/128"],

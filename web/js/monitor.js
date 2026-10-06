@@ -24,49 +24,6 @@ let surgeDismissedSeq = -1;   // 已按掉的事件流水號;超過才再跳橫�
 let surgeFirstRender = true;  // 首次渲染只記住現況、不為「開頁前就發生」的舊事件跳橫幅
 let lastStatus = null;        // 最近一次 /api/status;供暴增紀錄立即切換收合狀態
 
-// ===== 排除內網流量 =====
-// 走內網(內網 IP)的傳輸不計入對外額度。開關以「伺服器本機偏好檔」為準(各機獨立、
-// 跨重開留得住);localStorage 只當即時預填。實際扣除在後端取樣時完成,這裡只管開關與顯示。
-// ★ 落在後端 count_ranges 白名單的網段不受影響,仍完整計入。
-let excludeLan = false;
-
-function applyExcludeLan(on) {
-  excludeLan = on;
-  document.getElementById("lanswitch").classList.toggle("on", on);
-}
-
-function saveExcludeLanPrefs() {
-  try {
-    fetch("/api/prefs", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ exclude_lan: excludeLan }),
-    }).catch(() => {});
-  } catch (e) {}
-}
-
-function toggleExcludeLan() {
-  applyExcludeLan(!excludeLan);
-  try { localStorage.setItem("excludeLan", excludeLan ? "1" : "0"); } catch (e) {}
-  saveExcludeLanPrefs();   // 後端即時套用到執行中的 Monitor,不必重啟
-}
-
-// 由 loadMonitorConfig(/api/config)帶入伺服器本機偏好(權威);首次未存過就用目前狀態種一次。
-function applyExcludeLanFromServer(enabled) {
-  if (enabled == null) {
-    saveExcludeLanPrefs();
-    return;
-  }
-  applyExcludeLan(!!enabled);
-}
-
-function restoreExcludeLan() {
-  let on;
-  try { on = localStorage.getItem("excludeLan"); } catch (e) {}
-  // 預設開(與後端 cfg.exclude_lan=True 一致):沒設過就視為開,首次會把「開」種回伺服器。
-  // 伺服器回應後再以 applyExcludeLanFromServer 校正。
-  applyExcludeLan(on !== "0");
-}
-
 // ===== 用量通知 =====
 // 達到設定的已用比例(%)時跳一次桌面通知。設定以「伺服器本機偏好檔」為準
 //(prefs_<機器>.json,跨重開/換瀏覽器都留得住);localStorage 只當即時預填與離線後備。
@@ -893,7 +850,6 @@ async function loadMonitorConfig() {
     }
     applyNotifyFromServer(cfg.notify_enabled, cfg.notify_threshold);
     applySurgeFromServer(cfg.surge_enabled, cfg.surge_min_mb);
-    applyExcludeLanFromServer(cfg.exclude_lan);
     // 外觀(applyTheme 在 index.html)。save=false:讀回來的既有值不必再寫回去;
     // 伺服器沒存過(null)時把目前套用中的那個種上去。
     if (cfg.theme) applyTheme(cfg.theme, false);
@@ -945,7 +901,6 @@ registerTab({
   onInit() {
     restoreNotify();          // 用量通知
     restoreSurge();           // 流量暴增預警
-    restoreExcludeLan();      // 排除內網流量(稍後由 loadMonitorConfig 以伺服器為準覆寫)
     restoreSpeedFloor();      // 測速下限
     restoreCalcLogCollapse(); // 整合面板(網卡+用量明細)的收合/展開狀態(預設展開)
     restoreMonitorTab();      // 整合面板停在哪個頁籤(預設網卡)

@@ -147,7 +147,6 @@ def config_payload(app) -> dict:
         "notify_threshold": prefs.get("notify_threshold"),
         "surge_enabled": prefs.get("surge_enabled"),
         "surge_min_mb": prefs.get("surge_min_mb"),
-        "exclude_lan": prefs.get("exclude_lan"),
         "theme": prefs.get("theme"),
     }
 
@@ -177,9 +176,6 @@ def prefs_write(app, body: dict) -> dict:
             app.monitor.surge_min_bytes = mb * 1024 * 1024
         except (TypeError, ValueError):
             pass
-    if "exclude_lan" in body:
-        patch["exclude_lan"] = bool(body["exclude_lan"])
-        app.monitor.exclude_lan_enabled = patch["exclude_lan"]
     # 外觀(深色/淺色/原版)。純顯示偏好,不影響任何計量邏輯。
     # 白名單比對而非照單全收:這個值會直接回給下一次開頁決定載哪支 CSS,
     # 擋掉手工 POST 塞進對應不到的字串。

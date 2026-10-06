@@ -45,7 +45,7 @@
 
 - 讀所有網卡的**累積位元組**(排除回環/隧道介面),精準累計當日上+下行對 2GB。
 - 顯示已用 / 剩餘 / 即時速率 / 已排除(內網);接近上限圓環變色。
-- **排除內網流量**開關(預設開):每隔 `lan_probe_interval_sec` 秒用 ESTATS 取**每條 TCP 連線**的收/發 byte,
+- **排除內網流量**(一律開啟,沒有開關):每隔 `lan_probe_interval_sec` 秒用 ESTATS 取**每條 TCP 連線**的收/發 byte,
   按**對方 IP** 判內/外網 —— 落在 `lan_ranges`(且不在 `count_ranges`)的連線其增量從當日額度扣除。
   IPv4 與 IPv6 都收;同一支程式的內、外網連線會各自分開計。需管理員身分。
 - **用量通知**開關:已用比例達 N%(預設 80%)就跳頁內提醒視窗 + 紅色橫幅 + 分頁圖示紅點。同一天同門檻只提醒一次。
@@ -216,7 +216,7 @@ flow_check/
 │  ├─ config/xfer690_secrets.json    ★機密:wiki 登入憑證(wiki_jwt)
 │  └─ machines/            各電腦執行期資料(檔名含機器代號,同步不互相覆蓋)
 │     ├─ state_<機器>.json        當日用量(跨重啟保留、跨日歸零)
-│     ├─ prefs_<機器>.json        本機偏好:通知 / 暴增預警 / 排除內網開關與門檻、外觀
+│     ├─ prefs_<機器>.json        本機偏好:通知 / 暴增預警開關與門檻、外觀
 │     ├─ daily_stats_<機器>.json  每日用量統計(流量報表)
 │     ├─ gmail_token_<機器>.json  ★機密:690 的 Gmail 授權
 │     └─ xfer690_<機器>.json      690 抓過的信(主旨、時間、log 摘要;不存整份 log)
@@ -259,7 +259,6 @@ flow_check/
 | `sample_interval_sec` | NIC 計費取樣間隔秒數(預設 60) |
 | `lan_probe_interval_sec` | 內網 ESTATS 高頻探測間隔秒數(預設 1;越短越接得住短命內網連線) |
 | `exclude_nics` | 計流量時要略過的網卡關鍵字(預設 `["Loopback","isatap","Teredo"]`) |
-| `exclude_lan` | 是否排除內網流量(預設 `true`;前端開關以 `prefs_<機器>.json` 為準) |
 | `lan_ranges` | ★ 視為內網、要排除的網段(預設 `10.0.0.0/8`/`172.16.0.0/12`/`192.168.0.0/16`/`169.254.0.0/16`。`10.0.0.0/8` 是刻意涵蓋所有 `10.x` 內網 —— 7.0.2 以前只排除 `10.75/16`,其他 `10.x` 內網漏排除、單日一度衝到 ~6GB) |
 | `count_ranges` | 強制計入白名單,優先於 `lan_ranges`(預設空清單)。落在 `lan_ranges` 內、但實際走對外線路要算進額度的網段寫在這裡 |
 | `local_ranges` | 本機(loopback)網段(預設 `127.0.0.0/8`、`::1/128`):不經網卡、不吃額度,整筆不列入計算與歸因 |
@@ -286,7 +285,7 @@ flow_check/
 | GET | `/api/status` | 當日流量 / 即時速率 / 各網卡明細 / 健康狀態 / 暴增事件 / 今日程式排行 / `lan_excluded_bytes` 等(前端 5 秒輪詢) |
 | GET | `/api/traffic/log?date=YYYY-MM-DD` | 某天的逐分鐘用量明細,外加有明細的日期清單 |
 | GET | `/api/traffic/daily` | 每日用量統計(流量報表),今天那筆即時計算 |
-| GET | `/api/config` | 額度、速率下限、本機偏好(`notify_*`、`surge_*`、`exclude_lan`、`theme`) |
+| GET | `/api/config` | 額度、速率下限、本機偏好(`notify_*`、`surge_*`、`theme`) |
 | POST | `/api/prefs` | 寫回本機偏好,即時套用到執行中的監控(不必重啟) |
 | POST | `/api/speedtest` | 主動測速:抓一小段量實際 Mbps、判斷有無被限速(每次約耗 8MB) |
 | GET | `/api/xfer690` | 690 快照:各系統狀態、最近 20 封信、Gmail 與 Wiki 的狀態、Wiki 預覽(前端每 60 秒讀) |
