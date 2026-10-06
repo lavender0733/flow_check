@@ -252,10 +252,21 @@ function x6renderNav(a) {
     const v = b.dataset.v;
     b.setAttribute("aria-pressed", String(v === x6View));
     const badge = b.querySelector(".x6-badge");
-    const cnt = v === "wiki" ? x6wikiCounts().rows : a[v];
+    if (v === "wiki") {
+      // 有表沒處理(頁面表頭被改過等):不能只顯示「沒有要登記的」,徽章改成紅色驚嘆號
+      const broken = x6wikiTables().filter(t => t.error).length;
+      const cnt = x6wikiCounts().rows;
+      badge.hidden = !cnt && !broken;
+      badge.textContent = broken ? "!" : (cnt || "");
+      badge.classList.toggle("x6-info", !broken);
+      badge.classList.toggle("bad", !!broken);
+      badge.setAttribute("aria-label", broken ? `${broken} 張表沒有處理` : `${cnt} 列要登記`);
+      return;
+    }
+    const cnt = a[v];
     badge.hidden = !cnt;
     badge.textContent = cnt || "";
-    badge.setAttribute("aria-label", v === "wiki" ? `${cnt} 列要登記` : `${cnt} 件需要處理`);
+    badge.setAttribute("aria-label", `${cnt} 件需要處理`);
   });
 }
 
@@ -654,7 +665,8 @@ function x6renderWiki() {
   for (const tb of tables) {
     const sec = x6el("div", "x6-wpage");
     sec.append(x6el("h3", null, tb.title));
-    if (tb.error) sec.append(x6el("div", "x6-wnote", `這張表沒有處理:${tb.error}`));
+    if (tb.error) sec.append(x6el("div", "x6-result bad",
+      `這張表沒有處理,不會寫入:${tb.error}。頁面的表格改過的話,要更新 data/config/xfer690.json 這張表的 labels / cols。`));
     const rows = (tb.rows || []).filter(r => tb.columns.some(c => {
       const x = x6cell(tb, r, c);
       return ["fill", "hold", "wait", "edit"].includes(x.k) && c.kind !== "key" || x.flag;

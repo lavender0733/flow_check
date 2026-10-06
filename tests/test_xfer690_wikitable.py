@@ -168,7 +168,21 @@ class TableTest(unittest.TestCase):
     def test_read_rows(self):
         r = read_rows(BIBLIO, T_BIB_A)
         self.assertEqual(r["rows"]["2419"][4], "2384")
-        self.assertEqual(r["labels"][5], "Gazette SUD")
+        self.assertEqual(r["labels"][6], "Gazette SUD")
+
+    def test_biblio_sud_goes_to_gazette_column(self):
+        # 2026-10 書目表多了「690查詢筆數」「SUD抽測案例」兩欄:Gazette SUD 在第 6 欄,
+        # 新的兩欄 log 裡沒有,程式不碰
+        sud_a = target("TW書目Biblio及雜項", "twa-sud")
+        sud_b = target("TW書目Biblio及雜項", "twb-sud")
+        for t, key, val in ((sud_a, "2419", "2632"), (sud_b, "5328", "3561")):
+            out, rep = apply_fills(BIBLIO, t, {key: {"cells": {6: val}}}, PH)
+            self.assertEqual(rep["filled"], 1, t["system"])
+            row = row_of(out, key)
+            self.assertEqual(row[6], val)
+            self.assertEqual(row[5], "")                    # 690查詢筆數 不動
+            self.assertEqual(len(changed(BIBLIO, out)), 1)
+        self.assertEqual(row_of(BIBLIO, "2419")[7], "TWcccccc")   # SUD抽測案例 人填的
 
     def test_edit_overwrites_when_expect_matches(self):
         out, rep = apply_edits(FULL, T_FULL_A, [{"key": "2414", "col": 1, "expect": "07/11", "value": "07/16"}])
