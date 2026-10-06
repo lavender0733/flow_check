@@ -197,7 +197,9 @@ function x6connProblem() {
   if (!x6Snap) return false;
   if (x6Snap.ok === false) return true;
   const w = x6Snap.wiki || {};
-  return x6Snap.auth !== "ok" || !!x6Snap.last_error || !!(w.last_login && !w.last_login.ok);
+  // unknown = 伺服器剛啟動、第一次抓信還沒完成:卡片顯示灰色「還沒抓信」,不是問題
+  const gmailBad = x6Snap.auth !== "ok" && x6Snap.auth !== "unknown";
+  return gmailBad || !!x6Snap.last_error || !!(w.last_login && !w.last_login.ok);
 }
 
 // ── 畫面 ──
@@ -897,6 +899,7 @@ async function x6openLog(ev) {
 }
 
 // ── 動作 ──
+let x6Soon = null;
 async function x6load() {
   try {
     const r = await fetch("/api/xfer690");
@@ -905,6 +908,9 @@ async function x6load() {
     x6Snap = x6Snap || { ok: false, message: "讀不到 /api/xfer690" };
   }
   x6render();
+  // 第一次抓信還沒完成:每 3 秒再讀一次,抓完畫面馬上更新(平常每 60 秒)
+  clearTimeout(x6Soon);
+  if (x6Snap && x6Snap.ok !== false && x6Snap.auth === "unknown") x6Soon = setTimeout(x6load, 3000);
 }
 async function x6refresh() {
   if (x6Busy.refresh) return;
