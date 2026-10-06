@@ -202,12 +202,30 @@ class PlanTest(unittest.TestCase):
         st = self.status([ev("012001", "10-01 02:10")], datetime(2026, 10, 1, 3, 0, tzinfo=TPE))
         self.assertEqual(plan_fills(st, T_TECH, WIKI), {})
 
-    def test_plan_nodata_fills_all(self):
+    def test_plan_nodata_fills_dash(self):
+        # 每日系統「GCS 資料夾無檔案」:三格填 -(人工登記的做法),不能打 v
         st = self.status([ev("012000", "10-01 02:10", "fail"),
                           ev("012001", "10-01 02:10", "nodata", {"VOL_DATE": "1151001"})])
         plan = plan_fills(st, T_TECH, WIKI)
-        self.assertEqual(plan["2026/10/01"]["cells"], {9: "v", 10: "v", 11: "v"})
+        self.assertEqual(WIKI["nodata_value"], "-")
+        self.assertEqual(plan["2026/10/01"]["cells"], {9: "-", 10: "-", 11: "-"})
         self.assertEqual(plan["2026/10/01"]["new"], {0: "2026/10/01"})
+
+    def test_plan_nodata_value_from_config(self):
+        st = self.status([ev("012000", "10-01 02:10", "fail"),
+                          ev("012001", "10-01 02:10", "nodata", {"VOL_DATE": "1151001"})])
+        plan = plan_fills(st, T_TECH, dict(WIKI, nodata_value="無資料"))
+        self.assertEqual(plan["2026/10/01"]["cells"], {9: "無資料", 10: "無資料", 11: "無資料"})
+
+    def test_nodata_does_not_overwrite_existing_v(self):
+        # 頁面上已經有人打了 v(或程式之前打的):不自動覆蓋,列為衝突讓人看
+        st = self.status([ev("012000", "08-28 02:10", "fail"),
+                          ev("012001", "08-28 02:10", "nodata", {"VOL_DATE": "1150828"})],
+                         datetime(2026, 8, 28, 9, 0, tzinfo=TPE))
+        plan = plan_fills(st, T_TECH, WIKI)
+        out, rep = apply_fills(DAILY, T_TECH, plan, PH)
+        self.assertEqual(out, DAILY)
+        self.assertEqual({c["col"] for c in rep["conflicts"]}, {9, 10, 11})
 
     def test_plan_writes_and_tag(self):
         steps = ["010301", "010302", "010303", "010304", "010305", "010306", "010307", "010308",
@@ -262,9 +280,9 @@ class EditValidationTest(unittest.TestCase):
             self.assertEqual(rep["conflicts"][0]["reason"], "值不能含 | 或換行", repr(bad))
 
     def test_user_clear_not_refilled_in_same_write(self):
-        # 使用者清掉程式填的 v:同一次寫入的自動填格不能又把它填回去
-        st = build_status([ev("012000", "10-01 02:10", "fail"),
-                           ev("012001", "10-01 02:10", "nodata", {"VOL_DATE": "1151001"})],
+        # 使用者清掉程式填的值:同一次寫入的自動填格不能又把它填回去
+        st = build_status([ev(c, "10-01 02:10") for c in
+                           ["012001", "012002", "012003", "012004", "012005", "012006", "012007", "012008", "012000"]],
                           CFG["systems"], NOW, 14)
         daily = [t for t in WIKI["tables"] if t["page"] == "每日執行項目"]
         filled, _, _ = process_page(DAILY, daily, st, WIKI)

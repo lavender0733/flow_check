@@ -65,6 +65,7 @@ class ConfigTest(unittest.TestCase):
                     self.assertNotIn(col, daily_cols, f"每日表欄 {col} 重複")
                     daily_cols[col] = t["system"]
         self.assertEqual(len(cfg["wiki"]["tables"]), 10)
+        self.assertEqual(cfg["wiki"]["nodata_value"], "-")
 
 
 if __name__ == "__main__":

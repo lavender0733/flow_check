@@ -118,7 +118,7 @@ Rundeck 在內網連不到,所以只靠信。
 | 狀態 | 意思 |
 |---|---|
 | 成功 | 步驟與它的 check 都成功 |
-| 無資料 | step1-raw 失敗,原因是 `GCS 資料夾無檔案`。**每日系統**視為完成(wiki 照樣打 v);**期別系統**代表那期檔案還沒到,算警示 |
+| 無資料 | step1-raw 失敗,原因是 `GCS 資料夾無檔案`。**每日系統**不算警示,wiki 那幾格填 `-`(`wiki.nodata_value`),不打 v;**期別系統**代表那期檔案還沒到,算警示、不寫 wiki |
 | 失敗 | 有失敗信。之後的步驟顯示「沒有執行」 |
 | 該到沒到 | 過了 `expect_by` 還沒收到信;或一次執行收到幾步之後就沒信了(期別系統以最後一封信後 2 小時為期限) |
 | 還沒跑到 | 還沒到 `expect_by` |
@@ -164,6 +164,7 @@ Rundeck 在內網連不到,所以只靠信。
 | `systems[]` | 系統清單:`id`、`label`、`view`(`daily` / `twa` / `twb`)、`type`(`full` / `biblio` / `sud` / `eng`)、`auto`(母 job 代碼)、`steps`(步驟代碼,`-check` 是下一號)、`schedule`(`daily` / `{"monthdays": [...]}` / `manual`)、`period`(`date` / `vol_twa` / `vol_twb` / `vol` / `none`)、`expect_by`(最晚幾點該收到信) |
 | `wiki.enabled` / `wiki.dry_run` | 開放登入 / 只算不寫 |
 | `wiki.base` | 子頁所在的路徑 |
+| `wiki.nodata_value` | 每日系統無資料那天,要打 v 的格改填的值(預設 `-`) |
 | `wiki.tables[]` | 每張表的每個系統一筆:`page`、`table`(`TWA` / `TWB` / 空)、`after`(表格前面的標題文字)、`header_has`、`label_row`、`key_col`、`key`、`new_row`、`cols`(`{欄號: {label, value: v/tag/writes, step, check}}`) |
 
 **wiki 表格改結構時**:欄位順序變了 → 改 `cols` 的欄號與 `label`(欄名對不上時程式會整張表不寫,在預覽裡顯示原因);

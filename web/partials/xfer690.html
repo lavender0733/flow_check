@@ -254,7 +254,7 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
       <h2><span id="x6-today"></span><span class="x6-lgd"><button type="button" class="x6-lgd-btn" aria-label="圖例" aria-describedby="x6-lgd-daily"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
         <span class="x6-lgd-pop" id="x6-lgd-daily" role="tooltip">
           <span><i class="x6-dot ok"></i>成功</span>
-          <span><i class="x6-dot nodata"></i>無資料(當天沒有新檔,視為完成)</span>
+          <span><i class="x6-dot nodata"></i>無資料(當天沒有新檔;Wiki 填 -,不打 v)</span>
           <span><i class="x6-dot fail"></i>失敗</span>
           <span><i class="x6-dot missing"></i>該到沒到</span>
           <span><i class="x6-dot pending"></i>今天還沒跑到</span>
@@ -292,7 +292,7 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
     <section class="card" id="x6-v-wiki" hidden>
       <h2>Wiki 登記預覽<span class="x6-lgd"><button type="button" class="x6-lgd-btn" aria-label="圖例" aria-describedby="x6-lgd-wiki"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
         <span class="x6-lgd-pop" id="x6-lgd-wiki" role="tooltip">
-          <span><i class="x6-sw fill">v</i>這次要填進去</span>
+          <span><i class="x6-sw fill">v</i>這次要填進去(無資料那天填 -)</span>
           <span><i class="x6-sw old">07/16</i>頁面上原本就有</span>
           <span><i class="x6-sw hold">留空</i>失敗或沒到,不填</span>
           <span><i class="x6-sw wait">待跑</i>還沒跑到,之後再填</span>

@@ -85,11 +85,10 @@ def step_pairs(steps: list) -> list:
 
 def cell_done(period: dict, step: str, check=None) -> bool:
     """這一格可以打 v 了嗎。步驟本身成功,有 check 的話 check 也要成功、而且不早於步驟的最後一封
-    (步驟失敗重跑後,前一次的 check 不算數)。無資料只在每日系統算完成。"""
+    (步驟失敗重跑後,前一次的 check 不算數)。無資料不算完成:每日系統的無資料由
+    wiki.plan_fills 另外填 nodata_value。"""
     steps = period.get("steps", {})
     s = steps.get(step) or {}
-    if s.get("state") == "nodata" or (steps.get(check) or {}).get("state") == "nodata":
-        return period.get("state") == "nodata"
     if s.get("state") != "ok":
         return False
     if not check:

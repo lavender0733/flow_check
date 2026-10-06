@@ -65,6 +65,7 @@
     "locale": "zh-tw",
     "days": 14,
     "placeholder_re": "^\\d{4}x{4}$",
+    "nodata_value": "-",
     "base": "QC部/40_其他專案系統/智慧局-690整合式專利檢索系統/資料轉置登記",
     "tables": [
       {"page": "TW書目Biblio及雜項", "table": "TWA", "after": "TWA（公開）", "system": "twa-biblio",

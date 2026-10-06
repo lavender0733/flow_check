@@ -37,6 +37,7 @@ DEFAULT_XFER_CONFIG = {
         "locale": "zh-tw",
         "days": 14,
         "placeholder_re": r"^\d{4}x{4}$",
+        "nodata_value": "-",        # 每日系統「GCS 資料夾無檔案」那天,要打 v 的格改填這個
         "base": "QC部/40_其他專案系統/智慧局-690整合式專利檢索系統/資料轉置登記",
         "tables": [],
     },

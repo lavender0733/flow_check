@@ -38,6 +38,7 @@ def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
         return {}
     out = {}
     vol_system = str(sys_.get("period", "")).startswith("vol")
+    nodata_value = str(wiki_cfg.get("nodata_value", "-"))
     for p in sys_.get("periods", []):
         if not p.get("last_at"):
             continue        # 一封信都沒有的期(該到沒到 / 還沒跑)
@@ -47,10 +48,14 @@ def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
         if key is None:
             continue
         cells = {}
+        # 每日系統整天「GCS 資料夾無檔案」:要打 v 的格改填 nodata_value(人工登記用 -)
+        nodata_day = not vol_system and p.get("state") == "nodata"
         for col, c in (target.get("cols") or {}).items():
             kind = c.get("value")
             if kind == "v":
-                if cell_done(p, c["step"], c.get("check")):
+                if nodata_day:
+                    cells[int(col)] = nodata_value
+                elif cell_done(p, c["step"], c.get("check")):
                     cells[int(col)] = "v"
             elif kind == "tag":
                 if p.get("tag"):
