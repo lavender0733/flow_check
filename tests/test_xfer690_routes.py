@@ -35,8 +35,8 @@ class FakeService:
         return {"ok": True}
 
 
-def req(method, path, query=None, body=None):
-    return Request(method, path, query or {}, body or {})
+def req(method, path, query=None, body=None, ctype="application/json"):
+    return Request(method, path, query or {}, body or {}, ctype if method == "POST" else "")
 
 
 class RoutesTest(unittest.TestCase):
@@ -72,6 +72,17 @@ class RoutesTest(unittest.TestCase):
         self.assertTrue(self.call("POST", "/api/xfer690/wiki/login")["ok"])
         self.call("POST", "/api/xfer690/wiki/write", body={"edits": [{"key": "1"}]})
         self.assertIn(("write", [{"key": "1"}]), self.svc.calls)
+
+    def test_post_requires_json_content_type(self):
+        # 別的網站的頁面不經預檢只能送 text/plain / 表單:690 的 POST 一律要 application/json
+        for path in ("/api/xfer690/refresh", "/api/xfer690/wiki/login", "/api/xfer690/wiki/write"):
+            for ctype in ("", "text/plain", "application/x-www-form-urlencoded", "multipart/form-data"):
+                with self.assertRaises(HttpError, msg=f"{path} {ctype}") as cm:
+                    self.call("POST", path, body={"edits": [{"key": "1"}]}, ctype=ctype)
+                self.assertEqual(cm.exception.code, 415)
+        self.assertEqual(self.svc.calls, [])
+        self.call("POST", "/api/xfer690/refresh", ctype="application/json; charset=utf-8")
+        self.assertIn(("poll", "manual"), self.svc.calls)
 
     def test_write_without_login_is_409(self):
         with self.assertRaises(HttpError) as cm:

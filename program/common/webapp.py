@@ -30,13 +30,15 @@ NO_STORE = "no-store, must-revalidate"
 class Request:
     """一個已解析好的請求。handler 只需要看這四個欄位。"""
 
-    __slots__ = ("method", "path", "query", "body")
+    __slots__ = ("method", "path", "query", "body", "content_type")
 
-    def __init__(self, method, path, query, body):
+    def __init__(self, method, path, query, body, content_type=""):
         self.method = method
         self.path = path      # 已去除 query string
         self.query = query    # {str: str}，重複參數取第一個
         self.body = body      # POST 的 JSON；非 JSON 或空 body 為 {}
+        # Content-Type 的媒體類型(小寫、去掉 ; charset=…);沒帶為 ""。
+        self.content_type = content_type.split(";", 1)[0].strip().lower()
 
 
 class Raw:
@@ -119,7 +121,8 @@ def build_handler(routes, static_dir=None, index_renderer=None,
                         body = {}
                     if not isinstance(body, dict):
                         body = {}
-            return Request(method, unquote(parsed.path), query, body)
+            return Request(method, unquote(parsed.path), query, body,
+                           self.headers.get("Content-Type", "") or "")
 
         # ── 分派 ────────────────────────────────────────────
         def _dispatch(self, method):

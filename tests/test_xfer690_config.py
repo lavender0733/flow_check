@@ -57,6 +57,7 @@ class ConfigTest(unittest.TestCase):
             self.assertIn(t["system"], systems)
             steps = systems[t["system"]]["steps"]
             for col, c in t["cols"].items():
+                self.assertEqual(t["labels"][int(col)], c["label"], f"{t['system']} 欄 {col} 欄名")
                 for k in ("step", "check"):
                     if k in c:
                         self.assertIn(c[k], steps, f"{t['system']} 欄 {col} 的 {k}")

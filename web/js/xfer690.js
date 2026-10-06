@@ -909,7 +909,8 @@ async function x6refresh() {
   const b = x6$("x6-refresh");
   b.disabled = true; b.textContent = "抓信中…"; x6$("x6-spin").hidden = false;
   try {
-    const r = await fetch("/api/xfer690/refresh", { method: "POST" });
+    const r = await fetch("/api/xfer690/refresh", { method: "POST", headers: { "Content-Type": "application/json" },
+                                                    body: "{}" });
     x6Snap = await r.json();
   } catch (e) {
     if (x6Snap) x6Snap.last_error = `手動更新失敗:${e.message}`;
@@ -925,7 +926,8 @@ async function x6wikiLogin() {
   x6Busy.login = true;
   x6render();
   try {
-    await fetch("/api/xfer690/wiki/login", { method: "POST" });
+    await fetch("/api/xfer690/wiki/login", { method: "POST", headers: { "Content-Type": "application/json" },
+                                             body: "{}" });
   } catch (e) { /* 結果看快照的 last_login */ }
   x6Busy.login = false;
   await x6load();

@@ -28,6 +28,7 @@ DEFAULT_XFER_CONFIG = {
     "status_map": {"SUCCESS": "ok", "FAILURE": "fail"},
     "nodata_re": "GCS 資料夾無檔案",
     "max_raw_kb": 512,
+    "max_list": 5000,       # 一次最多列幾封(45 天約 740 封)
     "systems": [],
     "wiki": {
         "enabled": False,
@@ -161,7 +162,8 @@ class Xfer690Service:
                     self.auth = "missing_package"
                     self.last_error = "缺少套件 google-auth-oauthlib,請執行 python -m pip install -r requirements-690.txt"
                     return self.snapshot()
-                ids = gmail.list_ids(self._query())
+                max_list = int(self.cfg["max_list"])
+                ids = gmail.list_ids(self._query(), max_list)
                 new = {}
                 for mid in ids:
                     if mid in self.events:
@@ -189,10 +191,16 @@ class Xfer690Service:
                         self.account = gmail.account()
                     except Exception:
                         pass        # 只是顯示用,抓不到下次再試
-                self.last_poll = self.now().isoformat()
-                self.last_poll_kind = kind
-                self.last_error = None
                 self.auth = "ok"
+                if len(ids) >= max_list:
+                    # Gmail 由新到舊列,超過上限的是最舊的那些。last_poll 不前進:下次的 after:
+                    # 才會再涵蓋它們(調高上限後補齊)
+                    self.last_error = (f"信件超過 {max_list} 封,較舊的沒抓到;"
+                                       "請調高 data/config/xfer690.json 的 max_list")
+                else:
+                    self.last_poll = self.now().isoformat()
+                    self.last_error = None
+                self.last_poll_kind = kind
             except Exception as e:
                 if type(e).__name__ == "AuthError":
                     self.auth = "needs_auth"

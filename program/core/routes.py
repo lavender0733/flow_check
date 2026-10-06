@@ -202,6 +202,18 @@ def speedtest(app, body: dict) -> dict:
 _XFER_OFF = {"ok": False, "enabled": False, "message": "690 監控模組載入失敗"}
 
 
+def _json_only(handler):
+    """690 的 POST 會抓信、登入、寫 Wiki:只收 application/json。
+
+    別的網站的頁面不經 CORS 預檢只能送 text/plain / 表單;要送 application/json 就得先預檢,
+    而這個伺服器不回預檢 —— 擋掉跨站觸發寫入。"""
+    def wrapped(req):
+        if req.content_type != "application/json":
+            raise HttpError(415, "要用 Content-Type: application/json")
+        return handler(req)
+    return wrapped
+
+
 def xfer690_status(app) -> dict:
     return app.xfer690.snapshot() if app.xfer690 else dict(_XFER_OFF)
 
@@ -251,8 +263,8 @@ def build_routes(app: App) -> dict:
         ("POST", "/api/prefs"):         lambda req: prefs_write(app, req.body),
         ("POST", "/api/speedtest"):     lambda req: speedtest(app, req.body),
         ("GET",  "/api/xfer690"):            lambda req: xfer690_status(app),
-        ("POST", "/api/xfer690/refresh"):    lambda req: xfer690_refresh(app),
+        ("POST", "/api/xfer690/refresh"):    _json_only(lambda req: xfer690_refresh(app)),
         ("GET",  "/api/xfer690/log"):        lambda req: xfer690_log(app, req.query.get("id")),
-        ("POST", "/api/xfer690/wiki/login"): lambda req: xfer690_wiki_login(app),
-        ("POST", "/api/xfer690/wiki/write"): lambda req: xfer690_wiki_write(app, req.body),
+        ("POST", "/api/xfer690/wiki/login"): _json_only(lambda req: xfer690_wiki_login(app)),
+        ("POST", "/api/xfer690/wiki/write"): _json_only(lambda req: xfer690_wiki_write(app, req.body)),
     }

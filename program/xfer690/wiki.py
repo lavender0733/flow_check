@@ -37,9 +37,12 @@ def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
     if sys_ is None:
         return {}
     out = {}
+    vol_system = str(sys_.get("period", "")).startswith("vol")
     for p in sys_.get("periods", []):
         if not p.get("last_at"):
             continue        # 一封信都沒有的期(該到沒到 / 還沒跑)
+        if vol_system and p.get("nodata"):
+            continue        # 期別系統的無資料 = 那期檔案還沒到:列入警示、不寫 wiki(A4)
         key = _row_key(target, p)
         if key is None:
             continue
@@ -175,9 +178,11 @@ def table_title(target: dict) -> str:
 
 
 def _col_index(labels: list, targets: list, col, system=None):
-    """欄名 → 欄號。同名的欄(每日表有 4 個 RAW)用 system 指定是哪個系統的。"""
-    if isinstance(col, int) or str(col).isdigit():
-        return int(col)
+    """欄名 → 欄號。同名的欄(每日表有 4 個 RAW)用 system 指定是哪個系統的。
+
+    不收欄號:畫面一律送欄名,直接給欄號會略過欄名比對、能寫到列鍵在內的任何一格。"""
+    if not isinstance(col, str) or not col:
+        return None
     for t in targets:
         if system and t["system"] != system:
             continue
@@ -186,6 +191,10 @@ def _col_index(labels: list, targets: list, col, system=None):
                 return int(i)
     hits = [i for i, lab in enumerate(labels) if lab == col]
     return hits[0] if len(hits) == 1 else None
+
+
+# 使用者輸入的值:| 會多切一格、換行會斷開表格,整筆不寫
+_BAD_VALUE_RE = re.compile(r"[|\r\n]")
 
 
 def _period_map(status: dict, target: dict) -> dict:
@@ -234,6 +243,11 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
         if mine:
             resolved = []
             for e in mine:
+                if _BAD_VALUE_RE.search(str(e.get("value", ""))):
+                    report["conflicts"].append({"table": title, "key": e.get("key"), "col": e.get("col"),
+                                                "existing": None, "wanted": e.get("value"),
+                                                "reason": "值不能含 | 或換行"})
+                    continue
                 ci = _col_index(labels, ts, e.get("col"), e.get("system"))
                 if ci is None:
                     report["conflicts"].append({"table": title, "key": e.get("key"), "col": e.get("col"),
@@ -243,7 +257,8 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
                 resolved.append(dict(e, col=ci))
             try:
                 content, er = apply_edits(content, ts[0], resolved)
-            except TableNotFound as e:
+            except (TableNotFound, LabelMismatch) as e:
+                tb["error"] = str(e)
                 report["errors"].append(f"{title}:{e}")
                 continue
             report["edited"] += er["edited"]
@@ -269,6 +284,9 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
 
         for t in ts:
             plan = plan_fills(status, t, wiki_cfg)
+            # 使用者這次改過(包括清空)的格,不再自動填回去
+            for key, spec in plan.items():
+                spec["cells"] = {c: v for c, v in spec["cells"].items() if (str(key), c) not in edited}
             try:
                 content, rep = apply_fills(content, t, plan, ph)
             except (TableNotFound, LabelMismatch) as e:

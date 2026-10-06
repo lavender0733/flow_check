@@ -102,6 +102,14 @@ class StateTest(unittest.TestCase):
         self.assertFalse(cell_done(p, "012001", "012002"))
         self.assertEqual(p["state"], "fail")
 
+    def test_rerun_failure_after_check_not_done(self):
+        # 步驟成功、check 成功,三小時後重跑步驟失敗:舊的 check 不能讓這格打 v
+        evs = [ev("011601", "09-30 14:24", data={"VOL": "2415"}), ev("011602", "09-30 14:24"),
+               ev("011601", "09-30 17:30", status="fail", data={"VOL": "2415"})]
+        p = period(build_status(evs, CFG["systems"], NOW, 14), "twa-full", "2415")
+        self.assertEqual(p["steps"]["011601"]["state"], "fail")
+        self.assertFalse(cell_done(p, "011601", "011602"))
+
     def test_step_ok_check_pending(self):
         evs = [ev("012001", "10-01 02:10")]
         p = period(build_status(evs, CFG["systems"], datetime(2026, 10, 1, 3, 0, tzinfo=TPE), 14),

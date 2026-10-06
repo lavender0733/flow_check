@@ -26,7 +26,8 @@ class FakeGmail:
         if self.fail:
             raise self.fail
         self.queries.append(query)
-        return list(self.messages)
+        self.limits = getattr(self, "limits", []) + [limit]
+        return list(self.messages)[:limit]
 
     def fetch_meta(self, mid):
         self.meta_calls.append(mid)
@@ -178,6 +179,25 @@ class PollTest(ServiceCase):
         self.assertEqual(g.meta_calls, ["a"])
         self.assertIn("after:", g.queries[1])
         self.assertEqual(svc.snapshot()["last_poll_kind"], "manual")
+
+    def test_list_limit_from_config(self):
+        g = FakeGmail({})
+        self.make(g).poll()
+        self.assertEqual(g.limits, [5000])
+
+    def test_truncated_listing_does_not_advance_last_poll(self):
+        # 信多到超過上限:最舊的那些沒列到。last_poll 若照常前進,下次 after: 就再也不會涵蓋它們
+        g = FakeGmail({"a": mail("012001", "techreport-pdf-step1-raw", "02:10"),
+                       "b": mail("012002", "techreport-pdf-step1-raw-check", "02:10"),
+                       "c": mail("012000", "techreport-pdf-auto", "02:11")})
+        svc = self.make(g, cfg_patch={"max_list": 2})
+        snap = svc.poll()
+        self.assertEqual(sorted(svc.events), ["a", "b"])     # 列到的照樣存
+        self.assertIsNone(snap["last_poll"])
+        self.assertIn("max_list", snap["last_error"])
+        self.assertEqual(snap["auth"], "ok")
+        svc.poll()
+        self.assertIn("newer_than:45d", g.queries[1])        # 下次還是從頭列
 
     def test_cache_survives_restart(self):
         g = FakeGmail({"a": mail("012001", "techreport-pdf-step1-raw", "02:10")})

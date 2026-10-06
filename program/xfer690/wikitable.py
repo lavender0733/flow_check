@@ -115,7 +115,12 @@ def locate(lines: list, target: dict) -> dict:
 
 
 def _check_labels(table: dict, target: dict) -> None:
+    """整列欄名都要對上:每日表 RAW/L3/OS 重複四次,只看自己那幾欄抓不到別處插欄造成的錯位。"""
     labels = table["labels"]
+    want = target.get("labels")
+    if want is not None and labels != list(want):
+        raise LabelMismatch("欄名列應為「" + " | ".join(want) + "」,頁面上是「"
+                            + " | ".join(labels) + "」")
     for col, c in (target.get("cols") or {}).items():
         col = int(col)
         got = labels[col] if col < len(labels) else None
@@ -223,10 +228,12 @@ def apply_edits(content: str, target: dict, edits: list) -> tuple:
     """使用者在畫面上明確改過的格(唯一會覆寫非空值的路徑)。
 
     edits: [{"key", "col"(欄號), "expect", "value"}]。那一格的現值跟 expect 不同 → 整筆不寫,
-    列為衝突(別人剛改過,要使用者重新看)。回傳 (新內容, {"edited", "conflicts"})。
+    列為衝突(別人剛改過,要使用者重新看)。欄名對不上 → LabelMismatch,整張表不寫。
+    回傳 (新內容, {"edited", "conflicts"})。
     """
     lines = content.splitlines(keepends=True)
     table = locate(lines, target)
+    _check_labels(table, target)
     key_col = int(target.get("key_col", 0))
     by_key = {}
     for i in table["rows"]:

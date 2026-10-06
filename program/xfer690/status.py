@@ -84,11 +84,18 @@ def step_pairs(steps: list) -> list:
 
 
 def cell_done(period: dict, step: str, check=None) -> bool:
-    """這一格可以打 v 了嗎。有 check 看 check;無資料只在每日系統算完成。"""
-    st = (period.get("steps", {}).get(check or step) or {}).get("state")
-    if st == "nodata":
+    """這一格可以打 v 了嗎。步驟本身成功,有 check 的話 check 也要成功、而且不早於步驟的最後一封
+    (步驟失敗重跑後,前一次的 check 不算數)。無資料只在每日系統算完成。"""
+    steps = period.get("steps", {})
+    s = steps.get(step) or {}
+    if s.get("state") == "nodata" or (steps.get(check) or {}).get("state") == "nodata":
         return period.get("state") == "nodata"
-    return st == "ok"
+    if s.get("state") != "ok":
+        return False
+    if not check:
+        return True
+    c = steps.get(check) or {}
+    return c.get("state") == "ok" and (c.get("at") or "") >= (s.get("at") or "")
 
 
 def _overall(states: list) -> str:

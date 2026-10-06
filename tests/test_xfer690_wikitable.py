@@ -6,7 +6,7 @@ from core.paths import XFER690_CONFIG_PATH
 from xfer690.parser import TPE
 from xfer690.service import load_xfer_config
 from xfer690.status import build_status
-from xfer690.wiki import plan_fills
+from xfer690.wiki import plan_fills, process_page
 from xfer690.wikitable import (LabelMismatch, TableNotFound, apply_edits, apply_fills,
                                read_rows, split_row)
 from xfer690_mail import FIX
@@ -100,6 +100,22 @@ class TableTest(unittest.TestCase):
         bad = dict(T_FULL_A, cols={"4": {"label": "L1", "value": "v", "step": "011603"}})
         with self.assertRaises(LabelMismatch):
             apply_fills(FULL, bad, {"2414": {"cells": {4: "v"}}}, PH)
+
+    def test_daily_column_shift_refuses_every_target(self):
+        # 每日表 RAW/L3/OS 重複四次:在日期後面插一組新系統,每個系統的 target 都要拒寫(不能只看自己那幾欄的欄名)
+        lines = DAILY.split("\n")
+        i = next(n for n, l in enumerate(lines) if l.startswith("|      | RAW"))
+        lines[i] = lines[i].replace("|      |", "|      | RAW | L3 | OS | 案例 |", 1)
+        shifted = "\n".join(lines)
+        for t in [x for x in WIKI["tables"] if x["page"] == "每日執行項目"]:
+            with self.assertRaises(LabelMismatch, msg=t["system"]):
+                apply_fills(shifted, t, {"2026/08/28": {"cells": {int(c): "v" for c in t["cols"]}}}, PH)
+
+    def test_edit_refused_after_column_insert(self):
+        # 在 RAW 前面加一欄:使用者對 RAW 的修改不能寫進新欄
+        shifted = FULL.replace("| 資料包 TAG | RAW |", "| 資料包 TAG | QA | RAW |", 1)
+        with self.assertRaises(LabelMismatch):
+            apply_edits(shifted, T_FULL_A, [{"key": "2414", "col": 4, "expect": "", "value": "v"}])
 
     def test_daily_uses_first_row_labels(self):
         out, rep = apply_fills(DAILY, T_TECH, {"2026/08/28": {"cells": {9: "v"}}}, PH)
@@ -214,8 +230,57 @@ class PlanTest(unittest.TestCase):
         plan = plan_fills(self.status(evs), T_BIB_A, WIKI)
         self.assertEqual(plan["2420"]["new"], {0: "20261016", 1: "10/16", 2: "2420"})
 
+    def test_plan_vol_nodata_writes_nothing(self):
+        # A4:期別系統的無資料 = 檔案還沒到,列入警示、不寫 wiki(連 TAG 跟新列都不要)
+        st = self.status([ev("011601", "09-29 14:54", "nodata", {"VOL": "2415", "TAG": "20260929"})])
+        self.assertEqual(plan_fills(st, T_FULL_A, WIKI), {})
+
     def test_plan_skips_missing_periods(self):
         self.assertEqual(plan_fills(self.status([]), T_TECH, WIKI), {})
+
+
+class EditValidationTest(unittest.TestCase):
+    TS = [T_FULL_A, T_FULL_B]
+
+    def run_edits(self, edits):
+        st = build_status([], CFG["systems"], NOW, 14)
+        return process_page(FULL, self.TS, st, WIKI, edits)
+
+    def test_numeric_col_refused(self):
+        # 欄要用欄名:直接給欄號會略過欄名比對(可以寫到列鍵、資訊欄等任何一格)
+        out, rep, _ = self.run_edits([{"table": "TWA", "key": "2414", "col": 2, "expect": "2414", "value": "9999"}])
+        self.assertEqual(out, FULL)
+        self.assertEqual(rep["edited"], 0)
+        self.assertEqual(rep["conflicts"][0]["reason"], "找不到這一欄")
+
+    def test_value_that_breaks_table_refused(self):
+        for bad in ["07|16", "07\r16", "07\n| x | y |"]:
+            out, rep, _ = self.run_edits([{"table": "TWA", "key": "2414", "col": "日期",
+                                           "expect": "07/11", "value": bad}])
+            self.assertEqual(out, FULL, repr(bad))
+            self.assertEqual(rep["edited"], 0, repr(bad))
+            self.assertEqual(rep["conflicts"][0]["reason"], "值不能含 | 或換行", repr(bad))
+
+    def test_user_clear_not_refilled_in_same_write(self):
+        # 使用者清掉程式填的 v:同一次寫入的自動填格不能又把它填回去
+        st = build_status([ev("012000", "10-01 02:10", "fail"),
+                           ev("012001", "10-01 02:10", "nodata", {"VOL_DATE": "1151001"})],
+                          CFG["systems"], NOW, 14)
+        daily = [t for t in WIKI["tables"] if t["page"] == "每日執行項目"]
+        filled, _, _ = process_page(DAILY, daily, st, WIKI)
+        self.assertEqual(row_of(filled, "2026/10/01", 0)[9], "v")
+        out, rep, _ = process_page(filled, daily, st, WIKI, [
+            {"table": "", "key": "2026/10/01", "col": "RAW", "system": "techreport",
+             "expect": "v", "value": ""}])
+        self.assertEqual(rep["edited"], 1)
+        self.assertEqual(row_of(out, "2026/10/01", 0)[9], "")
+        self.assertEqual(row_of(out, "2026/10/01", 0)[10], "v")    # 別格照填
+
+    def test_label_edit_still_works(self):
+        out, rep, _ = self.run_edits([{"table": "TWA", "key": "2414", "col": "日期",
+                                       "expect": "07/11", "value": "07/16"}])
+        self.assertEqual(rep["edited"], 1)
+        self.assertEqual(row_of(out, "2414")[1], "07/16")
 
 
 if __name__ == "__main__":
