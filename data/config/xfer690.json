@@ -59,7 +59,7 @@
      "schedule": "daily", "period": "date", "expect_by": "05:30"}
   ],
   "wiki": {
-    "enabled": false,
+    "enabled": true,
     "dry_run": true,
     "url": "https://km.innovue.ltd",
     "locale": "zh-tw",

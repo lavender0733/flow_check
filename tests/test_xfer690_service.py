@@ -350,6 +350,16 @@ class WikiFlowTest(ServiceCase):
         self.assertNotIn("wrong", res["message"])
         self.assertFalse(svc.snapshot()["wiki"]["last_login"]["ok"])
 
+    def test_login_rereads_config(self):
+        # 使用者改了 xfer690.json 的 wiki.enabled 之後直接按登入:不用等下一次抓信
+        svc = self.make(FakeGmail({}), cfg_patch={"wiki": {"enabled": False}})
+        svc.poll()
+        self.assertFalse(svc.wiki_login()["ok"])
+        cfg = json.loads(svc.config_path.read_text(encoding="utf-8"))
+        cfg["wiki"]["enabled"] = True
+        svc.config_path.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
+        self.assertTrue(svc.wiki_login()["ok"])
+
     def test_login_missing_field(self):
         res = self.make(FakeGmail({}), secrets={"wiki_user": "me"}).wiki_login()
         self.assertIn("wiki_password", res["message"])

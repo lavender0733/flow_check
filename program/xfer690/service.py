@@ -288,6 +288,8 @@ class Xfer690Service:
     def wiki_login(self) -> dict:
         """讀 xfer690_secrets.json 登入,JWT 留在記憶體。回應只寫原因,不回顯帳號密碼。"""
         from xfer690.wiki import WikiError
+        with self._lock:        # 改了 xfer690.json(例如打開 wiki.enabled)直接按登入就生效
+            self.cfg = load_xfer_config(self.config_path)
         w = self.cfg["wiki"]
         name = self.secrets_path.name
         with self._wiki_lock:
