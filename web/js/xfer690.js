@@ -938,7 +938,7 @@ function x6wikiLoginBox(w) {
     wrap.append(out);
     return wrap;
   }
-  const ol = x6el("ol", "x6-steps");
+  const ol = x6el("ol", "x6-howto");
   const li1 = x6el("li");
   const a = x6el("a", null, "Wiki");
   a.href = (w.url || "https://km.innovue.ltd") + "/login"; a.target = "_blank"; a.rel = "noopener";
