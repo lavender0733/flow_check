@@ -587,10 +587,13 @@ function x6cell(tb, row, c) {
     if (c.kind === "writes" && cell.state === "same") out.tip = `L1 寫入筆數是 ${cell.value},跟頁面上一致`;
   }
   if (out.existing == null) out.existing = raw;
+  // auto = 不手改的話,寫入後這格會是什麼(要填的就是填的值,其他照頁面原值)
+  out.auto = out.k === "fill" ? out.v : out.existing;
   const ek = x6ek(tb, row, c.col);
   if (ek in x6Edits) {
     const was = out.k === "hold" || out.k === "wait" ? out.existing : (out.k === "fill" ? out.existing : out.v);
-    out = { v: x6Edits[ek].value, k: "edit", was, existing: out.existing, overwrite: !!out.existing && !/^\d{4}x{4}$/.test(out.existing),
+    out = { v: x6Edits[ek].value, k: "edit", was, existing: out.existing, auto: out.auto,
+            overwrite: !!out.existing && !/^\d{4}x{4}$/.test(out.existing),
             tip: `你改的,原本 ${was || "(空白)"}` };
   }
   return out;
@@ -729,6 +732,7 @@ function x6wtable(tb, rows) {
         td.dataset.ek = x6ek(tb, row, c.col);
         td.dataset.expect = x.existing || "";
         td.dataset.cur = x.k === "hold" || x.k === "wait" ? "" : x.v;
+        td.dataset.auto = x.auto || "";
         td.dataset.label = c.label || String(c.col);
         td.dataset.system = c.system || "";
         td.dataset.page = tb.page;
@@ -788,7 +792,9 @@ function x6startEdit(td) {
     done = true;
     if (save) {
       const val = inp.value.trim();
-      if (val === expect) delete x6Edits[ek];
+      // 跟「不手改的結果」一樣才算沒改。跟頁面原值一樣不算:那是「維持原值、不要自動填」
+      // (例如清掉程式要打的 v),要送出,自動填格才會跳過這格
+      if (val === td.dataset.auto) delete x6Edits[ek];
       else if (val !== td.dataset.cur || ek in x6Edits) {
         x6Edits[ek] = { page: td.dataset.page, table: td.dataset.table, key: td.dataset.key,
                         col: td.dataset.label, system: td.dataset.system || undefined, expect, value: val };
