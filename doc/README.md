@@ -207,7 +207,7 @@ flow_check/
 ├─ requirements.txt       第三方相依套件(psutil;會同步到 TIPO flow check)
 ├─ requirements-690.txt   690 的相依套件(google-auth-oauthlib;只在這裡)
 ├─ config.json            主設定:額度、port、取樣間隔、網段
-├─ tests/                 單元測試(690);fixtures/xfer690/ 是真實的 KM 頁面原文與 log
+├─ tests/                 單元測試(690;只放本機、不進版控);fixtures/xfer690/ 是真實的 KM 頁面原文與 log
 ├─ tools/                 開發用工具:sync_tipo.py(同步腳本)、sync_tipo.json(清單與路徑對應)、test_sync_tipo.py
 ├─ web/                   網頁介面(免打包純 HTML/JS;頁籤:流量監控 / 流量報表 / 690資轉 / 信件與連線)
 │  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
