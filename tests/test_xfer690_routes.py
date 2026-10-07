@@ -31,9 +31,13 @@ class FakeService:
         self.calls.append("logout")
         return {"ok": True}
 
-    def gmail_authorize(self):
-        self.calls.append("gmail_authorize")
-        return {"ok": True, "message": ""}
+    def gmail_authorize(self, redirect_uri):
+        self.calls.append(("gmail_authorize", redirect_uri))
+        return {"ok": True, "url": "https://accounts.google.com/x"}
+
+    def gmail_callback(self, query):
+        self.calls.append(("gmail_callback", query))
+        return "授權完成"
 
     def gmail_logout(self):
         self.calls.append("gmail_logout")
@@ -54,7 +58,7 @@ def req(method, path, query=None, body=None, ctype="application/json"):
 class RoutesTest(unittest.TestCase):
     def setUp(self):
         self.svc = FakeService()
-        self.routes = build_routes(App({}, None, xfer690=self.svc))
+        self.routes = build_routes(App({"port": 8765}, None, xfer690=self.svc))
 
     def call(self, method, path, **kw):
         return self.routes[(method, path)](req(method, path, **kw))
@@ -63,7 +67,8 @@ class RoutesTest(unittest.TestCase):
         for key in [("GET", "/api/xfer690"), ("POST", "/api/xfer690/refresh"),
                     ("GET", "/api/xfer690/log"), ("POST", "/api/xfer690/wiki/login"),
                     ("POST", "/api/xfer690/wiki/logout"), ("POST", "/api/xfer690/wiki/write"),
-                    ("POST", "/api/xfer690/gmail/authorize"), ("POST", "/api/xfer690/gmail/logout")]:
+                    ("POST", "/api/xfer690/gmail/authorize"), ("POST", "/api/xfer690/gmail/logout"),
+                    ("GET", "/api/xfer690/gmail/callback")]:
             self.assertIn(key, self.routes)
 
     def test_status_delegates(self):
@@ -107,8 +112,17 @@ class RoutesTest(unittest.TestCase):
     def test_gmail_authorize_and_logout(self):
         self.assertTrue(self.call("POST", "/api/xfer690/gmail/authorize")["ok"])
         self.assertTrue(self.call("POST", "/api/xfer690/gmail/logout")["ok"])
-        self.assertEqual([c for c in self.svc.calls if str(c).startswith("gmail")],
-                         ["gmail_authorize", "gmail_logout"])
+        # Google 同意後導回主程式自己的連接埠(這個伺服器一直開著,不另開暫時伺服器)
+        self.assertEqual([c for c in self.svc.calls if "gmail" in str(c)],
+                         [("gmail_authorize", "http://127.0.0.1:8765/api/xfer690/gmail/callback"), "gmail_logout"])
+
+    def test_gmail_callback_returns_text(self):
+        q = {"state": "s", "code": "c"}
+        r = self.call("GET", "/api/xfer690/gmail/callback", query=q)
+        self.assertIsInstance(r, Raw)
+        self.assertTrue(r.content_type.startswith("text/plain"))
+        self.assertEqual(r.body.decode("utf-8"), "授權完成")
+        self.assertIn(("gmail_callback", q), self.svc.calls)
 
     def test_write_without_login_is_409(self):
         with self.assertRaises(HttpError) as cm:

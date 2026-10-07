@@ -1,7 +1,7 @@
 # Flow Check — 流量監控 + 690 資轉監控  `v8.1.0`
 
 一個本機小工具:**量測當日網路用量**(對每日 2GB 額度),並提供**流量報表**,拿來跟公司反映連線問題。背景常駐、開瀏覽器即看。
-**690 資轉監控**讀 s690 Rundeck 的通知信,顯示每個轉置系統每天 / 每期的狀態,並在 Wiki 的「資料轉置登記」表格裡登記。
+**690 資轉監控**讀 s690 Rundeck 的通知信,顯示每個轉置系統每天 / 每期的狀態,並在 KM 的「資料轉置登記」表格裡登記。
 
 ## 使用的技術
 
@@ -89,20 +89,21 @@ Rundeck 在內網連不到,所以只靠信。
 ### 第一次設定(每台電腦一次)
 
 1. `data/config/gmail_credentials.json`:GCP 的 OAuth 用戶端(電腦版應用程式,範圍只要 `gmail.readonly`)。已經放好就跳過。
-2. 在「信件與連線」的 Gmail 卡片按 **授權**(或雙擊 **`690授權.bat`**)→ 瀏覽器跳出 Google 登入,用 `alicia.huang@innovue.ltd` 同意唯讀權限。
+2. 在「信件與連線」的 Gmail 卡片按 **授權**(或雙擊 **`690授權.bat`**)→ 新分頁跳出 Google 登入,用 `alicia.huang@innovue.ltd` 同意唯讀權限。
+   Gmail 走公開的 Google 端點,不用開 VPN、不用換網路。分頁被關掉就按「重新開啟授權頁」。
    已授權時卡片顯示 **登出**(刪掉 token、停止抓信)。
    完成後會印出近 30 天每個 job 的統計表(封數、成功失敗、時刻),拿來核對系統清單。
    token 存在 `data/machines/gmail_token_<機器>.json`。
-3. 要寫 Wiki 的話,`xfer690.json` 的 `wiki.enabled` 要是 `true`。Wiki 只開 **Innovue OAuth** 登入,程式沒辦法自己登入:
-   在瀏覽器用 Innovue OAuth 登入 Wiki → F12 → Application → Cookies → 複製 `jwt` 的值 →
-   貼到「信件與連線」的 Wiki 卡片按「登入 Wiki」。伺服器先跟 Wiki 確認有效才收下,存進
-   `data/config/xfer690_secrets.json` 的 `wiki_jwt`(重開不用重貼;Wiki 續期發的新憑證會自動寫回;失效時清掉、卡片要你重貼)。
+3. 要寫 KM 的話,`xfer690.json` 的 `wiki.enabled` 要是 `true`。KM 只開 **Innovue OAuth** 登入,程式沒辦法自己登入:
+   在瀏覽器用 Innovue OAuth 登入 KM → F12 → Application → Cookies → 複製 `jwt` 的值 →
+   貼到「信件與連線」的 KM 卡片按「登入 KM」。伺服器先跟 KM 確認有效才收下,存進
+   `data/config/xfer690_secrets.json` 的 `wiki_jwt`(重開不用重貼;KM 續期發的新憑證會自動寫回;失效時清掉、卡片要你重貼)。
    不開 VPN 也能用:那時 KM 走 Cloudflare,它擋 Python 預設的 User-Agent,程式送自己的
    `flow-check-xfer690/1`。被閘道擋下(HTTP 401/403)算網路問題,不會清掉 `wiki_jwt`。
 4. 重開 `start_monitor.bat`。第一次會自動安裝 `requirements-690.txt` 的套件;裝不起來只會停用 690,流量監控照常。
 
 > 三個機密檔(`gmail_credentials.json`、`gmail_token_<機器>.json`、`xfer690_secrets.json`)都不在版控內,
-> 也不會同步到 TIPO flow check。Wiki 登入憑證只存在 `xfer690_secrets.json`,網頁送出後不會再回傳或顯示。
+> 也不會同步到 TIPO flow check。KM 登入憑證只存在 `xfer690_secrets.json`,網頁送出後不會再回傳或顯示。
 
 ### 畫面
 
@@ -111,8 +112,8 @@ Rundeck 在內網連不到,所以只靠信。
   - **TWA 公開 / TWB 公告**:資料種類(全文、書目、雜項、英譯)× 公告期數。只追蹤最近一個月(TWA 2 期、TWB 3 期);
     近一個月內補跑的舊期列在「更早的期」。點一格看那期的細節。
   - **其他作業**:信裡出現、但不在系統清單裡的 job。手動作業每次執行一列(失敗會算警示);維運 99xxxx 只列最後一次。
-  - **Wiki 登記**:登入 Wiki 後顯示「填好之後」的表格預覽,按「寫入 Wiki」才寫。
-- **信件與連線**頁籤:Gmail 授權狀態、Wiki 登入(在這裡按「登入 Wiki」)、最近 20 封信。
+  - **KM 登記**:登入 KM 後顯示「填好之後」的表格預覽,按「寫入 KM」才寫。
+- **信件與連線**頁籤:Gmail 授權狀態、KM 登入(在這裡按「登入 KM」)、最近 20 封信。
 - 失敗項目的「失敗」兩個字就是連結,點了打開那封信附的 `.log`,自動捲到 `error:` 那一行(伺服器當下抓,不存檔)。
 - 分類上的紅色數字 = 需要處理的件數;主頁籤的 ⚠ = 有轉置警示(690資轉)或連線問題(信件與連線)。
 
@@ -121,7 +122,7 @@ Rundeck 在內網連不到,所以只靠信。
 | 狀態 | 意思 |
 |---|---|
 | 成功 | 步驟與它的 check 都成功 |
-| 無資料 | step1-raw 失敗,原因是 `GCS 資料夾無檔案`。**每日系統**不算警示,wiki 那幾格填 `-`(`wiki.nodata_value`),不打 v;**期別系統**代表那期檔案還沒到,算警示、不寫 wiki |
+| 無資料 | step1-raw 失敗,原因是 `GCS 資料夾無檔案`。**每日系統**不算警示,KM 那幾格填 `-`(`wiki.nodata_value`),不打 v;**期別系統**代表那期檔案還沒到,算警示、不寫 KM |
 | 失敗 | 有失敗信。之後的步驟顯示「沒有執行」 |
 | 該到沒到 | 過了 `expect_by` 還沒收到信;或一次執行收到幾步之後就沒信了(期別系統以最後一封信後 2 小時為期限) |
 | 還沒跑到 | 還沒到 `expect_by` |
@@ -130,28 +131,32 @@ Rundeck 在內網連不到,所以只靠信。
 同一期跑了好幾次(例如前一天無資料、隔天重跑成功)以最後一次為準。
 **不定期**的系統(全文、英譯)沒有排程,不會報「該到沒到」。
 
-### 期別怎麼對應到 wiki 的列
+### 期別怎麼對應到 KM 的列
 
 - 每日系統:一天一列,列鍵是執行日期(`2026/10/01`)。
 - 書目、雜項、全文:列鍵是**公告期數**,取自 log 的 `RUNDECK:DATA:VOL`(手動補跑舊期也會歸到正確的期,不看收信日期)。
   期數與日期互換:TWB 每月 1、11、21 日,`VOL = (年−1973)×100 + (月−1)×3 + 第幾旬`;TWA 每月 1、16 日,`VOL = (年−2002)×100 + (月−1)×2 + 上/下半月`。
+- 英譯(TW英譯En 頁):列鍵是**期數區間**(`5325 ~ 5327`),取自 log 的 `FILE_I`(公告)/ `FILE`(公開)檔名
+  `TW__I_20260901_5325_to_20260921_5327_complete`。同一個區間重跑好幾次是同一列,每個步驟以最後一次為準。
+  無資料(那批檔案還沒到)跟期別系統一樣算警示、不寫 KM。
+- TW影像GCS 頁不寫:信裡沒有影像上傳的 job。
 - 一次手動執行可能連跑好幾期,所以同一系統的信以「step1-raw 那封」或「跟上一封相隔超過 2 小時」切段,段裡其他信沿用該段的期數。
 
-### 寫 Wiki 的規則
+### 寫 KM 的規則
 
 - **只填空格**:格子已經有值就不動(`2026xxxx` 這種佔位字當空格);值不同在預覽裡用波浪底線標出。
 - 打 `v` 的格:那一步**和它的 check** 都成功才打。
 - 筆數欄(書目頁的 Biblio、Gazette SUD):填 L1 那封信 log 的 `writes`,而且**整期每一步都成功**才填。
 - 缺列就照列鍵順序插入;列鍵比表格最舊的一列還舊時不插入。
 - 目標列以外的每一行逐位元組不變;欄名對不上時整張表不寫;內容沒變不送更新;一頁失敗不影響其他頁。
-- **手動修改**:Wiki 登記頁點任一格可改(Enter 存、Esc 取消),寫入時一起送出。這是唯一會覆寫非空值的路徑,
+- **手動修改**:KM 登記頁點任一格可改(Enter 存、Esc 取消),寫入時一起送出。這是唯一會覆寫非空值的路徑,
   而且伺服器會先確認頁面上那格還是你看到的值,不是就整筆不寫、列為衝突。
 - 登入在「信件與連線」做一次,換到的憑證只放伺服器記憶體(不寫檔),伺服器重開要重新登入。
-- `xfer690.json` 的 `wiki.dry_run` 是 `true` 時,按「寫入 Wiki」只算結果、不真的寫。
+- `xfer690.json` 的 `wiki.dry_run` 是 `true` 時,按「寫入 KM」只算結果、不真的寫。
 
 ### 流量預算
 
-抓信一律先只抓主旨與時間(每封約 2 KB),只有三種信才下載全文:失敗信、期別系統每段的第一封(帶出期數)、
+抓信一律先只抓主旨與時間(每封約 2 KB),只有三種信才下載全文:失敗信、期別系統與英譯每段的第一封(帶出期數)、
 要填筆數的步驟。單封超過 `max_raw_kb`(預設 512 KB)也不下載。實測:第一次抓 45 天 495 封共 2.75 MB,之後每輪幾 KB。
 
 ### `data/config/xfer690.json`
@@ -168,9 +173,9 @@ Rundeck 在內網連不到,所以只靠信。
 | `wiki.enabled` / `wiki.dry_run` | 開放登入 / 只算不寫 |
 | `wiki.base` | 子頁所在的路徑 |
 | `wiki.nodata_value` | 每日系統無資料那天,要打 v 的格改填的值(預設 `-`) |
-| `wiki.tables[]` | 每張表的每個系統一筆:`page`、`table`(`TWA` / `TWB` / 空)、`after`(表格前面的標題文字)、`header_has`、`label_row`、`labels`(整列欄名;頁面上不一樣就整張表不寫,預覽顯示紅框)、`key_col`、`key`、`new_row`、`cols`(`{欄號: {label, value: v/tag/writes, step, check}}`) |
+| `wiki.tables[]` | 每張表的每個系統一筆:`page`、`table`(`TWA` / `TWB` / 空)、`after`(表格前面的標題文字)、`header_has`、`label_row`、`labels`(整列欄名;頁面上不一樣就整張表不寫,預覽顯示紅框)、`key_col`、`key`(`vol` 公告期數 / `date` 日期 / `span` 英譯的期數區間)、`new_row`(`{yyyymmdd}`、`{mm}`、`{dd}`、`{vol}`、`{key}` = 列鍵)、`cols`(`{欄號: {label, value: v/tag/writes, step, check}}`) |
 
-**wiki 表格改結構時**:欄位順序變了 → 改 `cols` 的欄號與 `label`(欄名對不上時程式會整張表不寫,在預覽裡顯示原因);
+**KM 表格改結構時**:欄位順序變了 → 改 `cols` 的欄號與 `label`(欄名對不上時程式會整張表不寫,在預覽裡顯示原因);
 表格前的標題改了 → 改 `after`;新增系統 → 在 `systems` 加一筆,要登記的話在 `tables` 加對應的 target。
 一個不在清單上的 job 想固定追蹤 → 加進 `systems`,它就從「其他作業」移到每日資轉或 TWA / TWB。
 
@@ -202,7 +207,7 @@ flow_check/
 ├─ requirements.txt       第三方相依套件(psutil;會同步到 TIPO flow check)
 ├─ requirements-690.txt   690 的相依套件(google-auth-oauthlib;只在這裡)
 ├─ config.json            主設定:額度、port、取樣間隔、網段
-├─ tests/                 單元測試(690);fixtures/xfer690/ 是真實的 wiki 頁面原文與 log
+├─ tests/                 單元測試(690);fixtures/xfer690/ 是真實的 KM 頁面原文與 log
 ├─ tools/                 開發用工具:sync_tipo.py(同步腳本)、sync_tipo.json(清單與路徑對應)、test_sync_tipo.py
 ├─ web/                   網頁介面(免打包純 HTML/JS;頁籤:流量監控 / 流量報表 / 690資轉 / 信件與連線)
 │  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
@@ -212,9 +217,9 @@ flow_check/
 │  └─ js/                 util / monitor / report / xfer690 / main(載入順序即相依順序、共用全域作用域)
 ├─ data/                  (不在版控內,除了下面標「版控」的)
 │  ├─ config/machines.json 機器代號 → 友善名稱對照(如「桌機」;空值則顯示代號)
-│  ├─ config/xfer690.json  690 的系統清單與 wiki 表格設定(版控)
+│  ├─ config/xfer690.json  690 的系統清單與 KM 表格設定(版控)
 │  ├─ config/gmail_credentials.json  ★機密:GCP 的 OAuth 用戶端
-│  ├─ config/xfer690_secrets.json    ★機密:wiki 登入憑證(wiki_jwt)
+│  ├─ config/xfer690_secrets.json    ★機密:KM 登入憑證(wiki_jwt)
 │  └─ machines/            各電腦執行期資料(檔名含機器代號,同步不互相覆蓋)
 │     ├─ state_<機器>.json        當日用量(跨重啟保留、跨日歸零)
 │     ├─ prefs_<機器>.json        本機偏好:通知 / 暴增預警開關與門檻、外觀
@@ -244,7 +249,7 @@ flow_check/
       ├─ wikitable.py         markdown 表格:找表、只填空格、插列、使用者的手動修改
       ├─ wiki.py              填格規劃、Wiki.js GraphQL 用戶端、整頁同步與預覽
       ├─ gmail_client.py      Gmail REST 唯讀用戶端
-      ├─ service.py           組裝:設定、抓信、快取、背景迴圈、Wiki 登入與寫入
+      ├─ service.py           組裝:設定、抓信、快取、背景迴圈、KM 登入與寫入
       └─ authorize.py         一次性 Gmail 授權與信箱統計(690授權.bat)
 ```
 
@@ -289,14 +294,15 @@ flow_check/
 | GET | `/api/config` | 額度、速率下限、本機偏好(`notify_*`、`surge_*`、`theme`) |
 | POST | `/api/prefs` | 寫回本機偏好,即時套用到執行中的監控(不必重啟) |
 | POST | `/api/speedtest` | 主動測速:抓一小段量實際 Mbps、判斷有無被限速(每次約耗 8MB) |
-| GET | `/api/xfer690` | 690 快照:各系統狀態、最近 20 封信、Gmail 與 Wiki 的狀態、Wiki 預覽(前端每 60 秒讀) |
+| GET | `/api/xfer690` | 690 快照:各系統狀態、最近 20 封信、Gmail 與 KM 的狀態、KM 預覽(前端每 60 秒讀) |
 | POST | `/api/xfer690/refresh` | 690「立即更新」:前景抓一次信,回傳新快照 |
 | GET | `/api/xfer690/log?id=<信件 id>` | 那封通知信附的 `.log` 純文字(當下從 Gmail 抓,不存檔) |
-| POST | `/api/xfer690/wiki/login` | body `{"jwt": "…"}`:使用者從瀏覽器複製的 Wiki jwt。確認有效才存進 `xfer690_secrets.json`,回應不回顯 |
-| POST | `/api/xfer690/wiki/logout` | 清掉 Wiki 登入憑證(記憶體與 `xfer690_secrets.json`) |
-| POST | `/api/xfer690/gmail/authorize` | 開瀏覽器到 Google 同意頁(伺服器背景等,最多 10 分鐘),同意後存 token、抓一次信 |
+| POST | `/api/xfer690/wiki/login` | body `{"jwt": "…"}`:使用者從瀏覽器複製的 KM jwt。確認有效才存進 `xfer690_secrets.json`,回應不回顯 |
+| POST | `/api/xfer690/wiki/logout` | 清掉 KM 登入憑證(記憶體與 `xfer690_secrets.json`) |
+| POST | `/api/xfer690/gmail/authorize` | 回傳 Google 同意頁網址 `{"ok", "url"}`(網頁在新分頁開;10 分鐘內有效,再按一次換新的) |
+| GET | `/api/xfer690/gmail/callback` | Google 同意後導回這裡(帶 `state`、`code`):換 token 存檔、背景抓一次信,回一句純文字給那個分頁 |
 | POST | `/api/xfer690/gmail/logout` | 刪掉這台電腦的 Gmail token,停止抓信 |
-| POST | `/api/xfer690/wiki/write` | 寫入 Wiki(body `{"edits": [...]}` 是使用者手改的格);沒登入回 409 `{"error": "not_logged_in"}` |
+| POST | `/api/xfer690/wiki/write` | 寫入 KM(body `{"edits": [...]}` 是使用者手改的格);沒登入回 409 `{"error": "not_logged_in"}` |
 
 ---
 

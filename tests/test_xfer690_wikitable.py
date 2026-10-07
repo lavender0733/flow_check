@@ -27,11 +27,14 @@ def text(name):
 FULL = text("wiki_full.md")
 DAILY = text("wiki_daily.md")
 BIBLIO = text("wiki_biblio.md")
+ENG = text("wiki_eng.md")
 T_FULL_A = target("TW全文Full", "twa-full")
 T_FULL_B = target("TW全文Full", "twb-full")
 T_BIB_A = target("TW書目Biblio及雜項", "twa-biblio")
 T_BIB_B = target("TW書目Biblio及雜項", "twb-biblio")
 T_TECH = target("每日執行項目", "techreport")
+T_ENG_B = target("TW英譯En", "eng")
+T_ENG_A = target("TW英譯En", "pub-eng")
 
 
 def changed(a, b):
@@ -263,12 +266,78 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(plan["2420"]["new"], {0: "20261016", 1: "10/16", 2: "2420"})
 
     def test_plan_vol_nodata_writes_nothing(self):
-        # A4:期別系統的無資料 = 檔案還沒到,列入警示、不寫 wiki(連 TAG 跟新列都不要)
+        # A4:期別系統的無資料 = 檔案還沒到,列入警示、不寫 KM(連 TAG 跟新列都不要)
         st = self.status([ev("011601", "09-29 14:54", "nodata", {"VOL": "2415", "TAG": "20260929"})])
         self.assertEqual(plan_fills(st, T_FULL_A, WIKI), {})
 
     def test_plan_skips_missing_periods(self):
         self.assertEqual(plan_fills(self.status([]), T_TECH, WIKI), {})
+
+
+ENG_I = {"FILE_I": "TW__I_20260901_5325_to_20260921_5327_complete",
+         "FILE_M": "TW__M_20260901_5325_to_20260921_5327_complete"}
+ENG_A = {"FILE": "TW__A_20260901_2417_to_20260916_2418_complete"}
+ENG_NOW = datetime(2026, 10, 7, 9, 0, tzinfo=TPE)
+
+
+def eng_run(at, raw="011301", data=ENG_I, tag="20261005", rest=True):
+    n = raw[:4]
+    evs = [ev(raw, at, data=dict(data, TAG=tag))]
+    if rest:
+        evs += [ev(f"{n}{i:02d}", at) for i in range(2, 7)] + [ev(f"{n}00", at)]
+    return evs
+
+
+class EngTest(unittest.TestCase):
+    """英譯頁:列鍵是信裡 FILE_I / FILE 的期數區間,RAW / L1 / L2 Pending 打 v。"""
+
+    def status(self, evs):
+        return build_status(evs, CFG["systems"], ENG_NOW, 14)
+
+    def test_span_key_and_v(self):
+        plan = plan_fills(self.status(eng_run("10-05 01:00")), T_ENG_B, WIKI)
+        self.assertEqual(plan, {"5325 ~ 5327": {"cells": {1: "20261005", 2: "v", 3: "v", 4: "v"},
+                                                "new": {0: "5325 ~ 5327"}}})
+
+    def test_pub_eng_uses_file(self):
+        plan = plan_fills(self.status(eng_run("10-05 01:00", "011401", ENG_A)), T_ENG_A, WIKI)
+        self.assertEqual(list(plan), ["2417 ~ 2418"])
+
+    def test_insert_on_real_page(self):
+        st = self.status(eng_run("10-05 01:00") + eng_run("10-05 03:00", "011401", ENG_A))
+        out, rep, _ = process_page(ENG, [T_ENG_B, T_ENG_A], st, WIKI)
+        self.assertEqual(rep["inserted"], 2)
+        self.assertEqual(row_of(out, "5325 ~ 5327", 0), ["5325 ~ 5327", "20261005", "v", "v", "v", ""])
+        self.assertEqual(row_of(out, "2417 ~ 2418", 0), ["2417 ~ 2418", "20261005", "v", "v", "v", ""])
+        lines = out.splitlines()
+        # 新列插在各自那張表的最上面(公告的在 5319 ~ 5321 前、公開的在 2407 ~ 2408 前)
+        self.assertEqual(lines.index("| 5325 ~ 5327 | 20261005 | v | v | v |  |") + 1,
+                         next(i for i, x in enumerate(lines) if "5319 ~ 5321" in x))
+        self.assertEqual(lines.index("| 2417 ~ 2418 | 20261005 | v | v | v |  |") + 1,
+                         next(i for i, x in enumerate(lines) if "2407 ~ 2408" in x))
+
+    def test_nodata_writes_nothing(self):
+        # 09-30 那次 GCS 沒檔案:跟期別系統一樣算「還沒到」,不寫 KM
+        evs = [ev("011301", "09-30 01:00", "nodata", dict(ENG_I, TAG="20260930")), ev("011300", "09-30 01:00", "fail")]
+        self.assertEqual(plan_fills(self.status(evs), T_ENG_B, WIKI), {})
+
+    def test_rerun_same_span_merged(self):
+        # 同一個區間 09-30 無資料、10-05 重跑成功:是同一列,以重跑為準
+        evs = [ev("011301", "09-30 01:00", "nodata", dict(ENG_I, TAG="20260930")), ev("011300", "09-30 01:00", "fail")]
+        plan = plan_fills(self.status(evs + eng_run("10-05 01:00")), T_ENG_B, WIKI)
+        self.assertEqual(plan["5325 ~ 5327"]["cells"], {1: "20261005", 2: "v", 3: "v", 4: "v"})
+
+    def test_rerun_partial_keeps_earlier_steps(self):
+        # 第一次跑到 L1、第二次只重跑 L2 Pending:三格都算完成
+        first = [ev("011301", "10-05 01:00", data=dict(ENG_I, TAG="20261005"))] +                 [ev(c, "10-05 01:05") for c in ("011302", "011303", "011304")] + [ev("011305", "10-05 01:06", "fail")]
+        second = [ev("011305", "10-06 01:00", data=dict(ENG_I, TAG="20261005")), ev("011306", "10-06 01:01")]
+        plan = plan_fills(self.status(first + second), T_ENG_B, WIKI)
+        self.assertEqual(plan["5325 ~ 5327"]["cells"], {1: "20261005", 2: "v", 3: "v", 4: "v"})
+
+    def test_no_file_no_row(self):
+        # log 沒帶 FILE_I(還沒下載到 log):不知道是哪一列,不寫
+        evs = [ev("011301", "10-05 01:00")] + [ev(f"0113{i:02d}", "10-05 01:00") for i in range(2, 7)]
+        self.assertEqual(plan_fills(self.status(evs), T_ENG_B, WIKI), {})
 
 
 class EditValidationTest(unittest.TestCase):

@@ -139,12 +139,12 @@
     <tr><td><code>status_map</code> / <code>nodata_re</code></td><td>主旨狀態字 → 狀態 / 判定「無資料」的錯誤訊息</td></tr>
     <tr><td><code>max_raw_kb</code></td><td>單封超過這個大小就不下載全文(預設 512)</td></tr>
     <tr><td><code>systems[]</code></td><td>系統清單:<code>id</code>、<code>label</code>、<code>view</code>(daily / twa / twb)、<code>type</code>(full / biblio / sud / eng)、<code>auto</code>(母 job)、<code>steps</code>(步驟代碼,<code>-check</code> 是下一號)、<code>schedule</code>(daily / <code>{"monthdays": [...]}</code> / manual)、<code>period</code>(date / vol_twa / vol_twb / vol / none)、<code>expect_by</code></td></tr>
-    <tr><td><code>wiki.enabled</code> / <code>wiki.dry_run</code></td><td>開放登入 Wiki / 按「寫入」時只算不寫</td></tr>
+    <tr><td><code>wiki.enabled</code> / <code>wiki.dry_run</code></td><td>開放登入 KM / 按「寫入」時只算不寫</td></tr>
     <tr><td><code>wiki.tables[]</code></td><td>每張表的每個系統一筆:<code>page</code>、<code>table</code>、<code>after</code>、<code>header_has</code>、<code>label_row</code>、<code>key_col</code>、<code>key</code>、<code>new_row</code>、<code>cols</code>(<code>{欄號: {label, value: v / tag / writes, step, check}}</code>)。表格改結構時改這裡;欄名對不上時程式整張表不寫</td></tr>
   </tbody>
 </table>
 
-<p><strong>690 的機密檔</strong>(都不在版控內、不同步到 TIPO flow check):<code>data/config/gmail_credentials.json</code>(GCP OAuth 用戶端)、<code>data/machines/gmail_token_&lt;機器&gt;.json</code>(由 <code>690授權.bat</code> 產生)、<code>data/config/xfer690_secrets.json</code>(<code>wiki_user</code>、<code>wiki_password</code>,選填 <code>wiki_strategy</code>)。Wiki 帳號密碼只存在最後這個檔,不經過網頁;登入換到的憑證只放伺服器記憶體。</p>
+<p><strong>690 的機密檔</strong>(都不在版控內、不同步到 TIPO flow check):<code>data/config/gmail_credentials.json</code>(GCP OAuth 用戶端)、<code>data/machines/gmail_token_&lt;機器&gt;.json</code>(由 <code>690授權.bat</code> 產生)、<code>data/config/xfer690_secrets.json</code>(<code>wiki_user</code>、<code>wiki_password</code>,選填 <code>wiki_strategy</code>)。KM 帳號密碼只存在最後這個檔,不經過網頁;登入換到的憑證只放伺服器記憶體。</p>
 
 <blockquote>
   <p>改完 <code>config.json</code> 或 <code>program/core/</code>、<code>program/common/</code>、<code>program/xfer690/</code> 下的任何 <code>.py</code> 後需<strong>重新啟動</strong>才生效(網頁上方會自動跳「需重啟」橫幅提醒);改 <code>web/</code> 下的網頁檔重整即可。<code>xfer690.json</code> 每輪抓信都會重讀。</p>
@@ -176,7 +176,7 @@
 ├─ requirements.txt       第三方套件(psutil;會同步到 TIPO flow check)
 ├─ requirements-690.txt   690 的套件(google-auth-oauthlib;只在這裡)
 ├─ config.json            主設定:額度、port、取樣間隔、網段等
-├─ tests/                 690 的單元測試與 fixtures(真實的 wiki 頁面原文與 log)
+├─ tests/                 690 的單元測試與 fixtures(真實的 KM 頁面原文與 log)
 ├─ tools/                 開發用工具(同步腳本與它的測試;不會同步到 TIPO flow check)
 ├─ web/                   網頁介面(免打包純 HTML/JS)
 │  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
@@ -186,7 +186,7 @@
 │  └─ js/                 util(共用)/ monitor / report / xfer690 / main(啟動)
 ├─ data/                  設定與資料(不在版控內,xfer690.json 除外)
 │  ├─ config/machines.json 機器代號 → 友善名稱對照(如「桌機」;空值則顯示代號)
-│  ├─ config/xfer690.json  690 的系統清單與 wiki 表格設定(版控)
+│  ├─ config/xfer690.json  690 的系統清單與 KM 表格設定(版控)
 │  ├─ config/gmail_credentials.json / xfer690_secrets.json   ★機密
 │  └─ machines/           各機執行期資料(檔名含機器代號,同步不互相覆蓋)
 │     ├─ state_&lt;機器&gt;.json        當日用量(跨重啟保留、跨日歸零)
@@ -217,7 +217,7 @@
       ├─ wikitable.py          markdown 表格:找表、只填空格、插列、手動修改
       ├─ wiki.py               填格規劃、Wiki.js 用戶端、整頁同步與預覽
       ├─ gmail_client.py       Gmail 唯讀用戶端
-      ├─ service.py            組裝:抓信、快取、背景迴圈、Wiki 登入與寫入
+      ├─ service.py            組裝:抓信、快取、背景迴圈、KM 登入與寫入
       └─ authorize.py          Gmail 授權與信箱統計(690授權.bat)</code></pre>
 
 <blockquote>
@@ -235,11 +235,11 @@
     <tr><td>GET</td><td><code>/api/config</code></td><td>額度、速率下限、本機偏好(通知 / 暴增 / 排除內網 / 外觀)</td></tr>
     <tr><td>POST</td><td><code>/api/prefs</code></td><td>寫回本機偏好,即時套用到執行中的監控</td></tr>
     <tr><td>POST</td><td><code>/api/speedtest</code></td><td>主動測速:抓一小段量實際 Mbps、判斷有無被限速(每次約耗 8MB)</td></tr>
-    <tr><td>GET</td><td><code>/api/xfer690</code></td><td>690 快照:各系統狀態、最近 20 封信、Gmail 與 Wiki 狀態、Wiki 預覽(前端 60 秒讀一次)</td></tr>
+    <tr><td>GET</td><td><code>/api/xfer690</code></td><td>690 快照:各系統狀態、最近 20 封信、Gmail 與 KM 狀態、KM 預覽(前端 60 秒讀一次)</td></tr>
     <tr><td>POST</td><td><code>/api/xfer690/refresh</code></td><td>690「立即更新」:前景抓一次信</td></tr>
     <tr><td>GET</td><td><code>/api/xfer690/log?id=&lt;信件 id&gt;</code></td><td>那封通知信附的 <code>.log</code>(當下從 Gmail 抓,不存檔)</td></tr>
-    <tr><td>POST</td><td><code>/api/xfer690/wiki/login</code></td><td>用 <code>xfer690_secrets.json</code> 登入 Wiki,憑證只放伺服器記憶體</td></tr>
-    <tr><td>POST</td><td><code>/api/xfer690/wiki/write</code></td><td>寫入 Wiki(body <code>{"edits": [...]}</code> 是手改的格);沒登入回 409</td></tr>
+    <tr><td>POST</td><td><code>/api/xfer690/wiki/login</code></td><td>用 <code>xfer690_secrets.json</code> 登入 KM,憑證只放伺服器記憶體</td></tr>
+    <tr><td>POST</td><td><code>/api/xfer690/wiki/write</code></td><td>寫入 KM(body <code>{"edits": [...]}</code> 是手改的格);沒登入回 409</td></tr>
   </tbody>
 </table>
 

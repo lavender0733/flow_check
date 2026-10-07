@@ -1,12 +1,13 @@
-"""690 資轉監控的組裝:設定、抓信、快取、狀態、wiki、背景迴圈。
+"""690 資轉監控的組裝:設定、抓信、快取、狀態、KM、背景迴圈。
 
 流量預算(這套工具本身就在管每天 2 GB 的額度):一律先抓 metadata(主旨、時間,每封約 2 KB),
 只有三種信才下載全文 —— 失敗信、期別系統每段的第一封(帶出 VOL)、要填筆數的步驟。
 
-Wiki 只在使用者按「寫入 Wiki」時寫;JWT 只放記憶體,不寫檔、不進 snapshot 或快取。
+KM 只在使用者按「寫入 KM」時寫;JWT 只放記憶體,不寫檔、不進 snapshot 或快取。
 """
 
 import copy
+import json
 import re
 import threading
 from datetime import datetime, timedelta
@@ -45,6 +46,7 @@ DEFAULT_XFER_CONFIG = {
 
 META_BYTES = 2048           # 一封 metadata 的流量估算
 RECENT = 20
+AUTH_WAIT = timedelta(minutes=10)      # 按「授權」後等 Google 導回來的時間
 AUTH_MSG = "Gmail 授權已失效或被管理員封鎖,請在「信件與連線」按「重新授權」"
 _MSG_ID_RE = re.compile(r"^[0-9a-fA-F]{6,32}$")
 
@@ -67,7 +69,7 @@ class NotLoggedIn(Exception):
     pass
 
 
-EXPIRED_MSG = "Wiki 登入已失效,請重新用 Innovue OAuth 登入 Wiki 後再貼一次 jwt"
+EXPIRED_MSG = "KM 登入已失效,請重新用 Innovue OAuth 登入 KM 後再貼一次 jwt"
 _JWT_RE = re.compile(r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$")
 
 
@@ -77,7 +79,7 @@ def _all_pages_failed(pages: dict):
     sync 把每頁的錯誤收在 report 裡、不往外拋,全部失敗時畫面上要看得到原因。"""
     errs = [p["errors"][0] for p in pages.values() if p.get("errors")]
     if pages and len(errs) == len(pages):
-        return f"讀 Wiki 失敗:{errs[0]}"[:300]
+        return f"讀 KM 失敗:{errs[0]}"[:300]
     return None
 
 
@@ -98,9 +100,9 @@ def _default_gmail():
     return GmailClient(GMAIL_TOKEN_PATH)
 
 
-def _default_consent(credentials_path, token_path):
-    from xfer690.authorize import run_consent
-    run_consent(credentials_path, token_path)
+def _default_flow(credentials_path, redirect_uri):
+    from xfer690.authorize import new_flow
+    return new_flow(credentials_path, redirect_uri)
 
 
 def _default_wiki(url, token=None):
@@ -120,15 +122,15 @@ class Xfer690Service:
         self.gmail_factory = gmail_factory
         self.wiki_factory = wiki_factory
         self.token_path = GMAIL_TOKEN_PATH    # 測試可換
-        self.consent_fn = _default_consent    # 開瀏覽器授權(測試可換)
-        self._auth_thread = None              # 網頁按「授權」時,在背景等瀏覽器同意
+        self.flow_factory = _default_flow     # Google 同意頁的流程物件(測試可換)
+        self._pending = None                  # 按了「授權」、還在等 Google 導回來:{flow, state, until}
         self.now = now
         self.cfg = load_xfer_config(config_path)
         self._lock = threading.Lock()         # 整個 poll()
         self._wiki_lock = threading.Lock()    # 登入 / 寫入 / 預覽
         self._stop = threading.Event()
-        self._jwt = None                      # Wiki 登入憑證;也存在 secrets 檔(重開不用重貼)
-        self._contents = {}                   # 上次讀到的 wiki 頁面(預覽用,只放記憶體)
+        self._jwt = None                      # KM 登入憑證;也存在 secrets 檔(重開不用重貼)
+        self._contents = {}                   # 上次讀到的 KM 頁面(預覽用,只放記憶體)
 
         cache = read_json(cache_path, default={})
         cache = cache if isinstance(cache, dict) else {}
@@ -148,7 +150,7 @@ class Xfer690Service:
         secrets = read_json(secrets_path, default={})
         jwt = secrets.get("wiki_jwt") if isinstance(secrets, dict) else None
         if isinstance(jwt, str) and _JWT_RE.match(jwt):
-            self._jwt = jwt     # 上次貼的;失效的話第一次讀 wiki 時清掉
+            self._jwt = jwt     # 上次貼的;失效的話第一次讀 KM 時清掉
 
     # ── 抓信 ────────────────────────────────────────────────
     def _add_bytes(self, n: int) -> None:
@@ -170,14 +172,16 @@ class Xfer690Service:
         writes = {c["step"] for t in self.cfg["wiki"].get("tables", [])
                   for c in (t.get("cols") or {}).values() if c.get("value") == "writes" and c.get("step")}
         want |= {i for i, e in new.items() if e["code"] in writes}
+        # 英譯的列鍵(期數區間)在 log 的 FILE_I / FILE 裡,跟期別系統一樣每段要一封
+        span = {t["system"] for t in self.cfg["wiki"].get("tables", []) if t.get("key") == "span"}
         for s in self.cfg["systems"]:
-            if not str(s.get("period", "")).startswith("vol"):
+            if not str(s.get("period", "")).startswith("vol") and s["id"] not in span:
                 continue
             codes = set(s.get("auto", [])) | set(s.get("steps", []))
             evs = [e for e in list(self.events.values()) + list(new.values())
                    if e.get("code") in codes and e.get("at")]
             for seg in group_runs(evs, s):
-                # 每段只要一封帶出 VOL:取第一封子步驟(母 job 的信排在最後,通常不是第一封)
+                # 每段只要一封帶出 VOL(或 FILE):取第一封子步驟(母 job 的信排在最後,通常不是第一封)
                 first = next((e for e in seg if e["code"] in s.get("steps", [])), seg[0])
                 if any(e.get("raw") for e in seg if e["id"] not in new):
                     continue
@@ -293,7 +297,7 @@ class Xfer690Service:
             "auth": self.auth, "gmail_account": self.account,
             # 有 token、而且沒被判定失效 = 已授權(卡片顯示「登出」;否則顯示「授權」)
             "gmail_authorized": self.token_path.exists() and self.auth != "needs_auth",
-            "gmail_authorizing": bool(self._auth_thread and self._auth_thread.is_alive()),
+            "gmail_authorizing": self._authorizing(),
             "last_poll": self.last_poll, "last_poll_kind": self.last_poll_kind,
             "last_error": self.last_error, "stale": stale,
             "poll_interval_min": int(self.cfg["poll_interval_min"]),
@@ -329,27 +333,48 @@ class Xfer690Service:
     def stop(self) -> None:
         self._stop.set()
 
-    # ── Gmail 授權(信件與連線的按鈕;690授權.bat 走同一個 run_consent) ──
-    def gmail_authorize(self) -> dict:
-        """開瀏覽器到 Google 同意頁。在背景等(最多 10 分鐘),請求馬上回來;授權完抓一次信。"""
-        if self._auth_thread and self._auth_thread.is_alive():
-            return {"ok": True, "message": "正在等瀏覽器授權"}
+    # ── Gmail 授權(信件與連線的按鈕) ──
+    # Google 同意後直接回呼主程式的 /api/xfer690/gmail/callback(這個伺服器一直開著、每個連線
+    # 各一條執行緒)。不另開暫時伺服器:google 套件的那個只接一個連線,瀏覽器的預先連線佔掉
+    # 以後真正的回呼進不來,畫面會一直「等待授權」到逾時。
+    def gmail_authorize(self, redirect_uri: str) -> dict:
+        """產生 Google 同意頁網址(網頁在新分頁開)。再按一次就換一組新的,舊的作廢。"""
         if not self.credentials_path.exists():
             return {"ok": False, "message": f"找不到 {self.credentials_path.name},請照 690授權.bat 的說明設定"}
+        try:
+            flow = self.flow_factory(self.credentials_path, redirect_uri)
+            url, state = flow.authorization_url(prompt="consent")   # consent:重新授權才會再給 refresh_token
+        except ImportError:
+            return {"ok": False, "message": "缺少套件 google-auth-oauthlib,請執行 python -m pip install -r requirements-690.txt"}
+        except Exception as e:
+            return {"ok": False, "message": f"開不了授權頁:{e}"[:300]}
+        self._pending = {"flow": flow, "state": state, "until": self.now() + AUTH_WAIT}
+        return {"ok": True, "url": url}
 
-        def run():
-            try:
-                self.consent_fn(self.credentials_path, self.token_path)
-            except Exception as e:
-                self.last_error = f"Gmail 授權沒有完成:{e}"[:300]
-                return
-            self.auth = "unknown"
-            self.account = None             # 可能換了帳號,下次抓信重讀
-            self.poll("manual")
+    def _authorizing(self) -> bool:
+        return bool(self._pending) and self.now() < self._pending["until"]
 
-        self._auth_thread = threading.Thread(target=run, daemon=True)
-        self._auth_thread.start()
-        return {"ok": True, "message": "已開啟瀏覽器,請在 Google 頁面按同意"}
+    def gmail_callback(self, query: dict) -> str:
+        """Google 同意頁導回來。回傳要顯示在那個分頁的訊息。"""
+        p = self._pending
+        if not p or not query.get("state") or query.get("state") != p["state"]:
+            return "這個授權連結已經失效,請回到「信件與連線」再按一次「授權」。"
+        self._pending = None
+        if query.get("error"):
+            self.last_error = f"Gmail 授權沒有完成:{query['error']}"[:300]
+            return f"授權沒有完成({query['error']}),可以關掉這個分頁,回到「信件與連線」再試一次。"
+        try:
+            p["flow"].fetch_token(code=query.get("code") or "")
+            write_json_atomic(self.token_path, json.loads(p["flow"].credentials.to_json()))
+        except Exception as e:
+            self.last_error = f"Gmail 授權沒有完成:{e}"[:300]
+            return f"授權沒有完成:{e}"[:300]
+        self.auth = "unknown"
+        self.account = None             # 可能換了帳號,下次抓信重讀
+        self.last_error = None
+        # 抓信可能要一陣子,不讓這個分頁等;網頁看到 auth 是 unknown 會每 3 秒重讀
+        threading.Thread(target=self.poll, args=("manual",), daemon=True).start()
+        return "授權完成,可以關掉這個分頁。"
 
     def gmail_logout(self) -> dict:
         """刪掉這台電腦的 Gmail token,停止抓信,直到重新授權。"""
@@ -364,18 +389,18 @@ class Xfer690Service:
             self._save()
         return {"ok": True}
 
-    # ── Wiki ────────────────────────────────────────────────
+    # ── KM ────────────────────────────────────────────────
     def wiki_login(self, pasted) -> dict:
         """使用者貼上瀏覽器的 jwt cookie(Innovue OAuth 登入後才有)。
 
-        先問 Wiki「這是誰」確認有效,才存進 secrets 檔(wiki_jwt)。回應不回顯 token。"""
+        先問 KM「這是誰」確認有效,才存進 secrets 檔(wiki_jwt)。回應不回顯 token。"""
         from xfer690.wiki import WikiAuthError, WikiError
         with self._lock:        # 改了 xfer690.json(例如打開 wiki.enabled)直接按登入就生效
             self.cfg = load_xfer_config(self.config_path)
         w = self.cfg["wiki"]
         with self._wiki_lock:
             if not w.get("enabled"):
-                return self._login_result(False, "Wiki 功能還沒啟用(xfer690.json 的 wiki.enabled)")
+                return self._login_result(False, "KM 功能還沒啟用(xfer690.json 的 wiki.enabled)")
             token = _clean_jwt(pasted)
             if not token:
                 return self._login_result(False, "貼上的不是 jwt:要複製 Cookies 裡名稱是 jwt 的那一列的「值」")
@@ -383,11 +408,11 @@ class Xfer690Service:
                 client = self.wiki_factory(w["url"], token)
                 who = client.whoami()
             except WikiAuthError:
-                return self._login_result(False, "Wiki 不認得這個 jwt(可能過期或複製不完整),請重新登入 Wiki 後再複製一次")
+                return self._login_result(False, "KM 不認得這個 jwt(可能過期或複製不完整),請重新登入 KM 後再複製一次")
             except WikiError as e:
-                return self._login_result(False, f"連不上 Wiki:{e}"[:200])
+                return self._login_result(False, f"連不上 KM:{e}"[:200])
             except Exception as e:
-                return self._login_result(False, f"連不上 Wiki:{type(e).__name__}")
+                return self._login_result(False, f"連不上 KM:{type(e).__name__}")
             self.wiki["account"] = (f"{who['name']}({who['email']})" if who["name"] and who["email"]
                                     else who["name"] or who["email"])
             self._set_jwt(client.token)
@@ -405,7 +430,7 @@ class Xfer690Service:
         return {"ok": True}
 
     def _set_jwt(self, token) -> None:
-        """換 token(登入、Wiki 續期、失效),同步寫回 secrets 檔;檔裡其他欄位不動。"""
+        """換 token(登入、KM 續期、失效),同步寫回 secrets 檔;檔裡其他欄位不動。"""
         self._jwt = token
         secrets = read_json(self.secrets_path, default={})
         secrets = secrets if isinstance(secrets, dict) else {}
@@ -442,7 +467,7 @@ class Xfer690Service:
                 try:
                     res = sync(client, self.status(), self.cfg["wiki"], write=False)
                 finally:
-                    if client.token != self._jwt:       # Wiki 續期發的新 token
+                    if client.token != self._jwt:       # KM 續期發的新 token
                         self._set_jwt(client.token)
                 self._contents = res["contents"]
                 self.wiki.update(report=res["pages"], tables=res["tables"],
@@ -450,10 +475,10 @@ class Xfer690Service:
             except WikiAuthError:
                 self._expire(EXPIRED_MSG)
             except Exception as e:
-                self.wiki["last_error"] = f"讀 Wiki 失敗:{e}"[:300]
+                self.wiki["last_error"] = f"讀 KM 失敗:{e}"[:300]
 
     def wiki_write(self, edits=(), only=None) -> dict:
-        """用記憶體裡的 JWT 寫入(使用者按「寫入 Wiki」)。沒有 JWT → NotLoggedIn。
+        """用記憶體裡的 JWT 寫入(使用者按「寫入 KM」)。沒有 JWT → NotLoggedIn。
 
         only={"page", "table", "key"}:「只寫這一列」,只動那一頁那張表的那一列。"""
         from xfer690.wiki import WikiAuthError, sync
@@ -478,7 +503,7 @@ class Xfer690Service:
                 self._expire(EXPIRED_MSG)
                 raise NotLoggedIn()
             except Exception as e:
-                self.wiki["last_error"] = f"寫 Wiki 失敗:{e}"[:300]
+                self.wiki["last_error"] = f"寫 KM 失敗:{e}"[:300]
                 return {"ok": False, "message": self.wiki["last_error"]}
             pages = res["pages"]
             if only:        # 只動了一張表:其他表的預覽照舊,這張表換成寫入後的結果

@@ -100,7 +100,7 @@
 
 <p class="lead">一個放在自己電腦上的小工具,量測每天用掉多少網路流量(對著每日 2GB 的額度),並提供<strong>流量報表</strong>,拿來跟公司反映連線問題。平時在背景執行,要看時打開瀏覽器就好。</p>
 
-<p><strong>690 資轉監控</strong>讀 s690 Rundeck 的通知信,顯示每個轉置系統每天、每一期是成功、失敗、無資料還是沒來,並在 Wiki 的「資料轉置登記」表格裡登記。</p>
+<p><strong>690 資轉監控</strong>讀 s690 Rundeck 的通知信,顯示每個轉置系統每天、每一期是成功、失敗、無資料還是沒來,並在 KM 的「資料轉置登記」表格裡登記。</p>
 
 <h3>使用的技術</h3>
 <ul>
@@ -180,19 +180,19 @@
       <li><strong>每日資轉</strong>:今天每個每日系統一列,每個步驟一顆點。</li>
       <li><strong>TWA 公開 / TWB 公告</strong>:全文、書目、雜項、英譯 × 公告期數,只追蹤最近一個月;補跑的舊期列在「更早的期」。點一格看那期的細節。</li>
       <li><strong>其他作業</strong>:不在系統清單上的手動作業,以及維運 99xxxx。</li>
-      <li><strong>Wiki 登記</strong>:登入 Wiki 後顯示填好的表格預覽,按「寫入 Wiki」才寫。點任一格可以手動修改。</li>
+      <li><strong>KM 登記</strong>:登入 KM 後顯示填好的表格預覽,按「寫入 KM」才寫。點任一格可以手動修改。</li>
     </ul>
   </li>
-  <li><strong>信件與連線</strong>:Gmail 授權、Wiki 登入(在這裡按「登入 Wiki」)、最近收到的信。</li>
+  <li><strong>信件與連線</strong>:Gmail 授權、KM 登入(在這裡按「登入 KM」)、最近收到的信。</li>
   <li>失敗項目的「失敗」兩個字就是連結,點了直接看那封信附的 log。分類上的紅色數字是要處理的件數,頁籤上的 ⚠ 表示有狀況。</li>
-  <li>寫 Wiki 時<strong>只填空格</strong>,不覆寫人填的值(你在畫面上明確改過的格除外)。</li>
+  <li>寫 KM 時<strong>只填空格</strong>,不覆寫人填的值(你在畫面上明確改過的格除外)。</li>
 </ul>
 
 <p><strong>第一次設定</strong>(每台電腦一次):</p>
 <ol class="steps">
   <li>確認 <code>data/config/gmail_credentials.json</code> 在(GCP 的 OAuth 用戶端)。</li>
   <li>雙擊 <code>690授權.bat</code>,用 <code>alicia.huang@innovue.ltd</code> 同意唯讀權限。</li>
-  <li>要寫 Wiki 的話,<code>data/config/xfer690.json</code> 的 <code>wiki.enabled</code> 要是 <code>true</code>。在瀏覽器用 Innovue OAuth 登入 Wiki,按 F12 → Application → Cookies 複製 <code>jwt</code> 的值,貼到「信件與連線」的 Wiki 卡片按「登入 Wiki」(存在 <code>data/config/xfer690_secrets.json</code>,重開不用重貼)。</li>
+  <li>要寫 KM 的話,<code>data/config/xfer690.json</code> 的 <code>wiki.enabled</code> 要是 <code>true</code>。在瀏覽器用 Innovue OAuth 登入 KM,按 F12 → Application → Cookies 複製 <code>jwt</code> 的值,貼到「信件與連線」的 KM 卡片按「登入 KM」(存在 <code>data/config/xfer690_secrets.json</code>,重開不用重貼)。</li>
   <li>重開 <code>start_monitor.bat</code>(第一次會自動安裝 690 需要的套件;裝不起來只停用 690,流量監控照常)。</li>
 </ol>
 <p>規則與設定的細節見<a href="doc/進階參考.html">進階參考</a>與 <code>doc/README.md</code> 的「690 資轉監控」一節。</p>

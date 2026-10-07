@@ -14,7 +14,7 @@ const X6_VIEWS = { twa: "TWA 公開", twb: "TWB 公告" };
 
 let x6Snap = null;
 let x6View = "daily";
-let x6Back = "daily";      // 從哪個分類點進 Wiki 登記(預覽卡片的「返回」用)
+let x6Back = "daily";      // 從哪個分類點進 KM 登記(預覽卡片的「返回」用)
 const x6Sel = { twa: null, twb: null };
 let x6Edits = {};          // 還沒寫入的手動修改,key = 頁|表|列鍵|欄號
 let x6Busy = { refresh: false, login: false, write: false };
@@ -233,18 +233,11 @@ function x6renderToolbar() {
   u.replaceChildren();
   if (!x6Snap) { u.textContent = "讀取中…"; return; }
   if (x6Snap.ok === false) { u.append(x6el("span", "x6-bad", x6Snap.message || "690 監控沒有啟動")); return; }
+  // 只放最後更新時間;抓信錯誤看「信件與連線」的 Gmail 卡片
   if (x6Snap.last_poll) {
-    const kind = x6Snap.last_poll_kind === "manual" ? "手動" : "自動";
-    u.append("最後更新 ", x6el("b", null, `${x6Snap.last_poll.slice(5, 10)} ${x6Snap.last_poll.slice(11, 19)}`), `(${kind})`);
+    u.append("最後更新 ", x6el("b", null, `${x6Snap.last_poll.slice(5, 10)} ${x6Snap.last_poll.slice(11, 19)}`));
   } else {
     u.append("還沒抓過信");
-  }
-  if (x6Snap.last_error) {
-    u.append(x6el("span", "x6-bad", ` · ${x6Snap.last_poll ? "之後抓信都失敗:" : ""}${x6Snap.last_error}`));
-  } else if (x6Snap.stale && x6Snap.last_poll) {
-    u.append(x6el("span", "x6-bad", " · 資料過舊"));
-  } else {
-    u.append(` · 每 ${x6Snap.poll_interval_min || 10} 分鐘自動更新`);
   }
 }
 
@@ -312,14 +305,14 @@ function x6renderDaily() {
     ["今天還沒跑到", String(counts.pending), ""],
   ]);
 }
-// 無資料與該到沒到的說明框(失敗不出框,錯誤訊息在「失敗」連結的提示裡)
+// 每日資轉的無資料與該到沒到說明框(失敗不出框,錯誤訊息在「失敗」連結的提示裡)
+// 無資料只放原因(冒號前,不含 gs:// 路徑)和「查看 log」
 function x6explain(s, p) {
   if (p.state === "nodata") {
     const ev = x6nodataEvent(p);
     const de = x6el("div", "x6-detail soft");
-    if (ev && ev.error) de.append(x6el("code", null, ev.error));
+    de.append(x6el("span", null, ((ev && ev.error) || "GCS 資料夾無檔案").split(":")[0].trim()));
     if (ev) de.append(x6logBtn(ev));
-    de.append(x6el("span", null, s.period === "date" ? "當天沒有新檔,視為完成,wiki 照樣打 v" : "這期的檔案還沒到"));
     return de;
   }
   if (p.state === "missing") {
@@ -349,7 +342,7 @@ function x6renderPeriod(v) {
   x6stats(x6$("x6-p-summary"), [
     ["最新一期", `VOL ${cols[0].vol}`, "", x6md(cols[0].iso)],
     ["需要處理", String(a), a ? "bad" : "good"],
-    ["Wiki 要登記", String(x6wikiCounts(v).rows), "", "列"],
+    ["KM 要登記", String(x6wikiCounts(v).rows), "", "列"],
   ]);
 
   // 預設選有問題的那一格,沒有就選最近收到信的
@@ -483,6 +476,9 @@ function x6renderDetail(v, cols) {
   const head = x6el("div", "x6-pd-head");
   head.append(x6el("i", "x6-dot " + p.state), x6el("b", null, `${v.toUpperCase()} ${name} · ${what}`),
               x6stateEl("span", p.state, fail, p.state === "nodata" ? "無檔案" : null));
+  // 不放說明框:無資料只在標題列留「查看 log」
+  const nd = p.state === "nodata" ? x6nodataEvent(p) : null;
+  if (nd) head.append(x6logBtn(nd));
   box.append(head);
   const steps = x6el("div", "x6-steps");
   for (const pr of s.pairs || []) {
@@ -493,8 +489,6 @@ function x6renderDetail(v, cols) {
     steps.append(sp2);
   }
   box.append(steps);
-  const ex = x6explain(s, p);
-  if (ex) box.append(ex);
   const kv = x6el("dl", "x6-kv");
   const add = (dt, dd) => kv.append(x6el("dt", null, dt), x6el("dd", null, dd));
   const oldest = Math.min(...cols.map(c => c.vol));
@@ -552,15 +546,6 @@ function x6renderAdhoc() {
       steps.append(sp);
     }
     row.append(steps, x6el("div", "when", `收信 ${x6mdhm(p.last_at)}`));
-    const info = x6el("div", "x6-detail soft");
-    const evs = codes.map(c => p.steps[c].event).filter(Boolean);
-    const data = Object.assign({}, ...evs.map(e => e.data || {}));
-    const dtxt = Object.entries(data).map(([k, v]) => `${k}=${v}`).join(" · ");
-    if (dtxt) info.append(x6el("code", null, dtxt));
-    const w = evs.map(e => e.writes).filter(x => x != null);
-    if (w.length) info.append(x6el("span", null, `寫入 ${x6num(w[w.length - 1])} 筆`));
-    info.append(x6el("span", null, "不在系統清單裡,只顯示、不寫 Wiki"));
-    row.append(info);
     box.append(row);
   }
   const m = x6$("x6-maint");
@@ -576,7 +561,7 @@ function x6renderAdhoc() {
   }
 }
 
-// ── Wiki 登記 ──
+// ── KM 登記 ──
 function x6wikiTables() {
   return ((x6Snap && x6Snap.wiki && x6Snap.wiki.tables) || []);
 }
@@ -635,18 +620,12 @@ function x6renderWiki() {
   x6$("x6-v-wiki").hidden = false;
   const w = (x6Snap && x6Snap.wiki) || {};
   const c = x6wikiCounts();
-  x6stats(x6$("x6-w-summary"), [
-    ["會改的頁", String(c.pages), "", "頁"],
-    ["要填的格", String(c.fill), "", "格"],
-    ["新增的列", String(c.added), "", "列"],
-    ["失敗留空", String(c.hold), c.hold ? "bad" : "good", "格"],
-  ]);
   const go = x6$("x6-w-go");
   if (!x6Busy.write) {
     go.removeAttribute("aria-busy");
-    go.textContent = !w.logged_in ? (w.last_login && !w.last_login.ok ? "Wiki 登入失敗" : "Wiki 還沒登入")
+    go.textContent = !w.logged_in ? (w.last_login && !w.last_login.ok ? "KM 登入失敗" : "KM 還沒登入")
                    : !c.pages ? "沒有要寫入的"
-                   : `寫入 Wiki(${c.pages} 頁${c.edits ? `,含手改 ${c.edits} 格` : ""})${w.dry_run ? " · 乾跑" : ""}`;
+                   : `寫入 KM(${c.pages} 頁${c.edits ? `,含手改 ${c.edits} 格` : ""})${w.dry_run ? " · 乾跑" : ""}`;
     go.disabled = !!w.logged_in && !c.pages;
   }
   const res = x6$("x6-w-result");
@@ -657,22 +636,32 @@ function x6renderWiki() {
   const box = x6$("x6-wikipages");
   box.replaceChildren();
   if (!w.logged_in && !x6wikiTables().length) {
-    box.append(x6el("div", "x6-wnote", w.enabled ? "到「信件與連線」登入 Wiki 之後,這裡會讀出各頁目前的內容,顯示填好的樣子。"
-                                                 : "Wiki 登記還沒啟用(data/config/xfer690.json 的 wiki.enabled)。"));
+    box.append(x6el("div", "x6-wnote", w.enabled ? "到「信件與連線」登入 KM 之後,這裡會讀出各頁目前的內容,顯示填好的樣子。"
+                                                 : "KM 登記還沒啟用(data/config/xfer690.json 的 wiki.enabled)。"));
     return;
   }
   if (w.last_error) box.append(x6el("div", "x6-result bad", w.last_error));
-  const order = ["每日執行項目", "TW全文Full", "TW書目Biblio及雜項"];
+  const order = ["每日執行項目", "TW全文Full", "TW書目Biblio及雜項", "TW英譯En"];
   const tables = x6wikiTables().slice().sort((a, b) => order.indexOf(a.page) - order.indexOf(b.page) || a.table.localeCompare(b.table));
+  const shown = new Map(tables.map(tb => [tb, (tb.rows || []).filter(r => tb.columns.some(c => {
+    const x = x6cell(tb, r, c);
+    return ["fill", "hold", "wait", "edit"].includes(x.k) && c.kind !== "key" || x.flag;
+  }))]));
+  // 每張表都沒有要登記(也沒有出錯的表):只放一個勾勾
+  if (tables.length && tables.every(tb => !tb.error && !shown.get(tb).length)) {
+    const done = x6el("div", "x6-wdone");
+    done.innerHTML = '<svg viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="25" fill="none" stroke="currentColor" stroke-width="3"/>'
+                   + '<path d="M17 29l7.5 7.5L39.5 21" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    done.append(x6el("span", null, "全部都登記完成"));
+    box.append(done);
+    return;
+  }
   for (const tb of tables) {
     const sec = x6el("div", "x6-wpage");
     sec.append(x6el("h3", null, tb.title));
     if (tb.error) sec.append(x6el("div", "x6-result bad",
       `這張表沒有處理,不會寫入:${tb.error}。頁面的表格改過的話,要更新 data/config/xfer690.json 這張表的 labels / cols。`));
-    const rows = (tb.rows || []).filter(r => tb.columns.some(c => {
-      const x = x6cell(tb, r, c);
-      return ["fill", "hold", "wait", "edit"].includes(x.k) && c.kind !== "key" || x.flag;
-    }));
+    const rows = shown.get(tb);
     if (rows.length) sec.append(x6wtable(tb, rows));
     const notes = [];
     if (!rows.length && !tb.error) notes.push(tb.table === "TWB" && tb.page === "TW全文Full" && !(tb.rows || []).length
@@ -681,7 +670,7 @@ function x6renderWiki() {
     box.append(sec);
   }
   const off = x6el("div", "x6-wpage");
-  off.append(x6el("div", "x6-wnote", "TW英譯En、TW影像GCS 這版不寫入。"));
+  off.append(x6el("div", "x6-wnote", "TW影像GCS 這版不寫入(信裡沒有影像上傳的 job)。"));
   box.append(off);
 }
 function x6wtable(tb, rows) {
@@ -844,7 +833,7 @@ function x6renderConn() {
   wrows.push(["最後登入", ll ? `${x6mdhm(ll.at)} ${ll.ok ? "成功" : "失敗"}` : "—"]);
   wrows.push(["最後寫入", lw ? `${x6mdhm(lw.at)} · ${lw.dry_run ? "乾跑,沒有真的寫入;" : ""}${lw.pages} 頁,填 ${lw.filled} 格、新增 ${lw.inserted} 列${lw.edited ? `、手改 ${lw.edited} 格` : ""}` : "還沒寫入過"]);
   const wfix = !w.logged_in && ll && !ll.ok ? ll.message : null;
-  box.append(card(state, "Wiki", word, wrows, wfix, x6wikiLoginBox(w)));
+  box.append(card(state, "KM", word, wrows, wfix, x6wikiLoginBox(w)));
 
   const m = x6$("x6-mail");
   m.replaceChildren();
@@ -931,8 +920,8 @@ async function x6refresh() {
   u.classList.add("flash");
   setTimeout(() => u.classList.remove("flash"), 1500);
 }
-// Wiki 只開 Innovue OAuth(GitLab)登入,程式沒辦法自己登:使用者在瀏覽器登入後,
-// 把 Cookies 裡的 jwt 貼過來。伺服器先跟 Wiki 確認有效才收下,畫面不回顯。
+// KM 只開 Innovue OAuth(GitLab)登入,程式沒辦法自己登:使用者在瀏覽器登入後,
+// 把 Cookies 裡的 jwt 貼過來。伺服器先跟 KM 確認有效才收下,畫面不回顯。
 // 卡片每分鐘重畫一次,輸入框放在卡片外保留,重畫時才不會清掉貼到一半的內容。
 const x6jwtInput = (() => {
   const i = document.createElement("input");
@@ -954,7 +943,7 @@ function x6wikiLoginBox(w) {
   }
   const ol = x6el("ol", "x6-howto");
   const li1 = x6el("li");
-  const a = x6el("a", null, "Wiki");
+  const a = x6el("a", null, "KM");
   a.href = (w.url || "https://km.innovue.ltd") + "/login"; a.target = "_blank"; a.rel = "noopener";
   li1.append("開 ", a, ",用「Innovue OAuth」登入");
   ol.append(li1,
@@ -962,7 +951,7 @@ function x6wikiLoginBox(w) {
             x6el("li", null, "點名稱是 jwt 的那一列,複製「值」,貼到下面"));
   const lab = x6el("label", "x6-jwt-lab", "jwt");
   lab.htmlFor = "x6-jwt";
-  const btn = x6el("button", "x6-btn", x6Busy.login ? "確認中…" : "登入 Wiki");
+  const btn = x6el("button", "x6-btn", x6Busy.login ? "確認中…" : "登入 KM");
   btn.type = "button";
   if (x6Busy.login) btn.setAttribute("aria-busy", "true");
   btn.disabled = x6Busy.login || x6Busy.write;
@@ -995,16 +984,17 @@ async function x6wikiLogout() {
   await x6load();
 }
 
-// ── Gmail 授權:沒授權顯示「授權」,已授權顯示「登出」(跟 Wiki 卡片一樣) ──
+// ── Gmail 授權:沒授權顯示「授權」,已授權顯示「登出」(跟 KM 卡片一樣) ──
 function x6gmailBox(s) {
   const wrap = x6el("div", "x6-login");
   const btn = x6el("button", "x6-btn" + (s.gmail_authorized ? " ghost" : ""));
   btn.type = "button";
   if (s.gmail_authorizing) {
-    btn.textContent = "等待授權…";
-    btn.disabled = true;
-    btn.setAttribute("aria-busy", "true");
-    wrap.append(btn, x6el("div", "hint", "已開啟瀏覽器:在 Google 頁面選帳號、按同意,完成後這裡會自動更新。"));
+    // 分頁被關掉或被瀏覽器擋掉:再按一次換一組新網址重開
+    btn.textContent = "重新開啟授權頁";
+    btn.classList.add("ghost");
+    btn.addEventListener("click", x6gmailAuthorize);
+    wrap.append(x6el("div", "hint", "已在新分頁開啟 Google 授權頁:選帳號、按同意,完成後這裡會自動更新。"), btn);
     return wrap;
   }
   if (s.gmail_authorized) {
@@ -1018,11 +1008,19 @@ function x6gmailBox(s) {
   return wrap;
 }
 async function x6gmailAuthorize() {
+  // 先在點擊當下開空白分頁,拿到網址再導過去:等 fetch 回來才開會被瀏覽器當成彈出視窗擋掉
+  const win = window.open("", "_blank");
   try {
     const r = await fetch("/api/xfer690/gmail/authorize", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     const j = await r.json();
-    if (!j.ok && x6Snap) x6Snap.last_error = j.message;
-  } catch (e) { /* 下次載入看快照 */ }
+    if (j.ok && j.url) {
+      if (win) win.location.href = j.url;
+      else location.href = j.url;         // 分頁開不了:這一頁直接去,同意完會顯示「授權完成」
+    } else {
+      if (win) win.close();
+      if (x6Snap) x6Snap.last_error = j.message;
+    }
+  } catch (e) { if (win) win.close(); }
   await x6load();
 }
 async function x6gmailLogout() {
@@ -1040,7 +1038,7 @@ async function x6wikiWrite(only) {
   // 「只寫這一列」:那一列的手改一起送,別列的手改留著
   const mine = (e) => only && e.page === only.page && e.table === only.table && String(e.key) === String(only.key);
   const rowEdits = only ? Object.values(x6Edits).filter(mine) : [];
-  if (only && !w.dry_run && !confirm(`只把「${only.title} ${only.key}」這一列寫進 Wiki?\n其他列、其他頁都不會動`
+  if (only && !w.dry_run && !confirm(`只把「${only.title} ${only.key}」這一列寫進 KM?\n其他列、其他頁都不會動`
       + (rowEdits.length ? `;這一列你手改的 ${rowEdits.length} 格會一起寫入。` : "。"))) return;
   const go = x6$("x6-w-go");
   x6Busy.write = true; x6Result = null;
@@ -1053,7 +1051,7 @@ async function x6wikiWrite(only) {
                                                        body: JSON.stringify(body) });
     const j = await r.json();
     if (r.status === 409) {
-      x6Result = { ok: false, text: "Wiki 登入已失效,請到「信件與連線」重新登入。修改都還在。" };
+      x6Result = { ok: false, text: "KM 登入已失效,請到「信件與連線」重新登入。修改都還在。" };
     } else if (!j.ok) {
       x6Result = { ok: false, text: j.message || "寫入失敗。修改都還在。" };
     } else {

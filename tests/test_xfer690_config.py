@@ -37,7 +37,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(cfg["systems"], [{"id": "x"}])
         self.assertFalse(cfg["wiki"]["dry_run"])
         self.assertEqual(cfg["wiki"]["tables"], [{"page": "p"}])
-        # 沒給的 wiki 欄位保留預設值
+        # 沒給的 KM 欄位保留預設值
         self.assertEqual(cfg["wiki"]["locale"], "zh-tw")
         self.assertEqual(cfg["max_raw_kb"], 512)
         # 預設值本身沒被改到
@@ -64,7 +64,7 @@ class ConfigTest(unittest.TestCase):
                 if t["page"] == "每日執行項目":
                     self.assertNotIn(col, daily_cols, f"每日表欄 {col} 重複")
                     daily_cols[col] = t["system"]
-        self.assertEqual(len(cfg["wiki"]["tables"]), 10)
+        self.assertEqual(len(cfg["wiki"]["tables"]), 12)
         self.assertEqual(cfg["wiki"]["nodata_value"], "-")
 
 

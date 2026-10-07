@@ -1,6 +1,6 @@
-"""Wiki 登記:規劃要填的格(plan_fills)、Wiki.js GraphQL 用戶端、整頁同步與預覽。
+"""KM 登記:規劃要填的格(plan_fills)、Wiki.js GraphQL 用戶端、整頁同步與預覽。
 
-寫入只在使用者按「寫入 Wiki」時發生;預覽用同一套流程、只是不送更新。
+寫入只在使用者按「寫入 KM」時發生;預覽用同一套流程、只是不送更新。
 """
 
 import json
@@ -9,26 +9,71 @@ import urllib.error
 import urllib.request
 from datetime import date
 
-from xfer690.status import cell_done
+from xfer690.status import _overall, cell_done
 from xfer690.wikitable import (LabelMismatch, TableNotFound, apply_edits, apply_fills, locate,
                                read_rows)
 
 
-def _new_row(template: dict, d, vol: str) -> dict:
+def _new_row(template: dict, d, key: str) -> dict:
     d = date.fromisoformat(d) if d else None
-    vals = {"vol": vol or ""}
+    vals = {"vol": key or "", "key": key or ""}
     if d:
         vals.update(yyyy=f"{d.year:04d}", mm=f"{d.month:02d}", dd=f"{d.day:02d}",
                     yyyymmdd=d.strftime("%Y%m%d"))
     return {int(c): t.format(**vals) for c, t in (template or {}).items()}
 
 
+# 英譯的檔名帶期數區間:TW__I_20260901_5325_to_20260921_5327_complete → 5325 ~ 5327
+_SPAN_RE = re.compile(r"_(\d{4})_to_\d+_(\d{4})_")
+
+
+def eng_span(p: dict):
+    """英譯那次執行處理的期數區間(KM 英譯頁的列鍵),從信裡的 FILE_I / FILE 取。"""
+    for st in list((p.get("steps") or {}).values()) + list((p.get("auto") or {}).values()):
+        d = (st.get("event") or {}).get("data") or {}
+        m = _SPAN_RE.search(d.get("FILE_I") or d.get("FILE") or "")
+        if m:
+            return f"{m.group(1)} ~ {m.group(2)}"
+    return None
+
+
 def _row_key(target: dict, p: dict):
     if target.get("key") == "vol":
         return p["key"]
+    if target.get("key") == "span":
+        return eng_span(p)
     if not p.get("date"):
         return None
     return date.fromisoformat(p["date"]).strftime(target.get("key_format") or "%Y-%m-%d")
+
+
+def _merge(periods: list) -> dict:
+    """同一列的幾次執行(英譯同一個期數區間重跑)合成一期:每個步驟以最後一封為準,跟期別系統
+    同一期重跑的規則一樣。periods 由新到舊。"""
+    if len(periods) == 1:
+        return periods[0]
+    steps = {}
+    for p in reversed(periods):
+        for c, st in (p.get("steps") or {}).items():
+            if (st.get("at") or "") >= ((steps.get(c) or {}).get("at") or ""):
+                steps[c] = st
+    states = [st.get("state") for st in steps.values()]
+    return dict(periods[0], steps=steps, state=_overall(states),
+                nodata=any(s == "nodata" for s in states),
+                tag=next((p["tag"] for p in periods if p.get("tag")), None))
+
+
+def _periods_by_row(status: dict, target: dict) -> dict:
+    """{列鍵: 期}:有收到信的期,依 KM 列鍵分組(同一列的多次執行合併)。"""
+    sys_ = next((s for s in status.get("systems", []) if s["id"] == target.get("system")), None)
+    rows = {}
+    for p in (sys_ or {}).get("periods", []):
+        if not p.get("last_at"):
+            continue        # 一封信都沒有的期(該到沒到 / 還沒跑)
+        key = _row_key(target, p)
+        if key:
+            rows.setdefault(key, []).append(p)
+    return {k: _merge(v) for k, v in rows.items()}
 
 
 def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
@@ -37,16 +82,12 @@ def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
     if sys_ is None:
         return {}
     out = {}
-    vol_system = str(sys_.get("period", "")).startswith("vol")
+    # 英譯(列鍵是期數區間)跟期別系統一樣:無資料 = 那批檔案還沒到
+    vol_system = str(sys_.get("period", "")).startswith("vol") or target.get("key") == "span"
     nodata_value = str(wiki_cfg.get("nodata_value", "-"))
-    for p in sys_.get("periods", []):
-        if not p.get("last_at"):
-            continue        # 一封信都沒有的期(該到沒到 / 還沒跑)
+    for key, p in _periods_by_row(status, target).items():
         if vol_system and p.get("nodata"):
-            continue        # 期別系統的無資料 = 那期檔案還沒到:列入警示、不寫 wiki(A4)
-        key = _row_key(target, p)
-        if key is None:
-            continue
+            continue        # 期別系統的無資料 = 那期檔案還沒到:列入警示、不寫 KM(A4)
         cells = {}
         # 每日系統整天「GCS 資料夾無檔案」:要打 v 的格改填 nodata_value(人工登記用 -)
         nodata_day = not vol_system and p.get("state") == "nodata"
@@ -66,7 +107,7 @@ def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
                 if w is not None and p.get("state") == "ok":
                     cells[int(col)] = str(w)
         if cells:
-            out[key] = {"cells": cells, "new": _new_row(target.get("new_row"), p.get("date"), p["key"])}
+            out[key] = {"cells": cells, "new": _new_row(target.get("new_row"), p.get("date"), key)}
     return out
 
 
@@ -120,11 +161,11 @@ def _urllib_post(url: str, headers: dict, body: bytes) -> tuple:
         except Exception:
             detail = ""
         if e.code in (401, 403):
-            raise WikiError(f"Wiki 前面的閘道擋下連線(HTTP {e.code}"
+            raise WikiError(f"KM 前面的閘道擋下連線(HTTP {e.code}"
                             + (f":{detail}" if detail else "") + ")") from e
-        raise WikiError(f"Wiki 回 HTTP {e.code}") from e
+        raise WikiError(f"KM 回 HTTP {e.code}") from e
     except (urllib.error.URLError, OSError) as e:
-        raise WikiError(f"連不上 Wiki:{e}") from e
+        raise WikiError(f"連不上 KM:{e}") from e
 
 
 class WikiClient:
@@ -152,7 +193,7 @@ class WikiClient:
         try:
             data = json.loads(raw)
         except ValueError as e:
-            raise WikiError("Wiki 回應不是 JSON") from e
+            raise WikiError("KM 回應不是 JSON") from e
         errs = data.get("errors") or []
         if errs:
             msg = "; ".join(str(e.get("message", "")) for e in errs)[:300]
@@ -166,7 +207,7 @@ class WikiClient:
         """token 對應的帳號 {name, email}。無效的 token 在 Wiki.js 是訪客 → WikiAuthError。"""
         p = (self._gql(_WHOAMI_Q, {}).get("users") or {}).get("profile")
         if not p:
-            raise WikiAuthError("Wiki 不認得這個登入憑證")
+            raise WikiAuthError("KM 不認得這個登入憑證")
         return {"name": p.get("name") or "", "email": p.get("email") or ""}
 
     def get_page(self, path: str, locale: str) -> dict:
@@ -223,17 +264,6 @@ def _col_index(labels: list, targets: list, col, system=None):
 
 # 使用者輸入的值:| 會多切一格、換行會斷開表格,整筆不寫
 _BAD_VALUE_RE = re.compile(r"[|\r\n]")
-
-
-def _period_map(status: dict, target: dict) -> dict:
-    sys_ = next((s for s in status.get("systems", []) if s["id"] == target["system"]), None)
-    out = {}
-    for p in (sys_ or {}).get("periods", []):
-        if p.get("last_at"):
-            k = _row_key(target, p)
-            if k:
-                out[k] = p
-    return out
 
 
 def _new_report():
@@ -369,7 +399,7 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
 
             # 有收到信、但沒排進計畫的格:失敗或沒到 → 留空;還沒跑到 → 待跑
             current = read_rows(content, t)["rows"]
-            for key, p in _period_map(status, t).items():
+            for key, p in _periods_by_row(status, t).items():
                 if key in tb["skipped"] or key not in current:
                     continue
                 row = tb["rows"].setdefault(key, {"key": key, "new": False, "cells": {}})

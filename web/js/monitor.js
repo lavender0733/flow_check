@@ -507,7 +507,7 @@ function renderSurgeLog(s) {
   if (sc) {
     const n = (s.surges || []).length;
     sc.textContent = n > 0 ? `・🔺 ${n}` : "";
-    sc.style.color = n > 0 ? "var(--warn)" : "";
+    sc.style.color = n > 0 ? "var(--warn-ink, var(--warn))" : "";
   }
   const tb = document.getElementById("surgelogbody");
   if (!tb) return;

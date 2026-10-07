@@ -1,7 +1,7 @@
 import json
 import threading
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from _util import TempDataCase
@@ -96,7 +96,8 @@ class FakeWikiPost:
 def wiki_pages():
     return {"TW書目Biblio及雜項": (FIX / "wiki_biblio.md").read_bytes().decode("utf-8"),
             "TW全文Full": (FIX / "wiki_full.md").read_bytes().decode("utf-8"),
-            "每日執行項目": (FIX / "wiki_daily.md").read_bytes().decode("utf-8")}
+            "每日執行項目": (FIX / "wiki_daily.md").read_bytes().decode("utf-8"),
+            "TW英譯En": (FIX / "wiki_eng.md").read_bytes().decode("utf-8")}
 
 
 class ServiceCase(TempDataCase):
@@ -173,6 +174,16 @@ class PollTest(ServiceCase):
         self.assertEqual(sorted(g.raw_calls), ["l", "r"])
         twb = next(s for s in snap["status"]["systems"] if s["id"] == "twb-biblio")
         self.assertEqual([p["key"] for p in twb["periods"] if p["last_at"]], ["5328"])
+
+    def test_raw_for_eng_span(self):
+        # 英譯的 KM 列鍵(期數區間)在 log 的 FILE_I:成功的那段也要抓第一封子步驟
+        log = "RUNDECK:DATA:FILE_I=TW__I_20260901_5325_to_20260921_5327_complete\nRUNDECK:DATA:TAG=20261005\n"
+        g = FakeGmail({f"e{j}": mail(c, f"eng-{c}", "01:00", day="05 Oct", log=log if c == "011301" else None)
+                       for j, c in enumerate(["011301", "011302", "011303", "011304", "011305", "011306", "011300"])})
+        snap = self.make(g, now=datetime(2026, 10, 7, 9, 0, tzinfo=TPE)).poll()
+        self.assertEqual(g.raw_calls, ["e0"])
+        eng = next(s for s in snap["status"]["systems"] if s["id"] == "eng")
+        self.assertEqual(eng["periods"][0]["state"], "ok")
 
     def test_raw_skipped_when_too_big(self):
         g = FakeGmail({"a": mail("012001", "techreport-pdf-step1-raw", "02:10", "FAILURE",
@@ -318,7 +329,7 @@ class _GatewayHandler(BaseHTTPRequestHandler):
 
 
 class GatewayTest(unittest.TestCase):
-    """不開 VPN 時 Wiki 走 Cloudflare:擋掉 Python-urllib,而且擋下來的 403 不是 jwt 失效。"""
+    """不開 VPN 時 KM 走 Cloudflare:擋掉 Python-urllib,而且擋下來的 403 不是 jwt 失效。"""
 
     def setUp(self):
         _GatewayHandler.seen_ua, _GatewayHandler.block_all = [], False
@@ -395,56 +406,121 @@ def daily_events():
     return out
 
 
+class FakeFlow:
+    """假的 google_auth_oauthlib Flow:記錄 redirect_uri 和換 token 用的 code。"""
+
+    def __init__(self, redirect_uri, fail=None):
+        self.redirect_uri = redirect_uri
+        self.fail = fail
+        self.codes = []
+        self.credentials = self
+
+    def authorization_url(self, **kw):
+        return f"https://accounts.google.com/o/oauth2/auth?state=st1&redirect_uri={self.redirect_uri}", "st1"
+
+    def fetch_token(self, code):
+        if self.fail:
+            raise self.fail
+        self.codes.append(code)
+
+    def to_json(self):
+        return '{"token": "t", "refresh_token": "r"}'
+
+
 class GmailAuthTest(ServiceCase):
     """信件與連線的 Gmail 卡片:沒授權時「授權」,已授權時「登出」。"""
 
-    def make_auth(self, gmail):
+    CB = "http://127.0.0.1:8765/api/xfer690/gmail/callback"
+
+    def make_auth(self, gmail, fail=None):
         svc = self.make(gmail)
         svc.token_path = self.tmp / "gmail_token.json"
-        self.release = threading.Event()
-        self.consent_calls = []
+        self.flows = []
 
-        def consent(cred_path, token_path):
-            self.consent_calls.append((cred_path, token_path))
-            self.release.wait(5)                    # 使用者在瀏覽器按同意之前,一直等
-            token_path.write_text('{"token": "t"}', encoding="utf-8")
-        svc.consent_fn = consent
+        def factory(cred_path, redirect_uri):
+            f = FakeFlow(redirect_uri, fail)
+            self.flows.append(f)
+            return f
+        svc.flow_factory = factory
         return svc
 
-    def test_authorize_runs_in_background_then_polls(self):
+    def wait_poll(self, svc):
+        for t in threading.enumerate():
+            if t is not threading.current_thread() and t.daemon:
+                t.join(5)
+
+    def test_authorize_returns_url_then_callback_saves_token(self):
         g = FakeGmail({"a": mail("012001", "techreport-pdf-step1-raw", "02:10")})
         svc = self.make_auth(g)
-        res = svc.gmail_authorize()                 # 不能卡住請求:馬上回來
+        res = svc.gmail_authorize(self.CB)          # 不等使用者:馬上回網址給網頁開
         self.assertTrue(res["ok"])
+        self.assertIn("accounts.google.com", res["url"])
+        self.assertEqual(self.flows[0].redirect_uri, self.CB)
         self.assertTrue(svc.snapshot()["gmail_authorizing"])
-        self.assertEqual(svc.gmail_authorize()["message"], "正在等瀏覽器授權")   # 不重複開
-        self.release.set()
-        svc._auth_thread.join(5)
+        msg = svc.gmail_callback({"state": "st1", "code": "c0de"})
+        self.assertIn("授權完成", msg)
+        self.assertEqual(self.flows[0].codes, ["c0de"])
+        self.assertTrue(svc.token_path.exists())
+        self.wait_poll(svc)
         snap = svc.snapshot()
         self.assertFalse(snap["gmail_authorizing"])
-        self.assertTrue(svc.token_path.exists())
         self.assertEqual(snap["auth"], "ok")        # 授權完馬上抓一次信
-        self.assertEqual(len(self.consent_calls), 1)
+        self.assertTrue(snap["gmail_authorized"])
 
-    def test_authorize_failure_reported(self):
+    def test_callback_with_wrong_state_ignored(self):
         svc = self.make_auth(FakeGmail({}))
+        svc.gmail_authorize(self.CB)
+        self.assertIn("失效", svc.gmail_callback({"state": "other", "code": "x"}))
+        self.assertIn("失效", svc.gmail_callback({"code": "x"}))
+        self.assertEqual(self.flows[0].codes, [])
+        self.assertFalse(svc.token_path.exists())
+        self.assertTrue(svc.snapshot()["gmail_authorizing"])     # 還在等真正的回呼
 
-        def boom(cred_path, token_path):
-            raise RuntimeError("使用者關掉了瀏覽器")
-        svc.consent_fn = boom
-        svc.gmail_authorize()
-        svc._auth_thread.join(5)
+    def test_callback_without_pending_authorize(self):
+        svc = self.make_auth(FakeGmail({}))
+        self.assertIn("失效", svc.gmail_callback({"state": "st1", "code": "x"}))
+        self.assertFalse(svc.token_path.exists())
+
+    def test_user_denied(self):
+        svc = self.make_auth(FakeGmail({}))
+        svc.gmail_authorize(self.CB)
+        msg = svc.gmail_callback({"state": "st1", "error": "access_denied"})
+        self.assertIn("沒有完成", msg)
+        snap = svc.snapshot()
+        self.assertFalse(snap["gmail_authorizing"])
+        self.assertIn("access_denied", snap["last_error"])
+        self.assertFalse(svc.token_path.exists())
+
+    def test_token_exchange_failure_reported(self):
+        svc = self.make_auth(FakeGmail({}), fail=RuntimeError("invalid_grant"))
+        svc.gmail_authorize(self.CB)
+        self.assertIn("沒有完成", svc.gmail_callback({"state": "st1", "code": "c"}))
         snap = svc.snapshot()
         self.assertFalse(snap["gmail_authorizing"])
         self.assertIn("授權沒有完成", snap["last_error"])
 
+    def test_authorizing_expires(self):
+        svc = self.make_auth(FakeGmail({}))
+        svc.gmail_authorize(self.CB)
+        self.clock[0] = NOW + timedelta(minutes=11)
+        self.assertFalse(svc.snapshot()["gmail_authorizing"])
+
+    def test_authorize_again_replaces_pending(self):
+        svc = self.make_auth(FakeGmail({}))
+        svc.gmail_authorize(self.CB)
+        svc.gmail_authorize(self.CB)                # 分頁被關掉,再按一次
+        self.assertEqual(len(self.flows), 2)
+        svc.gmail_callback({"state": "st1", "code": "c"})
+        self.assertEqual(self.flows[0].codes, [])
+        self.assertEqual(self.flows[1].codes, ["c"])
+
     def test_authorize_without_credentials_file(self):
         svc = self.make_auth(FakeGmail({}))
         svc.credentials_path.unlink()
-        res = svc.gmail_authorize()
+        res = svc.gmail_authorize(self.CB)
         self.assertFalse(res["ok"])
         self.assertIn(svc.credentials_path.name, res["message"])
-        self.assertEqual(self.consent_calls, [])
+        self.assertEqual(self.flows, [])
 
     def test_logout_removes_token(self):
         svc = self.make_auth(FakeGmail({}))
@@ -678,7 +754,7 @@ class WikiFlowTest(ServiceCase):
         svc.wiki_login(TOKEN)
 
         def blocked(url, headers, body):
-            raise WikiError("Wiki 前面的閘道擋下連線(HTTP 403:error code: 1010)")
+            raise WikiError("KM 前面的閘道擋下連線(HTTP 403:error code: 1010)")
         svc.wiki_factory = lambda url, token=None: WikiClient(url, token, post=blocked)
         res = svc.wiki_write([])                    # 每頁各自失敗(一頁失敗不影響其他頁的既有約定)
         self.assertTrue(all("1010" in " ".join(p["errors"]) for p in res["pages"].values()))
@@ -727,7 +803,8 @@ class WikiFlowTest(ServiceCase):
         self.assertTrue(row["new"])
         self.assertEqual(row["cells"][9]["state"], "fill")
         self.assertEqual({t["title"] for t in tables},
-                         {"TWA書目Biblio及雜項", "TWB書目Biblio及雜項", "TWA全文Full", "TWB全文Full", "每日執行項目"})
+                         {"TWA書目Biblio及雜項", "TWB書目Biblio及雜項", "TWA全文Full", "TWB全文Full", "每日執行項目",
+                          "TWA英譯En", "TWB英譯En"})
 
     def test_sync_function_dry(self):
         post = FakeWikiPost(wiki_pages())

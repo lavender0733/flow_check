@@ -9,6 +9,7 @@
 import collections
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -31,17 +32,63 @@ SETUP = """找不到 {path}
 """
 
 
-def run_consent(credentials_path=GMAIL_CREDENTIALS_PATH, token_path=GMAIL_TOKEN_PATH) -> None:
-    """開瀏覽器到 Google 同意頁(唯讀),等使用者同意後把 token 存起來。最多等 10 分鐘。
+def new_flow(credentials_path, redirect_uri):
+    """Google 同意頁的流程物件。同一個物件要用到換 token 為止(裡面有 PKCE 的 code_verifier)。"""
+    from google_auth_oauthlib.flow import Flow
+    return Flow.from_client_secrets_file(str(credentials_path), SCOPES, redirect_uri=redirect_uri)
 
-    690授權.bat 和網頁「信件與連線」的「授權」按鈕都走這裡。"""
-    from google_auth_oauthlib.flow import InstalledAppFlow
-    flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
-    creds = flow.run_local_server(
-        port=0, open_browser=True, timeout_seconds=600,
-        authorization_prompt_message="授權網址(瀏覽器沒自動開就手動貼上):\n{url}\n",
-        success_message="授權完成,可以關掉這個分頁。")
-    write_json_atomic(token_path, json.loads(creds.to_json()))
+
+def run_consent(credentials_path=GMAIL_CREDENTIALS_PATH, token_path=GMAIL_TOKEN_PATH,
+                wait_sec=600) -> None:
+    """690授權.bat:開瀏覽器到 Google 同意頁(唯讀),等使用者同意後把 token 存起來。最多等 10 分鐘。
+
+    網頁「信件與連線」的「授權」按鈕不走這裡:Google 直接回呼主程式的 /api/xfer690/gmail/callback。
+
+    不用 google 套件的 run_local_server:它的暫時伺服器只接「一個」連線,瀏覽器的預先連線
+    (連上但不送資料)佔掉以後,真正帶 code 的回呼進不來,只能等到逾時。這裡每個連線各一條執行緒。"""
+    import webbrowser
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.parse import parse_qs, urlparse
+
+    want, got = {}, {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items() if v}
+            if q.get("state") and q.get("state") == want.get("state"):
+                got.update(q)
+            msg = ("授權完成,可以關掉這個分頁。" if "code" in got
+                   else f"授權沒有完成:{got['error']}" if "error" in got else "等待 Google 授權中…")
+            body = msg.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    srv.daemon_threads = True
+    srv.timeout = 1
+    try:
+        flow = new_flow(credentials_path, f"http://127.0.0.1:{srv.server_port}/")
+        # consent:重新授權時 Google 才會再給 refresh_token
+        url, want["state"] = flow.authorization_url(prompt="consent")
+        print(f"授權網址(瀏覽器沒自動開就手動貼上):\n{url}\n")
+        webbrowser.open(url)
+        deadline = time.monotonic() + wait_sec
+        while not got and time.monotonic() < deadline:
+            srv.handle_request()
+    finally:
+        srv.server_close()
+    if not got:
+        raise TimeoutError(f"等了 {wait_sec // 60} 分鐘沒有完成授權")
+    if "error" in got:
+        raise RuntimeError(f"Google 回報:{got['error']}")
+    flow.fetch_token(code=got["code"])
+    write_json_atomic(token_path, json.loads(flow.credentials.to_json()))
 
 
 def authorize() -> None:

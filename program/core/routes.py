@@ -199,7 +199,7 @@ _XFER_OFF = {"ok": False, "enabled": False, "message": "690 監控模組載入�
 
 
 def _json_only(handler):
-    """690 的 POST 會抓信、登入、寫 Wiki:只收 application/json。
+    """690 的 POST 會抓信、登入、寫 KM:只收 application/json。
 
     別的網站的頁面不經 CORS 預檢只能送 text/plain / 表單;要送 application/json 就得先預檢,
     而這個伺服器不回預檢 —— 擋掉跨站觸發寫入。"""
@@ -231,7 +231,7 @@ def xfer690_log(app, msg_id) -> Raw:
 
 
 def xfer690_wiki_login(app, body: dict) -> dict:
-    """使用者貼上的 Wiki jwt(Innovue OAuth 登入後從瀏覽器 Cookies 複製)。"""
+    """使用者貼上的 KM jwt(Innovue OAuth 登入後從瀏覽器 Cookies 複製)。"""
     return app.xfer690.wiki_login(body.get("jwt")) if app.xfer690 else dict(_XFER_OFF)
 
 
@@ -240,8 +240,18 @@ def xfer690_wiki_logout(app) -> dict:
 
 
 def xfer690_gmail_authorize(app) -> dict:
-    """開瀏覽器到 Google 同意頁(在伺服器背景等,請求馬上回來)。"""
-    return app.xfer690.gmail_authorize() if app.xfer690 else dict(_XFER_OFF)
+    """Google 同意頁的網址(網頁在新分頁開);同意後 Google 導回下面的 callback。"""
+    if not app.xfer690:
+        return dict(_XFER_OFF)
+    return app.xfer690.gmail_authorize(f"http://127.0.0.1:{int(app.cfg['port'])}/api/xfer690/gmail/callback")
+
+
+def xfer690_gmail_callback(app, query: dict) -> Raw:
+    """Google 同意頁導回來(帶 code 和 state)。回一句話給那個分頁看。"""
+    if not app.xfer690:
+        raise HttpError(404, _XFER_OFF["message"])
+    msg = app.xfer690.gmail_callback(query)
+    return Raw(msg.encode("utf-8"), "text/plain; charset=utf-8")
 
 
 def xfer690_gmail_logout(app) -> dict:
@@ -249,7 +259,7 @@ def xfer690_gmail_logout(app) -> dict:
 
 
 def xfer690_wiki_write(app, body: dict) -> dict:
-    """用伺服器記憶體裡的登入寫入 Wiki。沒登入回 409,不會自己登入。"""
+    """用伺服器記憶體裡的登入寫入 KM。沒登入回 409,不會自己登入。"""
     if not app.xfer690:
         raise HttpError(404, _XFER_OFF["message"])
     try:
@@ -278,6 +288,7 @@ def build_routes(app: App) -> dict:
         ("POST", "/api/xfer690/wiki/login"):  _json_only(lambda req: xfer690_wiki_login(app, req.body)),
         ("POST", "/api/xfer690/wiki/logout"): _json_only(lambda req: xfer690_wiki_logout(app)),
         ("POST", "/api/xfer690/gmail/authorize"): _json_only(lambda req: xfer690_gmail_authorize(app)),
+        ("GET",  "/api/xfer690/gmail/callback"):  lambda req: xfer690_gmail_callback(app, req.query),
         ("POST", "/api/xfer690/gmail/logout"):    _json_only(lambda req: xfer690_gmail_logout(app)),
         ("POST", "/api/xfer690/wiki/write"): _json_only(lambda req: xfer690_wiki_write(app, req.body)),
     }

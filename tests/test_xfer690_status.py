@@ -123,7 +123,7 @@ class StateTest(unittest.TestCase):
         st = build_status(evs, CFG["systems"], NOW, 14)
         p = period(st, "techreport", "2026-10-01")
         self.assertEqual(p["state"], "nodata")
-        # 無資料不是「完成」:wiki 那幾格另外填 nodata_value(見 wiki.plan_fills),不打 v
+        # 無資料不是「完成」:KM 那幾格另外填 nodata_value(見 wiki.plan_fills),不打 v
         for step, chk in (("012001", "012002"), ("012005", "012006"), ("012007", "012008")):
             self.assertFalse(cell_done(p, step, chk), step)
         self.assertEqual(system(st, "techreport")["alerts"],
