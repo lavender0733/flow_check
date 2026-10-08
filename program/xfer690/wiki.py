@@ -77,7 +77,7 @@ def _periods_by_row(status: dict, target: dict) -> dict:
 
 
 _S690_PART = {"s690_count": "count", "s690_spec": "image", "s690_rep": "image",
-              "s690_sud_case": "sud", "s690_sud_note": "sud"}
+              "s690_image_case": "image", "s690_sud_case": "sud", "s690_sud_note": "sud"}
 
 
 def _s690_of(status: dict, target: dict, p: dict) -> dict:
@@ -160,6 +160,10 @@ def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
                 img = s690.get("image") or {}
                 if _s690_fresh(p, img) and img.get("spec" if kind == "s690_spec" else "rep"):
                     cells[int(col)] = "v"
+            elif kind == "s690_image_case":
+                img = s690.get("image") or {}
+                if _s690_fresh(p, img) and img.get("pn"):
+                    cells[int(col)] = img["pn"]     # 抽查的是哪一筆:說明書 / 代表圖沒有也照填
             elif kind in ("s690_sud_case", "s690_sud_note"):
                 sud = s690.get("sud") or {}
                 if _s690_fresh(p, sud) and sud.get("ok") and sud.get("pn"):
@@ -329,7 +333,7 @@ def _new_report():
     return {"filled": 0, "inserted": 0, "edited": 0, "conflicts": [], "errors": [], "skipped": []}
 
 
-def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edits=(), only_key=None) -> tuple:
+def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edits=()) -> tuple:
     """一頁的所有 target:先套使用者的編輯,再自動填空格。
 
     回傳 (新內容, report, tables)。tables 是預覽用的表格(同一張表的多個 target 合併)。
@@ -413,8 +417,6 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
 
         for t in ts:
             plan = plan_fills(status, t, wiki_cfg)
-            if only_key is not None:        # 「只寫這一列」:其他列不填、不插
-                plan = {k: v for k, v in plan.items() if str(k) == str(only_key)}
             # 使用者這次改過(包括清空)的格,不再自動填回去
             for key, spec in plan.items():
                 spec["cells"] = {c: v for c, v in spec["cells"].items() if (str(key), c) not in edited}
@@ -496,24 +498,16 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
     return content, report, tables
 
 
-def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True, only=None) -> dict:
+def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True) -> dict:
     """依頁分組,每頁讀一次、處理完內容有變才更新(dry_run 或 write=False 時不更新)。
     一頁失敗不影響其他頁;WikiAuthError 往外拋,讓呼叫端清掉登入狀態。
-
-    only={"page", "table", "key"}:只處理那一頁那張表的那一列(第一次正式寫入先試一列),
-    其他頁不讀不寫;手改只送那一列的。
 
     回傳 {"pages": {頁名: report + updated/id}, "tables": [...], "contents": {頁名: 目前內容}}。
     """
     pages = {}
     for t in wiki_cfg.get("tables", []):
-        if only and (t["page"] != only["page"] or (t.get("table") or "") != only["table"]):
-            continue
         pages.setdefault(t["page"], []).append(t)
-    if only:
-        edits = [e for e in edits if e.get("page") == only["page"]
-                 and (e.get("table") or "") == only["table"] and str(e.get("key")) == only["key"]]
-    out = {"pages": {}, "tables": [], "contents": {}}
+    out ={"pages": {}, "tables": [], "contents": {}}
     for page, targets in pages.items():
         rep = dict(_new_report(), updated=False, id=None)
         out["pages"][page] = rep
@@ -522,8 +516,7 @@ def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True, onl
             p = client.get_page(page_path(wiki_cfg, page), wiki_cfg.get("locale", "zh-tw"))
             rep["id"] = p.get("id")
             old = p.get("content") or ""
-            new, r, tables = process_page(old, targets, status, wiki_cfg, mine,
-                                          only_key=only["key"] if only else None)
+            new, r, tables = process_page(old, targets, status, wiki_cfg, mine)
             rep.update(r)
             out["contents"][page] = old
             if new != old and write and not wiki_cfg.get("dry_run", True):

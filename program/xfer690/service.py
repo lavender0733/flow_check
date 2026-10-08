@@ -582,25 +582,17 @@ class Xfer690Service:
             except Exception as e:
                 self.wiki["last_error"] = f"讀 KM 失敗:{e}"[:300]
 
-    def wiki_write(self, edits=(), only=None) -> dict:
-        """用記憶體裡的 JWT 寫入(使用者按「寫入 KM」)。沒有 JWT → NotLoggedIn。
-
-        only={"page", "table", "key"}:「只寫這一列」,只動那一頁那張表的那一列。"""
+    def wiki_write(self, edits=()) -> dict:
+        """用記憶體裡的 JWT 寫入(使用者按「寫入 KM」)。沒有 JWT → NotLoggedIn。"""
         from xfer690.wiki import WikiAuthError, sync
         edits = [e for e in (edits or []) if isinstance(e, dict)]
-        if only is not None:
-            known = {(t["page"], t.get("table") or "") for t in self.cfg["wiki"].get("tables", [])}
-            if (not isinstance(only, dict) or not isinstance(only.get("key"), str) or not only["key"]
-                    or (only.get("page"), only.get("table")) not in known):
-                return {"ok": False, "message": "「只寫這一列」指定的表或列不對"}
-            only = {"page": only["page"], "table": only["table"], "key": only["key"]}
         with self._wiki_lock:
             if not self._jwt:
                 raise NotLoggedIn()
             try:
                 client = self.wiki_factory(self.cfg["wiki"]["url"], self._jwt)
                 try:
-                    res = sync(client, self.status(), self.cfg["wiki"], edits=edits, write=True, only=only)
+                    res = sync(client, self.status(), self.cfg["wiki"], edits=edits, write=True)
                 finally:
                     if client.token != self._jwt:
                         self._set_jwt(client.token)
@@ -611,15 +603,8 @@ class Xfer690Service:
                 self.wiki["last_error"] = f"寫 KM 失敗:{e}"[:300]
                 return {"ok": False, "message": self.wiki["last_error"]}
             pages = res["pages"]
-            if only:        # 只動了一張表:其他表的預覽照舊,這張表換成寫入後的結果
-                self._contents.update(res["contents"])
-                same = lambda t: t["page"] == only["page"] and (t.get("table") or "") == only["table"]
-                fresh = [t for t in res["tables"] if same(t)]
-                tables = ([t for t in self.wiki["tables"] if not same(t)] + fresh) if fresh else self.wiki["tables"]
-            else:
-                self._contents = res["contents"]
-                tables = res["tables"]
-            self.wiki.update(report=pages, tables=tables, last_sync=self.now().isoformat(),
+            self._contents = res["contents"]
+            self.wiki.update(report=pages, tables=res["tables"], last_sync=self.now().isoformat(),
                              last_error=None)
             self.wiki["last_write"] = {
                 "at": self.now().isoformat(),
@@ -627,8 +612,7 @@ class Xfer690Service:
                 "filled": sum(p.get("filled", 0) for p in pages.values()),
                 "inserted": sum(p.get("inserted", 0) for p in pages.values()),
                 "edited": sum(p.get("edited", 0) for p in pages.values()),
-                "dry_run": bool(self.cfg["wiki"].get("dry_run", True)),
-                "only": f"{only['page']}{(' ' + only['table']) if only['table'] else ''} {only['key']}" if only else None}
+                "dry_run": bool(self.cfg["wiki"].get("dry_run", True))}
             self._save()
             return {"ok": True, "dry_run": bool(self.cfg["wiki"].get("dry_run", True)),
                     "pages": pages, "last_write": self.wiki["last_write"]}

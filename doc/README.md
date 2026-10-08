@@ -159,7 +159,7 @@ Rundeck 在內網連不到,所以只靠信。
     `MS:(類型…) AND MS:<卷> AND MS:<期>` 取第一筆「雜項真的刊在這一期」的案件(最多看 120 筆)。
     讓與比對書目的目前專利權人、消滅比對案件狀態,其他類型只確認查得到。正確 → 案例填 `TW` + 公開 / 公告號、備註填 `成功`;
     不符或找不到 → 兩格都不填,預覽的 tooltip 寫原因。
-  - TW影像GCS:`OGV:<卷> AND OGN:<期>` 的第一筆,有說明書 / 代表圖就打 `v`。
+  - TW影像GCS:`OGV:<卷> AND OGN:<期>` 的第一筆,有說明書 / 代表圖就打 `v`;「抽查案號」填那一筆的 `TW` + 公開 / 公告號(說明書 / 代表圖沒有也照填)。
   - s690 連不上不影響抓信與其他欄;`data/config/xfer690.json` 的 `s690_enabled` 可以關掉。
 
 ### 流量預算
@@ -183,7 +183,7 @@ Rundeck 在內網連不到,所以只靠信。
 | `s690_enabled` | 抓完信後是否查 s690(預設 true;0 筆 / 查不到案件的暫定結果 24 小時內每次抓信再查) |
 | `wiki.nodata_value` | 每日系統無資料那天,要打 v 的格改填的值(預設 `-`) |
 | `wiki.sud_ok_value` | SUD 抽測成功時「備註」格填的字(預設「成功」) |
-| `wiki.tables[]` | 每張表的每個系統一筆:`page`、`table`(`TWA` / `TWB` / 空)、`after`(表格前面的標題文字)、`header_has`、`label_row`、`labels`(整列欄名;頁面上不一樣就整張表不寫,預覽顯示紅框)、`key_col`、`key`(`vol` 公告期數 / `date` 日期 / `span` 英譯的期數區間)、`new_row`(`{yyyymmdd}`、`{mm}`、`{dd}`、`{vol}`、`{key}` = 列鍵)、`cols`(`{欄號: {label, value: v/tag/writes/s690_count/s690_spec/s690_rep/s690_sud_case/s690_sud_note, step, check}}`) |
+| `wiki.tables[]` | 每張表的每個系統一筆:`page`、`table`(`TWA` / `TWB` / 空)、`after`(表格前面的標題文字)、`header_has`、`label_row`、`labels`(整列欄名;頁面上不一樣就整張表不寫,預覽顯示紅框)、`key_col`、`key`(`vol` 公告期數 / `date` 日期 / `span` 英譯的期數區間)、`new_row`(`{yyyymmdd}`、`{mm}`、`{dd}`、`{vol}`、`{key}` = 列鍵)、`cols`(`{欄號: {label, value: v/tag/writes/s690_count/s690_spec/s690_rep/s690_image_case/s690_sud_case/s690_sud_note, step, check}}`) |
 
 **KM 表格改結構時**:欄位順序變了 → 改 `cols` 的欄號與 `label`(欄名對不上時程式會整張表不寫,在預覽裡顯示原因);
 表格前的標題改了 → 改 `after`;新增系統 → 在 `systems` 加一筆,要登記的話在 `tables` 加對應的 target。

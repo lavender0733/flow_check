@@ -730,15 +730,7 @@ function x6wtable(tb, rows) {
     for (const c of tb.columns) {
       if (c.kind === "key") {
         const td = x6el("td", "key", row.key);
-        if (row.new) {
-          td.append(x6el("span", "x6-tag add", "新增"));
-          // 第一次正式寫入先試一列:只插這一列,好檢查、好還原
-          const one = x6el("button", "x6-link x6-one", "只寫這一列");
-          one.type = "button";
-          one.disabled = x6Busy.write || !(x6Snap && x6Snap.wiki && x6Snap.wiki.logged_in);
-          one.addEventListener("click", () => x6wikiWrite({ page: tb.page, table: tb.table, key: row.key, title: tb.title }));
-          td.append(one);
-        }
+        if (row.new) td.append(x6el("span", "x6-tag add", "新增"));
         tr.append(td);
         continue;
       }
@@ -1053,22 +1045,15 @@ async function x6gmailLogout() {
   } catch (e) { /* 下次載入看快照 */ }
   await x6load();
 }
-// only = {page, table, key, title}:「只寫這一列」,不送手改的格
-async function x6wikiWrite(only) {
+async function x6wikiWrite() {
   const w = (x6Snap && x6Snap.wiki) || {};
   if (!w.logged_in) { showTab("xfer690conn"); return; }
   if (x6Busy.write) return;
-  // 「只寫這一列」:那一列的手改一起送,別列的手改留著
-  const mine = (e) => only && e.page === only.page && e.table === only.table && String(e.key) === String(only.key);
-  const rowEdits = only ? Object.values(x6Edits).filter(mine) : [];
-  if (only && !w.dry_run && !confirm(`只把「${only.title} ${only.key}」這一列寫進 KM?\n其他列、其他頁都不會動`
-      + (rowEdits.length ? `;這一列你手改的 ${rowEdits.length} 格會一起寫入。` : "。"))) return;
   const go = x6$("x6-w-go");
   x6Busy.write = true; x6Result = null;
   go.disabled = true; go.textContent = "寫入中…"; go.setAttribute("aria-busy", "true"); x6$("x6-w-spin").hidden = false;
   x6render();
-  const edits = only ? rowEdits : Object.values(x6Edits);
-  const body = only ? { edits, only: { page: only.page, table: only.table, key: only.key } } : { edits };
+  const body = { edits: Object.values(x6Edits) };
   try {
     const r = await fetch("/api/xfer690/wiki/write", { method: "POST", headers: { "Content-Type": "application/json" },
                                                        body: JSON.stringify(body) });
@@ -1082,17 +1067,17 @@ async function x6wikiWrite(only) {
       const sum = (k) => pages.reduce((a, p) => a + (p[k] || 0), 0);
       const conf = pages.flatMap(p => (p.conflicts || []).filter(c => c.reason === "頁面上的值已經被改過"));
       const errs = pages.flatMap(p => p.errors || []);
-      const scope = only ? `「${only.title} ${only.key}」這一列` : `${pages.filter(p => p.updated).length} 頁`;
-      const head = j.dry_run ? `乾跑模式(xfer690.json 的 wiki.dry_run),${only ? scope : ""}沒有真的寫入;` : `已寫入 ${scope}:`;
+      const head = j.dry_run ? "乾跑模式(xfer690.json 的 wiki.dry_run),沒有真的寫入;"
+                             : `已寫入 ${pages.filter(p => p.updated).length} 頁:`;
       let text = `${head}填 ${sum("filled")} 格、新增 ${sum("inserted")} 列${sum("edited") ? `、手改 ${sum("edited")} 格` : ""}。`;
       if (conf.length) text += ` ${conf.length} 格沒有改:頁面上的值已經被別人改過,請重新看過。`;
       if (errs.length) text += ` 有錯誤:${errs.join(";")}`;
       x6Result = { ok: !errs.length, text };
       if (!j.dry_run) {
-        // 衝突的格留著讓使用者重看;其他送出的已經寫進去了。只寫一列時,別列的手改不動
+        // 衝突的格留著讓使用者重看;其他送出的已經寫進去了
         const keep = {};
         for (const [ek, e] of Object.entries(x6Edits)) {
-          if (!(!only || mine(e)) || conf.some(c => String(e.key) === String(c.key))) keep[ek] = e;
+          if (conf.some(c => String(e.key) === String(c.key))) keep[ek] = e;
         }
         x6Edits = keep;
       }
