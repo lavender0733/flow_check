@@ -76,6 +76,37 @@ def _periods_by_row(status: dict, target: dict) -> dict:
     return {k: _merge(v) for k, v in rows.items()}
 
 
+_S690_PART = {"s690_count": "count", "s690_spec": "image", "s690_rep": "image",
+              "s690_sud_case": "sud", "s690_sud_note": "sud"}
+
+
+def _s690_of(status: dict, target: dict, p: dict) -> dict:
+    """那一期的 s690 查詢結果(service 放在 status["s690"],鍵 "<twa|twb>:<期數>")。"""
+    sys_ = next((s for s in status.get("systems", []) if s["id"] == target.get("system")), None) or {}
+    return (status.get("s690") or {}).get(f"{sys_.get('view')}:{p.get('key')}") or {}
+
+
+def s690_note(status: dict, target: dict, p: dict, kind) -> tuple:
+    """(預覽 tooltip 的說明, 還沒查)。不是 s690 的欄回 (None, False)。"""
+    part = _S690_PART.get(kind)
+    if not part:
+        return None, False
+    r = _s690_of(status, target, p).get(part)
+    if not r:
+        return "還沒查 s690(抓完信後會在背景查)", True
+    if r.get("error"):
+        return f"s690 查詢失敗:{r['error']}(下次抓信再試)", False
+    if part == "count":
+        return f"s690 查到 {r.get('value')} 筆", False
+    if not r.get("pn"):
+        return r.get("detail") or "s690 查不到案件", False
+    if part == "image":
+        return (f"抽查 {r['pn']}:說明書{'有' if r.get('spec') else '沒有'}、"
+                f"代表圖{'有' if r.get('rep') else '沒有'}"), False
+    head = f"抽測 {r['pn']}({r.get('type_name') or r.get('type')})"
+    return head + ("比對正確:" if r.get("ok") else "比對不符,這格不填:") + (r.get("detail") or ""), False
+
+
 def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
     """{列鍵: {"cells": {欄號: 值}, "new": {欄號: 值}}}。沒有要填的格的期不列入。"""
     sys_ = next((s for s in status.get("systems", []) if s["id"] == target.get("system")), None)
@@ -89,6 +120,7 @@ def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
         if vol_system and p.get("nodata"):
             continue        # 期別系統的無資料 = 那期檔案還沒到:列入警示、不寫 KM(A4)
         cells = {}
+        s690 = _s690_of(status, target, p)
         # 每日系統整天「GCS 資料夾無檔案」:要打 v 的格改填 nodata_value(人工登記用 -)
         nodata_day = not vol_system and p.get("state") == "nodata"
         for col, c in (target.get("cols") or {}).items():
@@ -106,6 +138,19 @@ def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
                 w = (st.get("event") or {}).get("writes")
                 if w is not None and p.get("state") == "ok":
                     cells[int(col)] = str(w)
+            elif kind == "s690_count":
+                v = (s690.get("count") or {}).get("value")
+                if v is not None:
+                    cells[int(col)] = str(v)
+            elif kind in ("s690_spec", "s690_rep"):
+                img = s690.get("image") or {}
+                if img.get("spec" if kind == "s690_spec" else "rep"):
+                    cells[int(col)] = "v"
+            elif kind in ("s690_sud_case", "s690_sud_note"):
+                sud = s690.get("sud") or {}
+                if sud.get("ok") and sud.get("pn"):
+                    cells[int(col)] = (sud["pn"] if kind == "s690_sud_case"
+                                       else str(wiki_cfg.get("sud_ok_value", "成功")))
         if cells:
             out[key] = {"cells": cells, "new": _new_row(target.get("new_row"), p.get("date"), key)}
     return out
@@ -411,11 +456,20 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
                     if have and not (ph and re.search(ph, have)):
                         row["cells"][i] = {"value": have, "existing": have, "state": "old"}
                         continue
-                    pending = p.get("state") == "pending" or any(
+                    _, waiting = s690_note(status, t, p, c.get("value"))
+                    pending = waiting or p.get("state") == "pending" or any(
                         (p.get("steps", {}).get(x) or {}).get("state") == "pending"
                         for x in (c.get("step"), c.get("check")) if x)
                     row["cells"][i] = {"value": "", "existing": have,
                                        "state": "wait" if pending else "hold"}
+            # s690 的欄:格子附上查詢結果(預覽的 tooltip 顯示)
+            for key, p in _periods_by_row(status, t).items():
+                row = tb["rows"].get(key)
+                for i, c in (t.get("cols") or {}).items():
+                    cell = row["cells"].get(int(i)) if row else None
+                    note, _ = s690_note(status, t, p, c.get("value"))
+                    if note and cell is not None:
+                        cell["note"] = note
 
         # 每列帶上頁面上(套用後)的整列值,畫面才能顯示列鍵、日期等資訊欄
         final = read_rows(content, ts[0])["rows"]
