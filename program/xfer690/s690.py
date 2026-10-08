@@ -15,7 +15,11 @@ USER_AGENT = "flow-check-xfer690/1"
 PAGE = 40
 MAX_PAGES = 3
 CATALOG = {"TWB": "sud00_1", "TWA": "pubsud01"}     # 公告目錄 / 發明公開目錄:每案都有,不算異動
-_REP_RE = re.compile(r"<representative[\s>]")
+# 代表圖:公開(TWA)包在 <representative> 裡;公告(TWB)沒有這個標籤,是那張圖式的 alt 以 * 開頭
+# (2026-10-08 實查各 200 筆;gazetteRepIndexInDrw 有沒有代表圖都是 0,不能用)
+_REP_RE = re.compile(r"<representative[\s>]|<img\b[^>]*\balt=\"\*")
+# 判定規則的版本:規則改了就加 1,service 會把舊版規則存的結果重查一次
+RULE_VERSION = 2
 _SPACE_RE = re.compile(r"[\s　]+")
 _SPLIT_RE = re.compile(r"[、;;,,]")
 

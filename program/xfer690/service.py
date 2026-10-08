@@ -50,6 +50,9 @@ META_BYTES = 2048           # 一封 metadata 的流量估算
 RECENT = 20
 # s690 剛變成整期成功時可能還沒建好那期的索引:0 筆 / 查不到案件的暫定結果,24 小時內每次抓信再查
 S690_SETTLE = timedelta(hours=24)
+# 抽查的判定規則版本(要跟 s690.RULE_VERSION 一樣);存的結果版本不同就重查一次
+# 2:公告(TWB)代表圖改認 alt 以 * 開頭的圖式(2026-10-08)
+S690_RULE = 2
 AUTH_WAIT = timedelta(minutes=10)      # 按「授權」後等 Google 導回來的時間
 AUTH_MSG = "Gmail 授權已失效或被管理員封鎖,請在「信件與連線」按「重新授權」"
 _MSG_ID_RE = re.compile(r"^[0-9a-fA-F]{6,32}$")
@@ -302,7 +305,8 @@ class Xfer690Service:
                     if part == "count" and not p.get("date"):
                         continue        # 沒有日期就不查(不送 PD:[None TO None])
                     r = have.get(part)
-                    if r and not r.get("error") and (r.get("at") or "") >= p["last_at"]:
+                    if (r and not r.get("error") and (r.get("at") or "") >= p["last_at"]
+                            and r.get("rule") == S690_RULE):     # 判定規則改過的舊結果要重查
                         if not (self._s690_provisional(part, r) and young):
                             continue
                     jobs.append((key, part, s["view"].upper(), p))
@@ -333,6 +337,7 @@ class Xfer690Service:
                 except Exception as e:      # 連不上、改版:記下來,下次抓信再試
                     r = {"error": str(e)[:200] or type(e).__name__}
                 r["at"] = self.now().isoformat()
+                r["rule"] = S690_RULE
                 with self._lock:
                     # 換整個 dict(不就地改):別的執行緒正在序列化舊的也不會出錯
                     entry = dict(self.s690.get(key) or {}, **{part: r})
