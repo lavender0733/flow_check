@@ -160,11 +160,12 @@ def _build_period(system: dict, key: str, evs: list, now: datetime) -> dict:
     if nodata and _is_vol(system):
         state = "fail"      # 期別系統的無資料 = 那一期的檔案還沒到,要處理
 
-    tag = None
+    tag, sud_types = None, None
     for ev in sorted(evs, key=_at):
         tag = (ev.get("data") or {}).get("TAG") or tag
+        sud_types = ev.get("sud_types") or sud_types
     return {"key": key, "date": _period_date(system, key), "state": state, "nodata": nodata,
-            "steps": steps, "auto": auto, "tag": tag,
+            "steps": steps, "auto": auto, "tag": tag, "sud_types": sud_types,
             "first_at": min(_at(ev) for ev in evs).isoformat(), "last_at": last_at.isoformat()}
 
 
@@ -218,7 +219,7 @@ def _system_status(system: dict, evs: list, now: datetime, days: int, first_at) 
             st = "pending" if now < _deadline(system, d.isoformat()) else "missing"
             periods[key] = {"key": key, "date": d.isoformat(), "state": st, "nodata": False,
                             "steps": {c: _empty_step(st) for c in system.get("steps", [])},
-                            "auto": {}, "tag": None, "first_at": None, "last_at": None,
+                            "auto": {}, "tag": None, "sud_types": None, "first_at": None, "last_at": None,
                             "expected": True}
 
     ordered = sorted(periods.values(), key=lambda p: (p["date"] or "", p["key"]), reverse=True)

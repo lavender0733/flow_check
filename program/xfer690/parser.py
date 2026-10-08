@@ -17,6 +17,7 @@ _SUBJECT_RE = re.compile(
     r"【(?P<st>[A-Z]+)】\s*\[(?P<proj>[^\]]+)\]\s*(?P<code>\d{6})-(?P<name>\S+)\s*\|\s*(?P<group>\S+)")
 _DATA_RE = re.compile(r"^RUNDECK:DATA:(\w+)\s*=\s*(\S+)", re.M)
 _WRITES_RE = re.compile(r"\[job_complete\] \S+ .*?writes=(\d+)")
+_SUDTYPE_RE = re.compile(r"XML parsing completed \(type=(\w+), recordCount=(\d+)\)")
 _ERROR_RE = re.compile(r"^\s*error:\s*(.+)$", re.M)
 _EXEC_RE = re.compile(r"#(\d+)")
 _URL_RE = re.compile(r'href="([^"]*/execution/show/\d+)"')
@@ -70,6 +71,9 @@ def parse_raw(raw: bytes, base: dict, cfg: dict) -> dict:
     ev["data"] = {k: v for k, v in _DATA_RE.findall(log)}
     hits = _WRITES_RE.findall(log)
     ev["writes"] = int(hits[-1]) if hits else None   # log 是累積的,最後一個才是本步驟
+    types = sud_types(log)
+    if types:
+        ev["sud_types"] = types
     m = _ERROR_RE.search(log)
     ev["error"] = m.group(1).strip()[:200] if m else ""
     m = _EXEC_RE.search(html)
@@ -80,6 +84,11 @@ def parse_raw(raw: bytes, base: dict, cfg: dict) -> dict:
             and re.search(cfg.get("nodata_re") or r"(?!)", ev["error"])):
         ev["status"] = "nodata"
     return ev
+
+
+def sud_types(log: str) -> dict:
+    """{雜項類型: 筆數}:這期有哪些雜項(SUD 抽測用;log 沒有逐筆案號)。"""
+    return {t: int(n) for t, n in _SUDTYPE_RE.findall(log or "")}
 
 
 def log_text(raw: bytes) -> str:
