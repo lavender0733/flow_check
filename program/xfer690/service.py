@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from common.jsonio import read_json, write_json_atomic
 from core.paths import (GMAIL_CREDENTIALS_PATH, GMAIL_TOKEN_PATH, XFER690_CACHE_PATH,
                         XFER690_CONFIG_PATH, XFER690_SECRETS_PATH)
-from xfer690.parser import TPE, log_text, parse_raw, parse_subject
+from xfer690.parser import TPE, log_text, parse_raw, parse_subject, sud_types
 from xfer690.status import build_status, group_runs
 
 # 預設值。systems / tables 留空:實際的系統清單在 data/config/xfer690.json(進版控)。
@@ -112,10 +112,15 @@ def _default_wiki(url, token=None):
     return WikiClient(url, token)
 
 
+def _default_s690():
+    from xfer690.s690 import S690Client
+    return S690Client()
+
+
 class Xfer690Service:
     def __init__(self, config_path=XFER690_CONFIG_PATH, cache_path=XFER690_CACHE_PATH,
                  secrets_path=XFER690_SECRETS_PATH, credentials_path=GMAIL_CREDENTIALS_PATH,
-                 gmail_factory=_default_gmail, wiki_factory=_default_wiki,
+                 gmail_factory=_default_gmail, wiki_factory=_default_wiki, s690_factory=_default_s690,
                  now=lambda: datetime.now(TPE)):
         self.config_path = config_path
         self.cache_path = cache_path
@@ -123,6 +128,9 @@ class Xfer690Service:
         self.credentials_path = credentials_path
         self.gmail_factory = gmail_factory
         self.wiki_factory = wiki_factory
+        self.s690_factory = s690_factory
+        self._s690_lock = threading.Lock()    # 背景查 s690 同時只跑一個
+        self._spawn = lambda fn: threading.Thread(target=fn, daemon=True).start()   # 測試可換
         self.token_path = GMAIL_TOKEN_PATH    # 測試可換
         self.flow_factory = _default_flow     # Google 同意頁的流程物件(測試可換)
         self._pending = None                  # 按了「授權」、還在等 Google 導回來:{flow, state, until}
@@ -142,6 +150,8 @@ class Xfer690Service:
         self.last_error = None
         self.auth = "unknown"
         self.account = cache.get("account")
+        s = cache.get("s690")
+        self.s690 = s if isinstance(s, dict) else {}    # {"twb:5328": {"count"/"image"/"sud": {…, "at"}}}
         t = cache.get("traffic") or {}
         self.traffic = {"day": t.get("day"), "today_bytes": int(t.get("today_bytes") or 0),
                         "last_poll_bytes": int(t.get("last_poll_bytes") or 0)}
@@ -259,6 +269,8 @@ class Xfer690Service:
                 self._save()
         if self._jwt:
             self._refresh_preview()
+        if self.cfg.get("s690_enabled", True):
+            self._spawn(self._s690_bg)      # 查 s690 要幾秒到幾十秒,不讓「立即更新」等它
         return self.snapshot()
 
     def _prune(self) -> None:
@@ -266,12 +278,89 @@ class Xfer690Service:
         for mid in [m for m, e in self.events.items()
                     if e.get("at") and datetime.fromisoformat(e["at"]) < cut]:
             del self.events[mid]
+        cut_at = cut.isoformat()
+        self.s690 = {k: v for k, v in self.s690.items()
+                     if max((x.get("at") or "" for x in v.values()), default="") >= cut_at}
+
+    # ── s690(KM 的 690查詢筆數、SUD 抽測、TW影像) ──
+    def _s690_jobs(self, status: dict) -> list:
+        """[(快取鍵, 部分, 案件類型, 期)]:整期成功、還沒有成功結果,或之後又重跑過的。"""
+        jobs = []
+        for s in status.get("systems", []):
+            if s.get("type") not in ("biblio", "sud") or s.get("view") not in ("twa", "twb"):
+                continue
+            parts = ("count", "image") if s["type"] == "biblio" else ("sud",)
+            for p in s.get("periods", []):
+                if p.get("state") != "ok" or not p.get("last_at"):
+                    continue
+                key = f"{s['view']}:{p['key']}"
+                have = self.s690.get(key) or {}
+                for part in parts:
+                    r = have.get(part)
+                    if r and not r.get("error") and (r.get("at") or "") >= p["last_at"]:
+                        continue
+                    jobs.append((key, part, s["view"].upper(), p))
+        return jobs
+
+    def _s690_refresh(self) -> bool:
+        """查還缺的、存進快取。有查回 True。已經有一個在跑就直接回 False。"""
+        if not self._s690_lock.acquire(blocking=False):
+            return False
+        try:
+            jobs = self._s690_jobs(self.status())
+            if not jobs:
+                return False
+            client = self.s690_factory()
+            for key, part, ct, p in jobs:
+                try:
+                    if part == "count":
+                        r = {"value": client.count(ct, p["date"])}
+                    elif part == "image":
+                        r = client.image_check(ct, p["key"])
+                    else:
+                        r = client.sud_sample(ct, p["key"], self._sud_types_of(p))
+                except Exception as e:      # 連不上、改版:記下來,下次抓信再試
+                    r = {"error": str(e)[:200] or type(e).__name__}
+                r["at"] = self.now().isoformat()
+                with self._lock:
+                    # 換整個 dict(不就地改):別的執行緒正在序列化舊的也不會出錯
+                    entry = dict(self.s690.get(key) or {}, **{part: r})
+                    self.s690 = dict(self.s690, **{key: entry})
+                    self._save()
+            return True
+        finally:
+            self._s690_lock.release()
+
+    def _sud_types_of(self, p: dict) -> list:
+        """這期的雜項類型。這個功能之前抓的信沒有,補下載那期一封有 log 的信取一次(約 20–60 KB)。"""
+        if p.get("sud_types"):
+            return sorted(p["sud_types"])
+        for st in (p.get("steps") or {}).values():
+            ev = st.get("event") or {}
+            if not (ev.get("raw") and ev.get("id") in self.events):
+                continue
+            raw = self.gmail_factory().fetch_raw(ev["id"])
+            self._add_bytes(len(raw))
+            types = sud_types(log_text(raw))
+            if types:
+                with self._lock:
+                    self.events[ev["id"]] = dict(self.events[ev["id"]], sud_types=types)
+                return sorted(types)
+        return []
+
+    def _s690_bg(self) -> None:
+        from core.health import record_error
+        try:
+            if self._s690_refresh() and self._jwt:
+                self._refresh_preview()
+        except Exception as e:
+            record_error("xfer690", e)
 
     def _save(self) -> None:
         try:
             write_json_atomic(self.cache_path, {
                 "events": self.events, "last_poll": self.last_poll, "account": self.account,
-                "last_poll_kind": self.last_poll_kind, "traffic": self.traffic,
+                "last_poll_kind": self.last_poll_kind, "traffic": self.traffic, "s690": self.s690,
                 "wiki": {"last_write": self.wiki["last_write"], "last_login": self.wiki["last_login"],
                          "account": self.wiki["account"]}})
         except OSError as e:
@@ -279,8 +368,10 @@ class Xfer690Service:
 
     # ── 畫面 ────────────────────────────────────────────────
     def status(self) -> dict:
-        return build_status(list(self.events.values()), self.cfg["systems"], self.now(),
-                            int(self.cfg["history_days"]))
+        st = build_status(list(self.events.values()), self.cfg["systems"], self.now(),
+                          int(self.cfg["history_days"]))
+        st["s690"] = self.s690      # KM 預覽用(wiki.plan_fills / s690_note)
+        return st
 
     def snapshot(self) -> dict:
         now = self.now()
