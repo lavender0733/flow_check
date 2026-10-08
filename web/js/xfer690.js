@@ -628,6 +628,11 @@ function x6wikiCounts(view) {
   }
   return { rows, fill, hold, added, edits, pages: pages.size };
 }
+// 已登入、KM 還沒讀過(伺服器剛啟動,要等第一次抓信完):預覽是空的,不是壞掉
+function x6wikiReading() {
+  const w = (x6Snap && x6Snap.wiki) || {};
+  return !!w.logged_in && !w.last_sync && !w.last_error && !x6wikiTables().length;
+}
 function x6renderWiki() {
   x6$("x6-v-wiki").hidden = false;
   const w = (x6Snap && x6Snap.wiki) || {};
@@ -653,7 +658,11 @@ function x6renderWiki() {
     return;
   }
   if (w.last_error) box.append(x6el("div", "x6-result bad", w.last_error));
-  const order = ["每日執行項目", "TW全文Full", "TW影像GCS", "TW書目Biblio及雜項", "TW英譯En"];
+  if (x6wikiReading()) {
+    box.append(x6el("div", "x6-wnote", "正在讀 KM…(伺服器剛啟動時要先抓完信才會讀,讀完這裡會自動出現)"));
+    return;
+  }
+  const order =["每日執行項目", "TW全文Full", "TW影像GCS", "TW書目Biblio及雜項", "TW英譯En"];
   const tables = x6wikiTables().slice().sort((a, b) => order.indexOf(a.page) - order.indexOf(b.page) || a.table.localeCompare(b.table));
   const shown = new Map(tables.map(tb => [tb, (tb.rows || []).filter(r => tb.columns.some(c => {
     const x = x6cell(tb, r, c);
@@ -911,8 +920,8 @@ async function x6load() {
   x6render();
   // 第一次抓信還沒完成:每 3 秒再讀一次,抓完畫面馬上更新(平常每 60 秒)
   clearTimeout(x6Soon);
-  // 等瀏覽器授權時也一樣:使用者按完同意,卡片馬上變成已授權
-  if (x6Snap && x6Snap.ok !== false && (x6Snap.auth === "unknown" || x6Snap.gmail_authorizing))
+  // 等瀏覽器授權時也一樣:使用者按完同意,卡片馬上變成已授權;KM 還沒讀完時也一樣
+  if (x6Snap && x6Snap.ok !== false && (x6Snap.auth === "unknown" || x6Snap.gmail_authorizing || x6wikiReading()))
     x6Soon = setTimeout(x6load, 3000);
 }
 async function x6refresh() {
