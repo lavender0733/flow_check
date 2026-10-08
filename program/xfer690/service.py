@@ -30,6 +30,7 @@ DEFAULT_XFER_CONFIG = {
     "nodata_re": "GCS 資料夾無檔案",
     "max_raw_kb": 512,
     "max_list": 5000,       # 一次最多列幾封(45 天約 740 封)
+    "s690_enabled": True,      # 抓完信後查 s690(KM 的 690查詢筆數、SUD 抽測、TW影像)
     "systems": [],
     "wiki": {
         "enabled": False,
@@ -39,6 +40,7 @@ DEFAULT_XFER_CONFIG = {
         "days": 14,
         "placeholder_re": r"^\d{4}x{4}$",
         "nodata_value": "-",        # 每日系統「GCS 資料夾無檔案」那天,要打 v 的格改填這個
+        "sud_ok_value": "成功",     # SUD 抽測比對正確時「備註」填這個
         "base": "QC部/40_其他專案系統/智慧局-690整合式專利檢索系統/資料轉置登記",
         "tables": [],
     },
