@@ -48,6 +48,8 @@ DEFAULT_XFER_CONFIG = {
 
 META_BYTES = 2048           # 一封 metadata 的流量估算
 RECENT = 20
+# s690 剛變成整期成功時可能還沒建好那期的索引:0 筆 / 查不到案件的暫定結果,24 小時內每次抓信再查
+S690_SETTLE = timedelta(hours=24)
 AUTH_WAIT = timedelta(minutes=10)      # 按「授權」後等 Google 導回來的時間
 AUTH_MSG = "Gmail 授權已失效或被管理員封鎖,請在「信件與連線」按「重新授權」"
 _MSG_ID_RE = re.compile(r"^[0-9a-fA-F]{6,32}$")
@@ -294,13 +296,22 @@ class Xfer690Service:
                 if p.get("state") != "ok" or not p.get("last_at"):
                     continue
                 key = f"{s['view']}:{p['key']}"
-                have = self.s690.get(key) or {}
+                young = self.now() < datetime.fromisoformat(p["last_at"]) + S690_SETTLE
+                have =self.s690.get(key) or {}
                 for part in parts:
+                    if part == "count" and not p.get("date"):
+                        continue        # 沒有日期就不查(不送 PD:[None TO None])
                     r = have.get(part)
                     if r and not r.get("error") and (r.get("at") or "") >= p["last_at"]:
-                        continue
+                        if not (self._s690_provisional(part, r) and young):
+                            continue
                     jobs.append((key, part, s["view"].upper(), p))
         return jobs
+
+    @staticmethod
+    def _s690_provisional(part: str, r: dict) -> bool:
+        """暫定結果:0 筆、或查不到案件(s690 可能還沒建好那期的索引)。"""
+        return r.get("value") == 0 if part == "count" else not r.get("pn")
 
     def _s690_refresh(self) -> bool:
         """查還缺的、存進快取。有查回 True。已經有一個在跑就直接回 False。"""
@@ -371,6 +382,7 @@ class Xfer690Service:
         st = build_status(list(self.events.values()), self.cfg["systems"], self.now(),
                           int(self.cfg["history_days"]))
         st["s690"] = self.s690      # KM 預覽用(wiki.plan_fills / s690_note)
+        st["s690_enabled"] = bool(self.cfg.get("s690_enabled", True))
         return st
 
     def snapshot(self) -> dict:

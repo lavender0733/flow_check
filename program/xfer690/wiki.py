@@ -86,17 +86,30 @@ def _s690_of(status: dict, target: dict, p: dict) -> dict:
     return (status.get("s690") or {}).get(f"{sys_.get('view')}:{p.get('key')}") or {}
 
 
+def _s690_fresh(p: dict, r: dict) -> bool:
+    """這筆結果是這期最後一次跑完之後查的(時間字串同為 +08:00,可直接比大小)。"""
+    return p.get("state") == "ok" and (r.get("at") or "") >= (p.get("last_at") or "")
+
+
 def s690_note(status: dict, target: dict, p: dict, kind) -> tuple:
     """(預覽 tooltip 的說明, 還沒查)。不是 s690 的欄回 (None, False)。"""
     part = _S690_PART.get(kind)
     if not part:
         return None, False
+    if p.get("state") != "ok":
+        return "這期還沒整期成功,不查 s690", False
+    if not status.get("s690_enabled", True):
+        return "s690 查詢已關閉(s690_enabled)", False
     r = _s690_of(status, target, p).get(part)
     if not r:
         return "還沒查 s690(抓完信後會在背景查)", True
     if r.get("error"):
         return f"s690 查詢失敗:{r['error']}(下次抓信再試)", False
+    if not _s690_fresh(p, r):
+        return "s690 結果是重跑前的,等重查", True
     if part == "count":
+        if r.get("value") == 0:
+            return "s690 查到 0 筆(可能還沒建好索引,不填)", False
         return f"s690 查到 {r.get('value')} 筆", False
     if not r.get("pn"):
         return r.get("detail") or "s690 查不到案件", False
@@ -139,16 +152,17 @@ def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
                 if w is not None and p.get("state") == "ok":
                     cells[int(col)] = str(w)
             elif kind == "s690_count":
-                v = (s690.get("count") or {}).get("value")
-                if v is not None:
+                cnt = s690.get("count") or {}
+                v = cnt.get("value")
+                if v and _s690_fresh(p, cnt):
                     cells[int(col)] = str(v)
             elif kind in ("s690_spec", "s690_rep"):
                 img = s690.get("image") or {}
-                if img.get("spec" if kind == "s690_spec" else "rep"):
+                if _s690_fresh(p, img) and img.get("spec" if kind == "s690_spec" else "rep"):
                     cells[int(col)] = "v"
             elif kind in ("s690_sud_case", "s690_sud_note"):
                 sud = s690.get("sud") or {}
-                if sud.get("ok") and sud.get("pn"):
+                if _s690_fresh(p, sud) and sud.get("ok") and sud.get("pn"):
                     cells[int(col)] = (sud["pn"] if kind == "s690_sud_case"
                                        else str(wiki_cfg.get("sud_ok_value", "成功")))
         if cells:

@@ -653,7 +653,7 @@ function x6renderWiki() {
     return;
   }
   if (w.last_error) box.append(x6el("div", "x6-result bad", w.last_error));
-  const order = ["每日執行項目", "TW全文Full", "TW書目Biblio及雜項", "TW英譯En"];
+  const order = ["每日執行項目", "TW全文Full", "TW影像GCS", "TW書目Biblio及雜項", "TW英譯En"];
   const tables = x6wikiTables().slice().sort((a, b) => order.indexOf(a.page) - order.indexOf(b.page) || a.table.localeCompare(b.table));
   const shown = new Map(tables.map(tb => [tb, (tb.rows || []).filter(r => tb.columns.some(c => {
     const x = x6cell(tb, r, c);

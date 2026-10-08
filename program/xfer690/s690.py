@@ -64,11 +64,17 @@ def _same_issue(rec: dict, vol: str, isu: str) -> bool:
         return False
 
 
+def _pn_of(case: dict) -> str:
+    if not case.get("pnRaw"):
+        raise S690Error("s690 回傳的案件沒有公開 / 公告號")
+    return "TW" + str(case["pnRaw"])
+
+
 def _judge(case: dict, rec: dict) -> dict:
     """抽到的案件 + 那筆雜項 → 判定。讓與看目前專利權人、消滅看案件狀態,其他類型只確認查得到。"""
     t = rec.get("type")
     name = rec.get("typeName") or t
-    out = {"pn": "TW" + str(case.get("pnRaw")), "type": t, "type_name": name}
+    out = {"pn": _pn_of(case), "type": t, "type_name": name}
     if t == "sud11":
         who = _items(rec).get("受讓人") or ""
         now = case.get("currentAssignees") or []
@@ -124,7 +130,7 @@ class S690Client:
         c = lst[0]
         spec = c.get("hasPublishedSpecification" if case_type == "TWA" else "hasIssuedSpecification")
         rep = any(_REP_RE.search(str(f)) for f in c.get("gazetteFigures") or [])
-        return {"pn": "TW" + str(c.get("pnRaw")), "spec": bool(spec), "rep": rep}
+        return {"pn": _pn_of(c), "spec": bool(spec), "rep": rep}
 
     def sud_sample(self, case_type: str, vol, types: list) -> dict:
         """抽測:這期 log 裡有的雜項類型一次查,取第一筆「雜項真的刊在這一期」的案件判定。

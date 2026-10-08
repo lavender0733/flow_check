@@ -180,8 +180,10 @@ Rundeck 在內網連不到,所以只靠信。
 | `systems[]` | 系統清單:`id`、`label`、`view`(`daily` / `twa` / `twb`)、`type`(`full` / `biblio` / `sud` / `eng`)、`auto`(母 job 代碼)、`steps`(步驟代碼,`-check` 是下一號)、`schedule`(`daily` / `{"monthdays": [...]}` / `manual`)、`period`(`date` / `vol_twa` / `vol_twb` / `vol` / `none`)、`expect_by`(最晚幾點該收到信) |
 | `wiki.enabled` / `wiki.dry_run` | 開放登入 / 只算不寫 |
 | `wiki.base` | 子頁所在的路徑 |
+| `s690_enabled` | 抓完信後是否查 s690(預設 true;0 筆 / 查不到案件的暫定結果 24 小時內每次抓信再查) |
 | `wiki.nodata_value` | 每日系統無資料那天,要打 v 的格改填的值(預設 `-`) |
-| `wiki.tables[]` | 每張表的每個系統一筆:`page`、`table`(`TWA` / `TWB` / 空)、`after`(表格前面的標題文字)、`header_has`、`label_row`、`labels`(整列欄名;頁面上不一樣就整張表不寫,預覽顯示紅框)、`key_col`、`key`(`vol` 公告期數 / `date` 日期 / `span` 英譯的期數區間)、`new_row`(`{yyyymmdd}`、`{mm}`、`{dd}`、`{vol}`、`{key}` = 列鍵)、`cols`(`{欄號: {label, value: v/tag/writes, step, check}}`) |
+| `wiki.sud_ok_value` | SUD 抽測成功時「備註」格填的字(預設「成功」) |
+| `wiki.tables[]` | 每張表的每個系統一筆:`page`、`table`(`TWA` / `TWB` / 空)、`after`(表格前面的標題文字)、`header_has`、`label_row`、`labels`(整列欄名;頁面上不一樣就整張表不寫,預覽顯示紅框)、`key_col`、`key`(`vol` 公告期數 / `date` 日期 / `span` 英譯的期數區間)、`new_row`(`{yyyymmdd}`、`{mm}`、`{dd}`、`{vol}`、`{key}` = 列鍵)、`cols`(`{欄號: {label, value: v/tag/writes/s690_count/s690_spec/s690_rep/s690_sud_case/s690_sud_note, step, check}}`) |
 
 **KM 表格改結構時**:欄位順序變了 → 改 `cols` 的欄號與 `label`(欄名對不上時程式會整張表不寫,在預覽裡顯示原因);
 表格前的標題改了 → 改 `after`;新增系統 → 在 `systems` 加一筆,要登記的話在 `tables` 加對應的 target。
