@@ -583,6 +583,18 @@ function x6cell(tb, row, c) {
     out = { v: cell.existing != null ? cell.existing : raw, k: "old", existing: cell.existing != null ? cell.existing : raw };
     if (c.kind === "writes" && cell.state === "same") out.tip = `L1 寫入筆數是 ${cell.value},跟頁面上一致`;
   }
+  if (cell && cell.note) {
+    // s690 查詢結果:放在 tooltip 最前面;留空的格把「失敗或沒到」換成查詢結果
+    out.tip = out.k === "hold" ? `${cell.note}\n這格不填` : [cell.note, out.tip].filter(Boolean).join("\n");
+  }
+  if (c.kind === "s690_count" && (out.k === "fill" || out.k === "old") && out.v) {
+    const bc = tb.columns.find(y => y.kind === "writes" && y.label === "Biblio");
+    const b = bc ? x6cell(tb, row, bc).v : "";
+    if (/^\d+$/.test(b) && /^\d+$/.test(out.v) && b !== out.v) {
+      out.flag = true;
+      out.tip = [out.tip, `跟 Biblio(${b})不一樣`].filter(Boolean).join("\n");
+    }
+  }
   if (out.existing == null) out.existing = raw;
   // auto = 不手改的話,寫入後這格會是什麼(要填的就是填的值,其他照頁面原值)
   out.auto = out.k === "fill" ? out.v : out.existing;
@@ -669,9 +681,6 @@ function x6renderWiki() {
     if (notes.length) sec.append(x6el("div", "x6-wnote", notes.join(";") + "。"));
     box.append(sec);
   }
-  const off = x6el("div", "x6-wpage");
-  off.append(x6el("div", "x6-wnote", "TW影像GCS 這版不寫入(信裡沒有影像上傳的 job)。"));
-  box.append(off);
 }
 function x6wtable(tb, rows) {
   const wrap = x6el("div", "x6-wrap");
@@ -694,6 +703,11 @@ function x6wtable(tb, rows) {
       if (c.kind === "writes") {
         th.append(x6el("span", "hint", " 筆數"));
         th.dataset.tip = `${c.label} = ${c.group} L1 的寫入筆數`;
+        th.tabIndex = 0;
+      }
+      if (String(c.kind || "").startsWith("s690_")) {
+        th.append(x6el("span", "hint", " s690"));
+        th.dataset.tip = "這欄由 s690 查詢結果填(抓完信後在背景查)";
         th.tabIndex = 0;
       }
       hr.append(th);
