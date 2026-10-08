@@ -188,6 +188,20 @@ def _expected(system: dict, today, days: int, first_at) -> list:
             if first_at is None or _deadline(system, d.isoformat()) >= first_at]
 
 
+def _drop_retried(periods: dict) -> dict:
+    """清單外的作業:失敗的那次,之後重跑時失敗的步驟都成功了,就拿掉,只留成功的紀錄。"""
+    out = {}
+    for k, p in periods.items():
+        if p["state"] == "fail":
+            failed = [c for c, s in p["steps"].items() if s["state"] == "fail"]
+            if any(q["last_at"] > p["last_at"]
+                   and all((q["steps"].get(c) or {}).get("state") == "ok" for c in failed)
+                   for q in periods.values()):
+                continue
+        out[k] = p
+    return out
+
+
 def _system_status(system: dict, evs: list, now: datetime, days: int, first_at) -> dict:
     today = now.date()
     grouping = system if system.get("configured") else {"steps": []}
@@ -221,6 +235,9 @@ def _system_status(system: dict, evs: list, now: datetime, days: int, first_at) 
                             "steps": {c: _empty_step(st) for c in system.get("steps", [])},
                             "auto": {}, "tag": None, "sud_types": None, "first_at": None, "last_at": None,
                             "expected": True}
+
+    if kind == "adhoc":
+        periods = _drop_retried(periods)
 
     ordered = sorted(periods.values(), key=lambda p: (p["date"] or "", p["key"]), reverse=True)
     if kind == "maint":
