@@ -916,14 +916,15 @@ async function x6load() {
   if (x6Snap && x6Snap.ok !== false && (x6Snap.auth === "unknown" || x6Snap.gmail_authorizing || x6wikiReading()))
     x6Soon = setTimeout(x6load, 3000);
 }
-async function x6refresh() {
+// kind "auto":網頁一打開自動抓一次(伺服器記成自動);按鈕是手動
+async function x6refresh(kind = "manual") {
   if (x6Busy.refresh) return;
   x6Busy.refresh = true;
   const b = x6$("x6-refresh");
   b.disabled = true; b.textContent = "抓信中…"; x6$("x6-spin").hidden = false;
   try {
     const r = await fetch("/api/xfer690/refresh", { method: "POST", headers: { "Content-Type": "application/json" },
-                                                    body: "{}" });
+                                                    body: JSON.stringify({ kind }) });
     x6Snap = await r.json();
   } catch (e) {
     if (x6Snap) x6Snap.last_error = `手動更新失敗:${e.message}`;
@@ -1116,7 +1117,7 @@ function x6bind() {
     x6$("x6-tip").hidden = true;
     x6render();
   });
-  x6$("x6-refresh").addEventListener("click", x6refresh);
+  x6$("x6-refresh").addEventListener("click", () => x6refresh());
   x6$("x6-w-go").addEventListener("click", () => x6wikiWrite());
   x6$("x6-w-undo").addEventListener("click", () => { x6Edits = {}; x6render(); });
   x6$("x6-log-close").addEventListener("click", () => x6$("x6-logdlg").close());
@@ -1147,10 +1148,12 @@ registerTab({
   id: "xfer690",
   label: "690資轉",
   order: 50,
-  onInit() {
+  async onInit() {
     x6bind();
-    x6load();
     setInterval(x6load, 60000);
+    // 先畫快取裡的,再自動抓一次信:不用等背景迴圈,也不用按「立即更新」
+    await x6load();
+    if (x6Snap && x6Snap.ok !== false && x6Snap.enabled !== false) x6refresh("auto");
   },
   onShow() { x6load(); },
 });

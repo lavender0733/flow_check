@@ -214,9 +214,10 @@ def xfer690_status(app) -> dict:
     return app.xfer690.snapshot() if app.xfer690 else dict(_XFER_OFF)
 
 
-def xfer690_refresh(app) -> dict:
-    """「立即更新」:前景抓一次信,回傳新的快照。"""
-    return app.xfer690.poll("manual") if app.xfer690 else dict(_XFER_OFF)
+def xfer690_refresh(app, body: dict) -> dict:
+    """「立即更新」:前景抓一次信,回傳新的快照。網頁一打開也自動抓一次(kind: auto)。"""
+    kind = "auto" if body.get("kind") == "auto" else "manual"
+    return app.xfer690.poll(kind) if app.xfer690 else dict(_XFER_OFF)
 
 
 def xfer690_log(app, msg_id) -> Raw:
@@ -283,7 +284,7 @@ def build_routes(app: App) -> dict:
         ("POST", "/api/prefs"):         lambda req: prefs_write(app, req.body),
         ("POST", "/api/speedtest"):     lambda req: speedtest(app, req.body),
         ("GET",  "/api/xfer690"):            lambda req: xfer690_status(app),
-        ("POST", "/api/xfer690/refresh"):    _json_only(lambda req: xfer690_refresh(app)),
+        ("POST", "/api/xfer690/refresh"):    _json_only(lambda req: xfer690_refresh(app, req.body)),
         ("GET",  "/api/xfer690/log"):        lambda req: xfer690_log(app, req.query.get("id")),
         ("POST", "/api/xfer690/wiki/login"):  _json_only(lambda req: xfer690_wiki_login(app, req.body)),
         ("POST", "/api/xfer690/wiki/logout"): _json_only(lambda req: xfer690_wiki_logout(app)),
