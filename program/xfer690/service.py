@@ -1,4 +1,6 @@
-"""690 資轉監控的組裝:設定、抓信、快取、狀態、KM、背景迴圈。
+"""690 資轉監控的組裝:設定、抓信、快取、狀態、KM。
+
+不在背景定時抓信:網頁打開時自動抓一次,之後只在按「立即更新」(或 Gmail 授權完成)時抓。
 
 流量預算(這套工具本身就在管每天 2 GB 的額度):一律先抓 metadata(主旨、時間,每封約 2 KB),
 只有三種信才下載全文 —— 失敗信、期別系統每段的第一封(帶出 VOL)、要填筆數的步驟。
@@ -21,7 +23,6 @@ from xfer690.status import build_status, group_runs
 # 預設值。systems / tables 留空:實際的系統清單在 data/config/xfer690.json(進版控)。
 DEFAULT_XFER_CONFIG = {
     "enabled": True,
-    "poll_interval_min": 10,
     "retain_days": 45,
     "history_days": 14,
     "project": "s690",
@@ -143,7 +144,6 @@ class Xfer690Service:
         self.cfg = load_xfer_config(config_path)
         self._lock = threading.Lock()         # 整個 poll()
         self._wiki_lock = threading.Lock()    # 登入 / 寫入 / 預覽
-        self._stop = threading.Event()
         self._jwt = None                      # KM 登入憑證;也存在 secrets 檔(重開不用重貼)
         self._contents = {}                   # 上次讀到的 KM 頁面(預覽用,只放記憶體)
 
@@ -392,10 +392,6 @@ class Xfer690Service:
 
     def snapshot(self) -> dict:
         now = self.now()
-        stale = True
-        if self.last_poll:
-            age = now - datetime.fromisoformat(self.last_poll)
-            stale = age > timedelta(minutes=3 * int(self.cfg["poll_interval_min"]))
         recent = sorted((e for e in self.events.values() if e.get("code") and e.get("at")),
                         key=lambda e: e["at"], reverse=True)[:RECENT]
         w = self.cfg["wiki"]
@@ -409,8 +405,7 @@ class Xfer690Service:
             "gmail_authorized": self.token_path.exists() and self.auth != "needs_auth",
             "gmail_authorizing": self._authorizing(),
             "last_poll": self.last_poll, "last_poll_kind": self.last_poll_kind,
-            "last_error": self.last_error, "stale": stale,
-            "poll_interval_min": int(self.cfg["poll_interval_min"]),
+            "last_error": self.last_error,
             "traffic": {"today_bytes": traffic["today_bytes"],
                         "last_poll_bytes": traffic["last_poll_bytes"]},
             "status": self.status(),
@@ -430,18 +425,6 @@ class Xfer690Service:
         raw = self.gmail_factory().fetch_raw(msg_id)
         self._add_bytes(len(raw))
         return log_text(raw)
-
-    def loop(self) -> None:
-        from core.health import record_error
-        while not self._stop.is_set():
-            try:
-                self.poll("auto")
-            except Exception as e:
-                record_error("xfer690", e)
-            self._stop.wait(int(self.cfg.get("poll_interval_min", 10)) * 60)
-
-    def stop(self) -> None:
-        self._stop.set()
 
     # ── Gmail 授權(信件與連線的按鈕) ──
     # Google 同意後直接回呼主程式的 /api/xfer690/gmail/callback(這個伺服器一直開著、每個連線

@@ -83,7 +83,7 @@
 ## 690 資轉監控
 
 s690 的 Rundeck 每跑一個步驟就寄一封通知信(主旨像 `🔴【FAILURE】[s690] 012001-techreport-pdf-step1-raw | 01-tw/20-techreport-pdf`)。
-伺服器每 10 分鐘從 Gmail 讀這些信,判定每個轉置系統每天(或每一期)、每個步驟是成功、失敗、無資料還是沒來。
+網頁打開時自動從 Gmail 讀一次這些信,之後按「立即更新」才再讀(不在背景定時抓),判定每個轉置系統每天(或每一期)、每個步驟是成功、失敗、無資料還是沒來。
 Rundeck 在內網連不到,所以只靠信。
 
 ### 第一次設定(每台電腦一次)
@@ -172,7 +172,6 @@ Rundeck 在內網連不到,所以只靠信。
 | 鍵 | 意義 |
 |---|---|
 | `enabled` | 690 監控開關 |
-| `poll_interval_min` | 抓信間隔(分,預設 10) |
 | `retain_days` / `history_days` | 快取保留天數(45)/ 每日系統往回看幾天(14) |
 | `gmail_query` | Gmail 搜尋條件 |
 | `status_map` / `nodata_re` | 主旨狀態字對應 / 判定「無資料」的錯誤訊息 |
@@ -299,7 +298,7 @@ flow_check/
 | 方法 | 路徑 | 用途 |
 |---|---|---|
 | GET | `/api/status` | 當日流量 / 即時速率 / 各網卡明細 / 健康狀態 / 暴增事件 / 今日程式排行 / `lan_excluded_bytes` 等(前端 5 秒輪詢) |
-| GET | `/api/traffic/log?date=YYYY-MM-DD` | 某天的逐分鐘用量明細,外加有明細的日期清單 |
+| GET | `/api/traffic/log?date=YYYY-MM-DD&after=N` | 某天的逐分鐘用量明細(網頁用到的欄位;`after` = 從第 N 筆起,網頁看今天時只補新增的),外加有明細的日期清單 |
 | GET | `/api/traffic/daily` | 每日用量統計(流量報表),今天那筆即時計算 |
 | GET | `/api/config` | 額度、速率下限、本機偏好(`notify_*`、`surge_*`、`theme`) |
 | POST | `/api/prefs` | 寫回本機偏好,即時套用到執行中的監控(不必重啟) |

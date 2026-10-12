@@ -1,6 +1,5 @@
 {
   "enabled": true,
-  "poll_interval_min": 10,
   "retain_days": 45,
   "history_days": 14,
   "project": "s690",

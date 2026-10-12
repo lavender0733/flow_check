@@ -70,7 +70,8 @@ def _ensure_machines_file():
 
 
 def _start_xfer690():
-    """載入 690 資轉監控並起背景抓信。回傳 (服務或 None, banner 用的一行說明)。
+    """載入 690 資轉監控。回傳 (服務或 None, banner 用的一行說明)。
+    不在背景定時抓信:網頁打開時自動抓一次,之後按「立即更新」才抓。
 
     program/xfer690 不存在(TIPO flow check)時安靜略過;載入失敗只記錯,流量監控照常啟動。
     """
@@ -84,8 +85,7 @@ def _start_xfer690():
         return None, f"  690 資轉監控: 載入失敗({e})"
     if not xfer.cfg.get("enabled", True):
         return xfer, "  690 資轉監控: 停用(data/config/xfer690.json 的 enabled)"
-    threading.Thread(target=xfer.loop, daemon=True).start()
-    return xfer, f"  690 資轉監控: 每 {xfer.cfg['poll_interval_min']} 分鐘抓信"
+    return xfer, "  690 資轉監控: 網頁打開時抓一次信,之後按「立即更新」才抓"
 
 
 def _startup_banner(cfg, monitor, url, probe_int, xfer_line=None) -> str:
