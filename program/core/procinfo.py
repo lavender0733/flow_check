@@ -4,8 +4,9 @@
 流量歸因原本只顯示程序檔名(GoogleDriveFS.exe、svchost.exe…),一般人看不出是哪個軟體。
 這裡把 pid 換成「軟體名稱」,供今日程式排行、用量明細、暴增紀錄顯示:
 
-  1. 本工具自己的程序(GPSS 檢索子程序與它開的瀏覽器、流量監控本身)→ 直接標明「本工具」,
-     免得把自己跑檢索用掉的量誤認成別的軟體。
+  1. 本工具自己的程序(流量監控本身,690 抓信 / KM / s690 / 測速都在這支 python 裡)→ 直接標明
+     「本工具」,免得把自己用掉的量誤認成別的軟體。只認命令列,不認檔名:別的程式開的同名程序
+     (例如 Playwright 的 chrome-headless-shell.exe)不能算成本工具。
   2. svchost.exe:一個檔名底下跑著各式 Windows 服務,檔名毫無資訊 → 反查該 pid 承載的服務顯示名
      (例如「Windows Update」「傳遞最佳化」)。
   3. 其餘:讀 exe 內嵌的版本資訊(檔案內容 → 詳細資料看到的那個)的 FileDescription,
@@ -24,15 +25,10 @@ import psutil
 
 _IS_WINDOWS = (os.name == "nt")
 
-SELF_GPSS = "GPSS 檢索(本工具)"
 SELF_MONITOR = "流量監控(本工具・測速)"
 
 # 這些 ProductName 是作業系統共用的,拿來當軟體名等於沒說 → 改用 FileDescription。
 _GENERIC_PRODUCTS = ("operating system", "作業系統")
-
-# 只有本工具會開的程序檔名:子程序的父程序可能已結束(命令列查不到)、升級前的舊紀錄更只剩檔名,
-# 只能靠檔名認。chrome-headless-shell.exe 是 Playwright 的無頭瀏覽器,這台只有傳統檢索會用到。
-_SELF_EXE_NAMES = {"chrome-headless-shell.exe": SELF_GPSS}
 
 if _IS_WINDOWS:
     _ver = ctypes.WinDLL("version.dll")
@@ -98,23 +94,13 @@ def _service_names(pid: int) -> list:
 
 
 def _self_tool_label(proc) -> str:
-    """本工具自己的程序回對應標籤,否則回空字串。看自己與祖先的命令列:
-    GPSS 檢索是 traffic_monitor 開的 python 子程序,傳統檢索再由它開 Playwright 的瀏覽器,
-    所以要往上找;API 檢索與測速的連線則直接出在那支 python 上。"""
+    """本工具自己的程序回對應標籤,否則回空字串。本工具不開子程序(8.0.0 起),
+    所有連線都出在 traffic_monitor.py 那支 python 上,只看它自己的命令列。"""
     try:
-        chain = [proc] + proc.parents()
+        cmd = " ".join(proc.cmdline()).lower()
     except Exception:
-        chain = [proc]
-    for pr in chain[:6]:
-        try:
-            cmd = " ".join(pr.cmdline()).lower()
-        except Exception:
-            continue
-        if "gpss_web_query.py" in cmd or "gpss_api_query.py" in cmd:
-            return SELF_GPSS
-        if "traffic_monitor.py" in cmd:
-            return SELF_MONITOR
-    return ""
+        return ""
+    return SELF_MONITOR if "traffic_monitor.py" in cmd else ""
 
 
 def describe(pid: int) -> tuple:
@@ -125,7 +111,7 @@ def describe(pid: int) -> tuple:
     except Exception:
         return (f"pid {pid}", f"pid {pid}")
 
-    own = _self_tool_label(proc) or _SELF_EXE_NAMES.get(exe_name.lower(), "")
+    own = _self_tool_label(proc)
     if own:
         return (own, exe_name)
 
@@ -156,9 +142,6 @@ def describe_exe_name(exe_name: str) -> str:
     找一支同檔名、還在跑的程序讀它的版本資訊;找不到就原樣回傳檔名。"""
     if not exe_name:
         return exe_name
-    own = _SELF_EXE_NAMES.get(exe_name.lower())
-    if own:
-        return own
     # svchost 每一支承載的服務都不同,拿現在隨便一支 svchost 的服務名來套會張冠李戴。
     if exe_name.lower() == "svchost.exe":
         return "Windows 服務(svchost)"

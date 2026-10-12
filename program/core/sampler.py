@@ -100,6 +100,24 @@ def _udp_owner_names() -> list:
     return [n for n, _ in names.most_common(8)]
 
 
+# 8.0.0 移除 GPSS 檢索後,procinfo 仍把所有 chrome-headless-shell.exe(Playwright 的無頭瀏覽器)
+# 標成這個名字 —— 別的程式開的也算到本工具頭上。修正前存下的當日排行讀檔時改回實際軟體名。
+_LEGACY_SELF_LABELS = ("GPSS 檢索(本工具)",)
+
+
+def _relabel_legacy(day_apps: dict, day_app_exes: dict) -> None:
+    for old in _LEGACY_SELF_LABELS:
+        if old not in day_apps:
+            continue
+        exe = day_app_exes.pop(old, "") or old
+        new = describe_exe_name(exe) or exe
+        r, sd = day_apps.pop(old)
+        acc = day_apps.setdefault(new, [0, 0])
+        acc[0] += r
+        acc[1] += sd
+        day_app_exes.setdefault(new, exe)
+
+
 def _upgrade_surge(ev: dict) -> dict:
     """升級前存下的暴增事件:來源只有程序檔名(chrome.exe)、也沒有「未歸因」那一列。
     讀檔時補齊成新格式 —— 檔名換成軟體名稱,事件總量減掉各來源加總的差額補成「未歸因」,
@@ -315,6 +333,7 @@ class Monitor:
             exes = saved.get("day_app_exes", {})
             if isinstance(exes, dict):
                 self.day_app_exes = {str(k): str(v) for k, v in exes.items()}
+            _relabel_legacy(self.day_apps, self.day_app_exes)
             hours = saved.get("day_hours")
             if isinstance(hours, dict):
                 self.day_hours = hours
