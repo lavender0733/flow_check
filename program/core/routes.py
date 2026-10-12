@@ -116,16 +116,19 @@ def status_payload(app) -> dict:
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-def traffic_log(app, date=None) -> dict:
+def traffic_log(app, date=None, after=None) -> dict:
     """某天的逐分鐘流量明細(舊到新),外加有明細的日期清單供網頁切換。
-    明細由伺服器每次取樣寫檔,網頁有沒有開著都照記。"""
+    明細由伺服器每次取樣寫檔,網頁有沒有開著都照記。
+    after = 網頁已有的筆數:只回傳那之後的(rows),total 是那天的總筆數,網頁據此判斷接不接得上。"""
     today = app.monitor.snapshot()["date"]
     if not date or not _DATE_RE.match(date):
         date = today
+    after = int(after) if after and str(after).isdigit() else 0
     dates = traffic_log_dates()
     if today not in dates:
         dates.insert(0, today)
-    return {"date": date, "dates": dates, "rows": app.monitor.traffic_log(date)}
+    rows, total = app.monitor.traffic_log(date, after)
+    return {"date": date, "dates": dates, "after": after, "total": total, "rows": rows}
 
 
 def traffic_daily(app) -> dict:
@@ -278,7 +281,7 @@ def build_routes(app: App) -> dict:
     """端點註冊表。新增端點只要在這裡加一行。路徑是精確比對,順序無關。"""
     return {
         ("GET",  "/api/status"):        lambda req: status_payload(app),
-        ("GET",  "/api/traffic/log"):   lambda req: traffic_log(app, req.query.get("date")),
+        ("GET",  "/api/traffic/log"):   lambda req: traffic_log(app, req.query.get("date"), req.query.get("after")),
         ("GET",  "/api/traffic/daily"): lambda req: traffic_daily(app),
         ("GET",  "/api/config"):        lambda req: config_payload(app),
         ("POST", "/api/prefs"):         lambda req: prefs_write(app, req.body),

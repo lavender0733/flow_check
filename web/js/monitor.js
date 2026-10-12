@@ -331,13 +331,15 @@ function restoreMonitorTab() {
 // 後端每次 NIC 結算(預設 60 秒)記一筆並寫進本機明細檔:網卡下載總量、其中判為內網(不計費)
 // 的部分、真正算進額度的下載/上傳。暴增事件另看「暴增紀錄」頁籤。
 // 以前明細只放在記憶體、只看近 5 分鐘,網頁沒開著的時段就什麼都查不到;現在整天都在、重開監控
-// 也接得回來,可切換日期回頭查(額度用完的隔天還能查前一天)。整天的量不隨每 5 秒的輪詢送:切到這個頁籤、換日期,
-// 或輪詢看到後端多了新的一筆(log_last 變了)時,才向 /api/traffic/log 拉。
+// 也接得回來,可切換日期回頭查(額度用完的隔天還能查前一天)。整天的量不隨每 5 秒的輪詢送:切到這個頁籤、換日期
+// 才向 /api/traffic/log 拉整天;看著今天時,輪詢看到後端多了新的一筆(log_last 變了)只拉新增的那幾筆
+// (?after=已有筆數),插到表格最上面 —— 不再每分鐘重拉整天、整張表重畫。
 let calcLogRows = [];          // 目前顯示那天的明細(舊到新)
 let calcLogDate = null;        // 目前顯示的日期;null = 還沒載過
 let calcLogToday = null;       // 後端的「今天」
 let calcLogSeenLast = null;    // 已載入的最後一筆時間(今天);輪詢的 log_last 變了才重拉
 let calcLogLoading = false;
+let calcLogGen = 0;            // 每次整天重拉 +1;補新筆數的回應回來時若已換過(換了日期),丟掉
 
 const APP_LABELS = { __unattributed__: "未歸因(UDP/QUIC・標頭)", __offline__: "監控未執行期間" };
 function appLabel(name) { return APP_LABELS[name] || name || "未知程式"; }
@@ -387,12 +389,13 @@ function exeCell(exe) {
 }
 
 async function loadCalcLog(fromPicker) {
-  if (calcLogLoading) return;
   const sel = document.getElementById("calclog-date");
   const want = fromPicker && sel && sel.value ? sel.value : (calcLogDate || "");
+  const gen = ++calcLogGen;
   calcLogLoading = true;
   try {
     const d = await (await fetch("/api/traffic/log" + (want ? "?date=" + encodeURIComponent(want) : ""))).json();
+    if (gen !== calcLogGen) return;   // 等回應時又換了日期:以後來那次為準
     calcLogRows = d.rows || [];
     calcLogDate = d.date;
     calcLogToday = (d.dates && d.dates[0]) || d.date;
@@ -410,40 +413,68 @@ async function loadCalcLog(fromPicker) {
   } catch (e) {
     // 拉不到就保留舊畫面;tickStatus 的連線橫幅會另外提醒後端斷線
   } finally {
-    calcLogLoading = false;
+    if (gen === calcLogGen) calcLogLoading = false;
   }
 }
 
-// 由 tickStatus 呼叫:只在「正看著今天的明細」且後端多了新的一筆時才重拉。
+// 由 tickStatus 呼叫:只在「正看著今天的明細」且後端多了新的一筆時,補拉新增的那幾筆。
 function maybeRefreshCalcLog(s) {
   const pane = document.getElementById("pane-calclog");
   if (!pane || pane.style.display === "none") return;
   if (calcLogDate !== null && calcLogDate !== s.date) return;   // 在看別天,不動
-  if (s.log_last && s.log_last !== calcLogSeenLast) loadCalcLog(false);
+  if (!s.log_last || s.log_last === calcLogSeenLast || calcLogLoading) return;
+  if (calcLogDate === null) { loadCalcLog(false); return; }
+  appendCalcLog();
+}
+
+// 只拉今天還沒有的那幾筆,插到表格最上面。接不上(伺服器重啟後筆數變少、換日)就整天重拉。
+async function appendCalcLog() {
+  const gen = calcLogGen, have = calcLogRows.length;
+  calcLogLoading = true;
+  let d = null;
+  try {
+    d = await (await fetch("/api/traffic/log?date=" + encodeURIComponent(calcLogDate) + "&after=" + have)).json();
+  } catch (e) {
+    // 拉不到就保留舊畫面;下次輪詢再試
+  } finally {
+    if (gen === calcLogGen) calcLogLoading = false;
+  }
+  if (!d || gen !== calcLogGen || d.date !== calcLogDate) return;
+  const rows = d.rows || [];
+  // 筆數對不上(伺服器重啟後少了幾筆),或 log_last 變了卻沒有新的一筆:整天重拉
+  if (!rows.length || d.after !== have || d.total !== have + rows.length) { loadCalcLog(false); return; }
+  calcLogRows = calcLogRows.concat(rows);
+  calcLogSeenLast = rows[rows.length - 1].t;
+  const tb = document.getElementById("calclogbody");
+  if (!tb) return;
+  if (tb.querySelector(".empty-row")) { renderCalcLog(); return; }   // 原本是「沒有明細」那一列
+  const html = calcLogRowsHtml(rows);
+  if (html) tb.insertAdjacentHTML("afterbegin", html);
+}
+
+// rows(舊到新)→ 表格列的 HTML(新到舊);勾了「≥1 MB」就略過小的分鐘。
+function calcLogRowsHtml(rows) {
+  const onlyBusy = !!(document.getElementById("calclog-busy") || {}).checked;
+  const html = [];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const e = rows[i];
+    if (onlyBusy && (e.cnt_recv || 0) + (e.cnt_sent || 0) < 1048576) continue;
+    const exc = e.excl_recv > 0 ? fmtBytes(e.excl_recv) : "—";
+    html.push(`<tr><td>${escHtml(e.t)}</td>`
+      + `<td class="num">${fmtBytes(e.nic_recv)}</td>`
+      + `<td class="num">${exc}</td>`
+      + `<td class="num">${fmtBytes(e.cnt_recv)}</td>`
+      + `<td class="num">${fmtBytes(e.cnt_sent)}</td></tr>`);
+  }
+  return html.join("");
 }
 
 function renderCalcLog() {
   const tb = document.getElementById("calclogbody");
   if (!tb) return;
-  const onlyBusy = !!(document.getElementById("calclog-busy") || {}).checked;
-
-  tb.innerHTML = "";
-  for (let i = calcLogRows.length - 1; i >= 0; i--) {   // 新到舊
-    const e = calcLogRows[i];
-    if (onlyBusy && (e.cnt_recv || 0) + (e.cnt_sent || 0) < 1048576) continue;
-    const tr = document.createElement("tr");
-    const exc = e.excl_recv > 0 ? fmtBytes(e.excl_recv) : "—";
-    tr.innerHTML =
-        `<td>${e.t}</td>`
-      + `<td class="num">${fmtBytes(e.nic_recv)}</td>`
-      + `<td class="num">${exc}</td>`
-      + `<td class="num">${fmtBytes(e.cnt_recv)}</td>`
-      + `<td class="num">${fmtBytes(e.cnt_sent)}</td>`;
-    tb.appendChild(tr);
-  }
-  if (!tb.children.length) {
-    tb.innerHTML = `<tr><td colspan="5" class="empty-row">${calcLogRows.length ? "這天沒有 ≥1 MB 的分鐘。" : "這天還沒有明細。"}</td></tr>`;
-  }
+  const html = calcLogRowsHtml(calcLogRows);
+  tb.innerHTML = html
+    || `<tr><td colspan="5" class="empty-row">${calcLogRows.length ? "這天沒有 ≥1 MB 的分鐘。" : "這天還沒有明細。"}</td></tr>`;
 }
 
 // ===== 今日程式排行 =====

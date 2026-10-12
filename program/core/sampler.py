@@ -13,6 +13,7 @@
 
 import collections
 import ipaddress
+import itertools
 import json
 import threading
 import time
@@ -43,6 +44,10 @@ OFFLINE = "__offline__"
 TRAFFIC_LOG_KEEP_DAYS = 31
 # 一次取樣「未歸因」超過這個量時,順手記下當時持有 UDP 通訊埠的程式當線索(QUIC 抓不到逐連線位元組)。
 UDP_HINT_BYTES = 20 * 1024 * 1024
+# 網頁「用量明細」表只用到這幾欄。記憶體裡的當日明細與 /api/traffic/log 回傳的都只留這些;
+# 完整的一筆(主要來源、內網/外網 payload 等除錯欄位)照樣寫進明細檔。整天 1440 筆全帶著
+# 來源清單時約佔 8 MB,只留這幾欄不到 1 MB。
+LOG_VIEW_KEYS = ("t", "nic_recv", "excl_recv", "cnt_recv", "cnt_sent")
 
 
 def traffic_log_path(date: str):
@@ -64,6 +69,10 @@ def read_traffic_log(date: str) -> list:
     except OSError:
         pass
     return rows
+
+
+def _log_view(rec: dict) -> dict:
+    return {k: rec[k] for k in LOG_VIEW_KEYS if k in rec}
 
 
 def traffic_log_dates() -> list:
@@ -193,8 +202,8 @@ class Monitor:
         self._last_surge_at = 0.0     # 最近一次記錄暴增的 monotonic 時刻(冷卻用)
         self._surge_seq = 0           # 事件流水號(前端據此判斷有沒有「新的」暴增)
         # 逐次取樣的計費明細:每筆 = 一次 NIC 結算怎麼分內/外網、算進額度多少、主要來源是誰。
-        # 由伺服器每次取樣寫進本機明細檔(traffic_<日期>.jsonl)並留一整天在記憶體,
-        # 不靠網頁開著 —— 網頁關著的時段、重開監控之後,明細都還在。
+        # 由伺服器每次取樣寫進本機明細檔(traffic_<日期>.jsonl)並留一整天在記憶體(只留網頁
+        # 用到的欄位,見 LOG_VIEW_KEYS),不靠網頁開著 —— 網頁關著的時段、重開監控之後,明細都還在。
         self.sample_log = collections.deque(maxlen=(86400 + interval - 1) // interval + 60)
         # 今日各程式累計(計入額度的外網量):name -> [recv, sent]。暴增偵測只抓「單分鐘突然變大」,
         # 抓不到一整天細水長流的背景流量(雲端同步、備份、更新);這張排行才看得出誰累積吃最多。
@@ -365,7 +374,7 @@ class Monitor:
             self._baseline(cur)
 
         # 今天已寫過的明細接回記憶體(重啟監控不丟今天前段),順手清掉過期的明細檔。
-        self.sample_log.extend(read_traffic_log(today))
+        self.sample_log.extend(_log_view(r) for r in read_traffic_log(today))
         _prune_traffic_logs()
         self.last_time = time.monotonic()
 
@@ -548,7 +557,7 @@ class Monitor:
         if unattr_recv + unattr_sent >= UDP_HINT_BYTES:
             entry["udp"] = _udp_owner_names()
         with self.lock:
-            self.sample_log.append(entry)
+            self.sample_log.append(_log_view(entry))
         try:
             TRAFFIC_LOG_DIR.mkdir(parents=True, exist_ok=True)
             with traffic_log_path(date).open("a", encoding="utf-8") as f:
@@ -698,12 +707,15 @@ class Monitor:
                 "top": self._attribute_surge(source_net, unattributed),
             })
 
-    def traffic_log(self, date: str) -> list:
-        """某天的逐分鐘明細(舊到新)。今天直接給記憶體那份。"""
+    def traffic_log(self, date: str, after: int = 0) -> tuple:
+        """某天的逐分鐘明細(舊到新),從第 after 筆起,外加那天的總筆數。今天直接給記憶體那份。
+        網頁看著今天時只拿它還沒有的那幾筆(after = 已有筆數),不用每分鐘重拉整天。"""
+        after = max(0, int(after))
         with self.lock:
             if date == self.date:
-                return list(self.sample_log)
-        return read_traffic_log(date)
+                return list(itertools.islice(self.sample_log, after, None)), len(self.sample_log)
+        rows = [_log_view(r) for r in read_traffic_log(date)]
+        return rows[after:], len(rows)
 
     def snapshot(self) -> dict:
         with self.lock:
