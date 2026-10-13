@@ -1,13 +1,14 @@
 """事件 + 系統設定 + 現在時間 → 各系統、各期、各步驟的狀態。純函式。
 
 一期 = KM 上的一列:每日系統是日期,期別系統是公告期數(VOL),不定期系統(英譯、
-清單外的作業)是那次執行的開始時刻。
+清單外的作業)是那次執行的開始時刻。系統設定的 reruns(補跑 job)另外放在 rerun_runs。
 
 期別不能靠時間推算:一次手動執行可能連跑好幾期(全文 2415 → 2414 → 2413 相隔 2 分鐘),
 也可能補跑很舊的期。所以先把同一系統的信切成「段」(group_runs),每段從帶 VOL 的那封信
 取得期別,段裡其他只抓了 metadata 的信沿用它。
 """
 
+import re
 from datetime import datetime, time, timedelta
 
 from xfer690.parser import TPE
@@ -18,6 +19,7 @@ VOL_TRACK = 31                  # TWA / TWB 只追蹤最近一個月
 ADHOC_DAYS = 7                  # 清單外的作業只看近 7 天
 BAD = ("fail", "unknown", "missing")
 _VOL_FN = {"vol_twa": vol_twa, "vol_twb": vol_twb}
+_JOB_SUFFIX = re.compile(r"-step\d+-.*$|-auto$")
 
 
 def _at(ev) -> datetime:
@@ -188,33 +190,41 @@ def _expected(system: dict, today, days: int, first_at) -> list:
             if first_at is None or _deadline(system, d.isoformat()) >= first_at]
 
 
-def _drop_retried(periods: dict) -> dict:
-    """清單外的作業:失敗的那次,之後重跑時失敗的步驟都成功了,就拿掉,只留成功的紀錄。"""
+def job_of(ev: dict) -> str:
+    """信屬於哪個作業:名稱去掉 -stepN-… / -auto(legal-backfill-step2-l1 → legal-backfill),沒名稱用代碼。"""
+    return _JOB_SUFFIX.sub("", ev.get("name") or "") or ev["code"]
+
+
+def _latest_per_job(system: dict, evs: list, now: datetime) -> dict:
+    """清單外的作業與補跑:同名的作業不論成功失敗,只留最新一次。
+
+    先依作業名稱分開再切段,連著跑的兩個作業(相隔不到 2 小時)才不會併成一次。"""
+    by_job = {}
+    for ev in evs:
+        by_job.setdefault(job_of(ev), []).append(ev)
     out = {}
-    for k, p in periods.items():
-        if p["state"] == "fail":
-            failed = [c for c, s in p["steps"].items() if s["state"] == "fail"]
-            if any(q["last_at"] > p["last_at"]
-                   and all((q["steps"].get(c) or {}).get("state") == "ok" for c in failed)
-                   for q in periods.values()):
-                continue
-        out[k] = p
+    for job, lst in by_job.items():
+        seg = group_runs(lst, {"steps": []})[-1]
+        out[job] = dict(_build_period(system, _run_period(seg, system), seg, now), job=job)
     return out
 
 
-def _system_status(system: dict, evs: list, now: datetime, days: int, first_at) -> dict:
+def _system_status(system: dict, evs: list, now: datetime, days: int, first_at, reruns=()) -> dict:
     today = now.date()
-    grouping = system if system.get("configured") else {"steps": []}
-    buckets = {}
-    for seg in group_runs(evs, grouping):
-        rp = _run_period(seg, system)
-        for ev in seg:
-            key = period_of(ev, system, rp)
-            if key is not None:
-                buckets.setdefault(key, []).append(ev)
-    periods = {k: _build_period(system, k, v, now) for k, v in buckets.items()}
-
     kind = system.get("kind")
+    if kind == "adhoc":
+        periods = _latest_per_job(system, evs, now)
+    else:
+        grouping = system if system.get("configured") else {"steps": []}
+        buckets = {}
+        for seg in group_runs(evs, grouping):
+            rp = _run_period(seg, system)
+            for ev in seg:
+                key = period_of(ev, system, rp)
+                if key is not None:
+                    buckets.setdefault(key, []).append(ev)
+        periods = {k: _build_period(system, k, v, now) for k, v in buckets.items()}
+
     if kind == "system":
         if system.get("period") == "date":
             cutoff = today - timedelta(days=days - 1)
@@ -236,9 +246,6 @@ def _system_status(system: dict, evs: list, now: datetime, days: int, first_at) 
                             "auto": {}, "tag": None, "sud_types": None, "first_at": None, "last_at": None,
                             "expected": True}
 
-    if kind == "adhoc":
-        periods = _drop_retried(periods)
-
     ordered = sorted(periods.values(), key=lambda p: (p["date"] or "", p["key"]), reverse=True)
     if kind == "maint":
         ordered = ordered[:1]
@@ -255,10 +262,17 @@ def _system_status(system: dict, evs: list, now: datetime, days: int, first_at) 
             names[ev["code"]] = ev["name"]
     groups = sorted({ev.get("group") for ev in evs if ev.get("group")})
     keep = ("id", "label", "schedule", "period", "expect_by", "configured", "kind",
-            "view", "type", "auto", "steps")
+            "view", "type", "auto", "steps", "reruns")
     out = {k: system.get(k) for k in keep}
     out.update(pairs=step_pairs(system.get("steps", [])), names=names, groups=groups,
                periods=ordered, alerts=alerts)
+    if kind == "system" and system.get("reruns"):
+        # 這個系統的補跑 job(設定的 reruns):跟清單外的作業一樣,近 7 天、同名只留最新一次
+        sub = _system_status({"id": system["id"], "kind": "adhoc", "configured": False, "auto": [],
+                              "steps": sorted(system["reruns"]), "period": "none"},
+                             list(reruns), now, days, first_at)
+        names.update(sub["names"])
+        out.update(rerun_runs=sub["periods"], alerts=alerts + sub["alerts"])
     return out
 
 
@@ -275,13 +289,18 @@ def _unlisted_system(code: str) -> dict:
 def build_status(events: list, systems: list, now: datetime, days: int) -> dict:
     now = now.astimezone(TPE)
     configured = [dict(s, configured=True, kind="system") for s in systems]
-    owner = {}
+    owner, rerun_of = {}, {}
     for s in configured:
         for c in list(s.get("auto", [])) + list(s.get("steps", [])):
             owner[c] = s
-    extra, buckets = {}, {}
+        for c in s.get("reruns", []):
+            rerun_of[c] = s["id"]
+    extra, buckets, reruns = {}, {}, {}
     known = [ev for ev in events if ev.get("code") and ev.get("at")]
     for ev in known:
+        if ev["code"] in rerun_of:
+            reruns.setdefault(rerun_of[ev["code"]], []).append(ev)
+            continue
         s = owner.get(ev["code"])
         if s is None:
             u = _unlisted_system(ev["code"])
@@ -291,7 +310,7 @@ def build_status(events: list, systems: list, now: datetime, days: int) -> dict:
         s["steps"] = sorted({ev["code"] for ev in buckets[s["id"]]})
 
     first_at = min((_at(ev) for ev in known), default=None)
-    out = [_system_status(s, buckets.get(s["id"], []), now, days, first_at)
+    out = [_system_status(s, buckets.get(s["id"], []), now, days, first_at, reruns.get(s["id"], []))
            for s in configured + sorted(extra.values(), key=lambda x: x["id"])]
     return {"date": now.date().isoformat(), "systems": out,
             "alerts": sum(s["alerts"] for s in out)}

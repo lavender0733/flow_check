@@ -56,6 +56,7 @@
      "schedule": "daily", "period": "date", "expect_by": "03:40"},
     {"id": "search", "label": "搜尋後續", "view": "daily", "auto": ["015100", "015200"],
      "steps": ["015101", "015102", "015103", "015104", "015105", "015106", "015107", "015108"],
+     "reruns": ["019103", "019104", "019105", "019106"],
      "schedule": "daily", "period": "date", "expect_by": "05:30"}
   ],
   "wiki": {

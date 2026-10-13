@@ -182,6 +182,7 @@ function x6alerts() {
   for (const s of x6systems("daily")) {
     const p = x6todayPeriod(s);
     if (p && X6_BAD.includes(p.state)) out.daily++;
+    out.daily += (s.rerun_runs || []).filter(r => r.state === "fail").length;
   }
   for (const v of ["twa", "twb"]) {
     const vols = x6periodCols(v).map(c => String(c.vol));
@@ -296,15 +297,42 @@ function x6renderDaily() {
     row.append(steps, x6el("div", "when", p.last_at ? `收信 ${x6hm(p.last_at)}` : `最晚 ${s.expect_by}`));
     const box2 = x6explain(s, p);
     if (box2) row.append(box2);
+    if ((s.rerun_runs || []).length) row.append(x6reruns(s));
     box.append(row);
   }
   const done = counts.ok + counts.nodata;
-  const bad = counts.fail + counts.missing + counts.unknown;
+  const bad = counts.fail + counts.missing + counts.unknown +
+              systems.reduce((n, s) => n + (s.rerun_runs || []).filter(r => r.state === "fail").length, 0);
   x6stats(x6$("x6-d-summary"), [
     ["完成", `${done} / ${systems.length}`, done === systems.length ? "good" : ""],
     ["需要處理", String(bad), bad ? "bad" : "good"],
     ["今天還沒跑到", String(counts.pending), ""],
   ]);
+}
+// 補跑(系統設定的 reruns):每個作業只有最新一次。成功的只放一顆點(名稱、時間在提示裡);
+// 失敗的另外寫名稱、時間,「失敗」連到 log
+function x6rerunLabel(job) {
+  return job.split("-").filter(w => w !== "search" && w !== "backfill").map(w => X6_WORD[w] || w).join(" ");
+}
+function x6adhocFail(s, p, job) {
+  const fc = Object.keys(p.steps || {}).sort().find(c => p.steps[c].state === "fail");
+  const ev = fc && p.steps[fc].event;
+  return fc ? { label: ((s.names || {})[fc] || fc).replace(job + "-", ""), ev, err: (ev && ev.error) || "", after: [] } : null;
+}
+function x6reruns(s) {
+  const box = x6el("div", "x6-reruns");
+  box.append(x6el("span", "k", "補跑"));
+  // 失敗的排前面
+  for (const p of s.rerun_runs.slice().sort((a, b) => (b.state === "fail") - (a.state === "fail"))) {
+    const it = x6el("span", "it");
+    const codes = Object.keys(p.steps || {}).sort().join(" · ");
+    it.append(x6dot(p.state, `補跑 ${x6rerunLabel(p.job)}(${codes})
+${X6_LABEL[p.state] || p.state},${x6mdhm(p.last_at)} 收到`));
+    if (p.state === "fail") it.append(x6el("span", null, x6rerunLabel(p.job)), x6el("span", "t", x6mdhm(p.last_at)),
+                                      x6stateEl("span", p.state, x6adhocFail(s, p, p.job)));
+    box.append(it);
+  }
+  return box;
 }
 // 每日資轉的無資料與該到沒到說明框(失敗不出框,錯誤訊息在「失敗」連結的提示裡)
 // 無資料只放原因(冒號前,不含 gs:// 路徑)和「查看 log」
@@ -516,7 +544,7 @@ function x6renderAdhoc() {
   const nFail = runs.filter(([, p]) => p.state === "fail").length;
   const mBad = maint.filter(s => (s.periods[0] || {}).state === "fail").length;
   x6stats(x6$("x6-a-summary"), [
-    ["不在清單的作業", String(runs.length), "", "次"],
+    ["不在清單的作業", String(runs.length), "", "項"],
     ["失敗", String(nFail), nFail ? "bad" : "good"],
     ["維運", `${maint.length} 項`, mBad ? "bad" : "good", mBad ? `${mBad} 項失敗` : "都正常"],
   ]);
@@ -525,18 +553,12 @@ function x6renderAdhoc() {
   if (!runs.length) box.append(x6el("p", "hint", "近 7 天沒有清單以外的作業。"));
   for (const [s, p] of runs) {
     const codes = Object.keys(p.steps || {}).sort();
-    const first = (s.names || {})[codes[0]] || "";
-    const job = first.replace(/-step\d+-.*$|-auto$/, "") || s.id;
+    const job = p.job || s.id;
     const row = x6el("div", "x6-sys wide");
     row.append(x6el("i", "x6-dot " + p.state));
     const nm = x6el("div", "name", job);
     nm.append(x6el("small", null, `${s.id} · ${(s.groups || []).join("、")}`));
-    let fail = null;
-    if (p.state === "fail") {
-      const fc = codes.find(c => p.steps[c].state === "fail");
-      const ev = fc && p.steps[fc].event;
-      fail = { label: ((s.names || {})[fc] || fc).replace(job + "-", ""), ev, err: (ev && ev.error) || "", after: [] };
-    }
+    const fail = p.state === "fail" ? x6adhocFail(s, p, job) : null;
     row.append(nm, x6stateEl("div", p.state, fail));
     const steps = x6el("div", "x6-steps");
     for (const c of codes) {
@@ -858,6 +880,7 @@ function x6renderConn() {
     const cat = sys.kind === "maint" ? "維運" : sys.kind === "adhoc" ? "其他作業(不在清單)" :
                 sys.view === "daily" ? `每日 · ${sys.label}` : `${(sys.view || "").toUpperCase()} · ${sys.label}`;
     for (const c of [...(sys.auto || []), ...(sys.steps || [])]) label[c] = cat;
+    for (const c of sys.reruns || []) label[c] = `${cat} · 補跑`;
   }
   if (!(s.recent || []).length) m.append(x6el("span", "hint", "還沒有信。"));
   for (const e of s.recent || []) {

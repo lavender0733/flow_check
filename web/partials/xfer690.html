@@ -105,6 +105,11 @@ html[data-theme="light"] .x6-lgd-pop { background: var(--hole-bg, #fff); }
 .x6-sys .name small { display: block; font-weight: 400; color: var(--muted, var(--dim)); font-size: 11px; font-family: var(--ff-mono, monospace); }
 .x6-state { font-size: 13px; color: var(--dim); }
 .x6-state.bad { color: var(--danger-ink, var(--danger)); font-weight: 600; }
+.x6-reruns { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 2px 16px; align-items: center; font-size: 12px; color: var(--muted, var(--dim)); }
+.x6-reruns .k { font-weight: 600; color: var(--dim); }
+.x6-reruns .it { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.x6-reruns .t { font-variant-numeric: tabular-nums; }
+.x6-reruns .x6-state { font-size: 12px; }
 .x6-sys .when { font-size: 12px; color: var(--muted, var(--dim)); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .x6-steps { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; min-width: 0; }
 .x6-step { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; color: var(--muted, var(--dim)); white-space: nowrap; }
@@ -289,14 +294,14 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
     <section class="card" id="x6-v-adhoc" hidden>
       <h2>其他作業 <span class="hint">近 7 天</span><span class="x6-lgd"><button type="button" class="x6-lgd-btn" aria-label="說明" aria-describedby="x6-lgd-adhoc"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r=".95" fill="currentColor"/><path d="M8 7.1v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
         <span class="x6-lgd-pop" id="x6-lgd-adhoc" role="tooltip">
-          <span>不在系統清單裡的作業:只顯示、不寫 KM</span>
+          <span>不在系統清單裡的作業:只顯示、不寫 KM。同名的作業只列最新一次</span>
         </span></span><button type="button" class="x6-sn x6-wikibtn" data-v="wiki">KM 登記<span class="x6-badge x6-info" hidden></span></button></h2>
       <div class="x6-summary" id="x6-a-summary"></div>
       <h3 style="margin:20px 0 0;font-size:14px">不在清單上的作業</h3>
       <div id="x6-adhoc"></div>
       <h3 style="margin:20px 0 0;font-size:14px">維運 99xxxx <span class="hint">只列最後一次,不算警示</span></h3>
       <div class="x6-mail" id="x6-maint"></div>
-      <p class="hint" style="margin:16px 0 0">某個作業之後要固定追蹤,就把它加進 data/config/xfer690.json 的系統清單:它會移到每日資轉或 TWA / TWB,開始判斷「該到沒到」,也可以設定要寫 KM 的欄。</p>
+      <p class="hint" style="margin:16px 0 0">某個作業之後要固定追蹤,就把它加進 data/config/xfer690.json 的系統清單:它會移到每日資轉或 TWA / TWB,開始判斷「該到沒到」,也可以設定要寫 KM 的欄。是某個系統的補跑,就加進那個系統的 reruns,會顯示在那一列底下的「補跑」。</p>
     </section>
 
     <section class="card" id="x6-v-wiki" hidden>
