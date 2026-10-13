@@ -182,7 +182,7 @@ function x6alerts() {
   for (const s of x6systems("daily")) {
     const p = x6todayPeriod(s);
     if (p && X6_BAD.includes(p.state)) out.daily++;
-    out.daily += (s.rerun_runs || []).filter(r => r.state === "fail").length;
+    out.daily += x6rerunItems(s).filter(r => r.state === "fail").length;
   }
   for (const v of ["twa", "twb"]) {
     const vols = x6periodCols(v).map(c => String(c.vol));
@@ -297,22 +297,31 @@ function x6renderDaily() {
     row.append(steps, x6el("div", "when", p.last_at ? `收信 ${x6hm(p.last_at)}` : `最晚 ${s.expect_by}`));
     const box2 = x6explain(s, p);
     if (box2) row.append(box2);
-    if ((s.rerun_runs || []).length) row.append(x6reruns(s));
+    if (x6rerunItems(s).length) row.append(x6reruns(s));
     box.append(row);
   }
   const done = counts.ok + counts.nodata;
   const bad = counts.fail + counts.missing + counts.unknown +
-              systems.reduce((n, s) => n + (s.rerun_runs || []).filter(r => r.state === "fail").length, 0);
+              systems.reduce((n, s) => n + x6rerunItems(s).filter(r => r.state === "fail").length, 0);
   x6stats(x6$("x6-d-summary"), [
     ["完成", `${done} / ${systems.length}`, done === systems.length ? "good" : ""],
     ["需要處理", String(bad), bad ? "bad" : "good"],
     ["今天還沒跑到", String(counts.pending), ""],
   ]);
 }
-// 補跑(系統設定的 reruns):每個作業只有最新一次。成功的只放一顆點(名稱、時間在提示裡);
-// 失敗的另外寫名稱、時間,「失敗」連到 log
+// 補跑:補跑 job(系統設定的 reruns,每個作業只有最新一次),以及近 7 天補跑前幾天資料的那幾天
+// (rerun_date)。成功的只放一顆點(名稱、時間在提示裡);失敗的另外寫名稱、時間,「失敗」連到 log
 function x6rerunLabel(job) {
   return job.split("-").filter(w => w !== "search" && w !== "backfill").map(w => X6_WORD[w] || w).join(" ");
+}
+function x6rerunItems(s) {
+  const today = x6Snap.status.date;
+  const d = new Date(today + "T00:00:00");
+  d.setDate(d.getDate() - 6);
+  const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const days = (s.periods || []).filter(p => p.rerun && p.key !== today && (p.last_at || "").slice(0, 10) >= from)
+    .map(p => Object.assign({}, p, { job: `${x6md(p.key)} 資料`, day: true }));
+  return [...(s.rerun_runs || []), ...days];
 }
 function x6adhocFail(s, p, job) {
   const fc = Object.keys(p.steps || {}).sort().find(c => p.steps[c].state === "fail");
@@ -323,13 +332,14 @@ function x6reruns(s) {
   const box = x6el("div", "x6-reruns");
   box.append(x6el("span", "k", "補跑"));
   // 失敗的排前面
-  for (const p of s.rerun_runs.slice().sort((a, b) => (b.state === "fail") - (a.state === "fail"))) {
+  for (const p of x6rerunItems(s).sort((a, b) => (b.state === "fail") - (a.state === "fail"))) {
     const it = x6el("span", "it");
     const codes = Object.keys(p.steps || {}).sort().join(" · ");
-    it.append(x6dot(p.state, `補跑 ${x6rerunLabel(p.job)}(${codes})
+    const label = p.day ? p.job : x6rerunLabel(p.job);
+    it.append(x6dot(p.state, `補跑 ${label}(${codes})
 ${X6_LABEL[p.state] || p.state},${x6mdhm(p.last_at)} 收到`));
-    if (p.state === "fail") it.append(x6el("span", null, x6rerunLabel(p.job)), x6el("span", "t", x6mdhm(p.last_at)),
-                                      x6stateEl("span", p.state, x6adhocFail(s, p, p.job)));
+    if (p.state === "fail") it.append(x6el("span", null, label), x6el("span", "t", x6mdhm(p.last_at)),
+                                      x6stateEl("span", p.state, p.day ? x6failInfo(s, p) : x6adhocFail(s, p, p.job)));
     box.append(it);
   }
   return box;

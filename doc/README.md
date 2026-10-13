@@ -111,6 +111,8 @@ Rundeck 在內網連不到,所以只靠信。
   - **每日資轉**:今天每個每日系統一列,步驟一顆點(步驟和它的 `-check` 併成一顆,兩個都成功才算綠)。
     系統有設定 `reruns` 的(目前是搜尋後續),那一列底下多一行「補跑」:近 7 天每個補跑作業只看最新一次,
     成功的一顆綠點,失敗的寫出作業名稱和「失敗」log 連結,算在每日資轉的警示。
+    設了 `rerun_date` 的(目前是技術報告)補跑前幾天的資料時,也列在「補跑」,並算回資料那一天;
+    KM 上那天原本填的「-」(`nodata_value`)補跑成功後改成 v,其他人填的值照樣不覆寫。
   - **TWA 公開 / TWB 公告**:資料種類(全文、書目、雜項、英譯)× 公告期數。只追蹤最近一個月(TWA 2 期、TWB 3 期);
     近一個月內補跑的舊期列在「更早的期」。點一格看那期的細節。
   - **其他作業**:信裡出現、但不在系統清單裡的 job。手動作業依作業名稱(去掉 `-stepN-…`)一個作業一列,
@@ -179,7 +181,7 @@ Rundeck 在內網連不到,所以只靠信。
 | `gmail_query` | Gmail 搜尋條件 |
 | `status_map` / `nodata_re` | 主旨狀態字對應 / 判定「無資料」的錯誤訊息 |
 | `max_raw_kb` | 單封超過這個大小就不下載全文 |
-| `systems[]` | 系統清單:`id`、`label`、`view`(`daily` / `twa` / `twb`)、`type`(`full` / `biblio` / `sud` / `eng`)、`auto`(母 job 代碼)、`steps`(步驟代碼,`-check` 是下一號)、`reruns`(選填,這個系統的補跑 job 代碼,顯示在該列的「補跑」)、`schedule`(`daily` / `{"monthdays": [...]}` / `manual`)、`period`(`date` / `vol_twa` / `vol_twb` / `vol` / `none`)、`expect_by`(最晚幾點該收到信) |
+| `systems[]` | 系統清單:`id`、`label`、`view`(`daily` / `twa` / `twb`)、`type`(`full` / `biblio` / `sud` / `eng`)、`auto`(母 job 代碼)、`steps`(步驟代碼,`-check` 是下一號)、`reruns`(選填,補跑 job 的代碼前綴,例如 `0191`,顯示在該列的「補跑」)、`rerun_date`(選填,每日系統 log 裡資料日期的 key,例如 `VOL_DATE`;當天第二次以後、或過了 `expect_by` 才跑的執行會下載 log 看補的是哪天)、`schedule`(`daily` / `{"monthdays": [...]}` / `manual`)、`period`(`date` / `vol_twa` / `vol_twb` / `vol` / `none`)、`expect_by`(最晚幾點該收到信) |
 | `wiki.enabled` / `wiki.dry_run` | 開放登入 / 只算不寫 |
 | `wiki.base` | 子頁所在的路徑 |
 | `s690_enabled` | 抓完信後是否查 s690(預設 true;0 筆 / 查不到案件的暫定結果 24 小時內每次抓信再查) |

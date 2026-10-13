@@ -171,6 +171,8 @@ def plan_fills(status: dict, target: dict, wiki_cfg: dict) -> dict:
                                        else str(wiki_cfg.get("sud_ok_value", "成功")))
         if cells:
             out[key] = {"cells": cells, "new": _new_row(target.get("new_row"), p.get("date"), key)}
+            if p.get("rerun") and not nodata_day:
+                out[key]["replace"] = [nodata_value]     # 原本無資料填了「-」,補跑成功改成 v
     return out
 
 

@@ -3,6 +3,9 @@
 一期 = KM 上的一列:每日系統是日期,期別系統是公告期數(VOL),不定期系統(英譯、
 清單外的作業)是那次執行的開始時刻。系統設定的 reruns(補跑 job)另外放在 rerun_runs。
 
+每日系統設了 rerun_date(log 裡資料日期的 key,例如技術報告的 VOL_DATE)時,一次執行的資料
+日期跟執行日期不同,就是補跑前幾天:算回資料日期那一天,那天標 rerun。
+
 期別不能靠時間推算:一次手動執行可能連跑好幾期(全文 2415 → 2414 → 2413 相隔 2 分鐘),
 也可能補跑很舊的期。所以先把同一系統的信切成「段」(group_runs),每段從帶 VOL 的那封信
 取得期別,段裡其他只抓了 metadata 的信沿用它。
@@ -30,6 +33,32 @@ def _is_vol(system) -> bool:
     return str(system.get("period", "")).startswith("vol")
 
 
+def data_date(ev: dict, key: str):
+    """log 裡的資料日期 → YYYY-MM-DD。VOL_DATE 是民國年(1151009),其他是西元(20261009)。"""
+    v = str((ev.get("data") or {}).get(key) or "")[:8]
+    if not v.isdigit() or len(v) < 7:
+        return None
+    y, md = (int(v[:3]) + 1911, v[3:7]) if len(v) == 7 else (int(v[:4]), v[4:8])
+    try:
+        return datetime.strptime(f"{y}{md}", "%Y%m%d").date().isoformat()
+    except ValueError:
+        return None
+
+
+def date_log_runs(events: list, system: dict) -> list:
+    """要下載 log 看資料日期的那幾次執行:系統設了 rerun_date,而且是當天第二次以後、或過了
+    expect_by 才開始跑的(排程那次就是當天的資料,不用下載)。"""
+    if system.get("period") != "date" or not system.get("rerun_date"):
+        return []
+    out, seen = [], set()
+    for seg in group_runs(events, system):
+        day = _at(seg[0]).date().isoformat()
+        if day in seen or _at(seg[0]) > _deadline(system, day):
+            out.append(seg)
+        seen.add(day)
+    return out
+
+
 def period_of(event: dict, system: dict, run_period):
     """這封信屬於哪一期。期別系統以信裡的 VOL 為準,沒有就沿用同一段已知的期別。
 
@@ -39,7 +68,7 @@ def period_of(event: dict, system: dict, run_period):
     """
     period = system.get("period")
     if period == "date":
-        return run_period or _at(event).date().isoformat()
+        return run_period or _at(event).date().isoformat()     # 補跑的資料日期在 _run_period
     if _is_vol(system):
         v = str((event.get("data") or {}).get("VOL") or "")
         return str(int(v)) if v.isdigit() else run_period
@@ -62,6 +91,11 @@ def group_runs(events: list, system: dict) -> list:
 def _run_period(seg: list, system: dict):
     start = _at(seg[0])
     if system.get("period") == "date":
+        key = system.get("rerun_date")
+        for ev in seg if key else ():
+            d = data_date(ev, key)
+            if d:
+                return d
         return start.date().isoformat()
     if _is_vol(system):
         for ev in seg:
@@ -216,14 +250,18 @@ def _system_status(system: dict, evs: list, now: datetime, days: int, first_at, 
         periods = _latest_per_job(system, evs, now)
     else:
         grouping = system if system.get("configured") else {"steps": []}
-        buckets = {}
+        buckets, reran = {}, set()
         for seg in group_runs(evs, grouping):
             rp = _run_period(seg, system)
+            if system.get("period") == "date" and rp != _at(seg[0]).date().isoformat():
+                reran.add(rp)
             for ev in seg:
                 key = period_of(ev, system, rp)
                 if key is not None:
                     buckets.setdefault(key, []).append(ev)
         periods = {k: _build_period(system, k, v, now) for k, v in buckets.items()}
+        for k in reran:
+            periods[k]["rerun"] = True
 
     if kind == "system":
         if system.get("period") == "date":
@@ -269,7 +307,7 @@ def _system_status(system: dict, evs: list, now: datetime, days: int, first_at, 
     if kind == "system" and system.get("reruns"):
         # 這個系統的補跑 job(設定的 reruns):跟清單外的作業一樣,近 7 天、同名只留最新一次
         sub = _system_status({"id": system["id"], "kind": "adhoc", "configured": False, "auto": [],
-                              "steps": sorted(system["reruns"]), "period": "none"},
+                              "steps": sorted({ev["code"] for ev in reruns}), "period": "none"},
                              list(reruns), now, days, first_at)
         names.update(sub["names"])
         out.update(rerun_runs=sub["periods"], alerts=alerts + sub["alerts"])
@@ -293,13 +331,15 @@ def build_status(events: list, systems: list, now: datetime, days: int) -> dict:
     for s in configured:
         for c in list(s.get("auto", [])) + list(s.get("steps", [])):
             owner[c] = s
-        for c in s.get("reruns", []):
-            rerun_of[c] = s["id"]
+        for prefix in s.get("reruns", []):
+            rerun_of[prefix] = s["id"]
     extra, buckets, reruns = {}, {}, {}
     known = [ev for ev in events if ev.get("code") and ev.get("at")]
     for ev in known:
-        if ev["code"] in rerun_of:
-            reruns.setdefault(rerun_of[ev["code"]], []).append(ev)
+        # reruns 是代碼前綴:"0191" = 0191xx 整組
+        sid = next((v for k, v in rerun_of.items() if ev["code"].startswith(k)), None)
+        if sid and ev["code"] not in owner:
+            reruns.setdefault(sid, []).append(ev)
             continue
         s = owner.get(ev["code"])
         if s is None:

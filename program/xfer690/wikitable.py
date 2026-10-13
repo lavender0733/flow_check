@@ -140,7 +140,9 @@ def _key_of(line: str, key_col: int):
 
 
 def apply_fills(content: str, target: dict, rows: dict, placeholder_re: str = "") -> tuple:
-    """依 rows({列鍵: {"cells": {欄: 值}, "new": {欄: 值}}})填格。回傳 (新內容, report)。"""
+    """依 rows({列鍵: {"cells": {欄: 值}, "new": {欄: 值}, "replace": [值]}})填格。回傳 (新內容, report)。
+
+    只填空格(或佔位字);replace 裡的值也可以換掉(每日系統補跑成功:原本的「-」改成 v)。"""
     lines = content.splitlines(keepends=True)
     table = locate(lines, target)
     _check_labels(table, target)
@@ -154,7 +156,7 @@ def apply_fills(content: str, target: dict, rows: dict, placeholder_re: str = ""
         if k:
             by_key.setdefault(k, i)
 
-    def fill(i, key, cells, detail):
+    def fill(i, key, cells, detail, replace=()):
         for col, val in sorted(((int(c), str(v)) for c, v in cells.items())):
             spans = split_row(lines[i])
             if col >= len(spans):
@@ -164,7 +166,7 @@ def apply_fills(content: str, target: dict, rows: dict, placeholder_re: str = ""
             cur = spans[col].strip()
             if cur == val:
                 detail[col] = {"value": val, "existing": cur, "state": "same"}
-            elif cur == "" or (ph and ph.search(cur)):
+            elif cur == "" or (ph and ph.search(cur)) or cur in replace:
                 lines[i] = _set_cell(lines[i], col, val)
                 report["filled"] += 1
                 detail[col] = {"value": val, "existing": cur, "state": "fill"}
@@ -177,7 +179,7 @@ def apply_fills(content: str, target: dict, rows: dict, placeholder_re: str = ""
         key = str(key)
         if key in by_key:
             detail = {}
-            fill(by_key[key], key, spec.get("cells") or {}, detail)
+            fill(by_key[key], key, spec.get("cells") or {}, detail, spec.get("replace") or ())
             report["rows"].append({"key": key, "new": False, "cells": detail,
                                    "row": [c.strip() for c in split_row(lines[by_key[key]])]})
 

@@ -18,7 +18,7 @@ from common.jsonio import read_json, write_json_atomic
 from core.paths import (GMAIL_CREDENTIALS_PATH, GMAIL_TOKEN_PATH, XFER690_CACHE_PATH,
                         XFER690_CONFIG_PATH, XFER690_SECRETS_PATH)
 from xfer690.parser import TPE, log_text, parse_raw, parse_subject, sud_types
-from xfer690.status import build_status, group_runs
+from xfer690.status import build_status, date_log_runs, group_runs
 
 # 預設值。systems / tables 留空:實際的系統清單在 data/config/xfer690.json(進版控)。
 DEFAULT_XFER_CONFIG = {
@@ -204,7 +204,21 @@ class Xfer690Service:
                     continue
                 if first["id"] in new:
                     want.add(first["id"])
-        return want
+        return want | {e["id"] for e in self._date_log_wanted(new)}
+
+    def _date_log_wanted(self, new: dict) -> list:
+        """每日系統的補跑(rerun_date):每次執行要一封有 log 的信,才知道補的是哪一天。
+        之前抓過、還沒下載 log 的信(這個設定加上去以前收到的)也包含在內,補下載一次。"""
+        out = []
+        for s in self.cfg["systems"]:
+            codes = set(s.get("auto", [])) | set(s.get("steps", []))
+            evs = [e for e in list(self.events.values()) + list(new.values())
+                   if e.get("code") in codes and e.get("at")]
+            for seg in date_log_runs(evs, s):
+                if any(e.get("raw") for e in seg):
+                    continue
+                out.append(next((e for e in seg if e["code"] in s.get("steps", [])), seg[0]))
+        return out
 
     def poll(self, kind: str = "auto") -> dict:
         with self._lock:
@@ -236,7 +250,7 @@ class Xfer690Service:
                     new[mid] = ev
                 limit = int(self.cfg["max_raw_kb"]) * 1024
                 for mid in sorted(self._raw_wanted(new)):
-                    ev = new[mid]
+                    ev = new.get(mid) or self.events[mid]
                     if not ev.get("code") or ev["size"] > limit:
                         continue
                     raw = gmail.fetch_raw(mid)
