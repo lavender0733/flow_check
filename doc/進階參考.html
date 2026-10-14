@@ -100,7 +100,77 @@
 <p class="backlink"><a href="../README.html">← 回說明首頁</a></p>
 
 <h1>進階參考</h1>
-<p>本頁提供設定速查與 HTTP API。完整使用者說明以 <a href="README.md">doc/README.md</a> 為準；開發架構與規範見 <a href="../.claude/CLAUDE.md">.claude/CLAUDE.md</a>。</p>
+<p>操作與功能見<a href="../README.html">說明首頁</a>;本頁放 690 的規則、設定、檔案位置與 HTTP API。開發架構與規範見 <a href="../.claude/CLAUDE.md">.claude/CLAUDE.md</a>。</p>
+
+<blockquote>
+  <p>改完 <code>program/core/</code>、<code>program/common/</code> 或 <code>program/xfer690/</code> 下的任何 <code>.py</code> 或 <code>config.json</code> 後需<strong>重新啟動</strong>才生效(網頁上方會自動跳「需重啟」橫幅提醒);改 <code>web/</code> 下的網頁檔重整即可。<code>xfer690.json</code> 每次抓信都會重讀。</p>
+</blockquote>
+
+<h2>690 資轉監控規則</h2>
+
+<p>s690 的 Rundeck 每跑一個步驟就寄一封通知信(主旨像 <code>🔴【FAILURE】[s690] 012001-techreport-pdf-step1-raw | 01-tw/20-techreport-pdf</code>)。Rundeck 在內網連不到,所以只靠信。</p>
+
+<h3>連線與憑證</h3>
+<ul>
+  <li>Gmail 走公開的 Google 端點,不用開 VPN、不用換網路。授權分頁被關掉就按「重新開啟授權頁」;已授權時卡片顯示<strong>登出</strong>(刪掉 token、停止抓信)。</li>
+  <li>用 <code>690授權.bat</code> 授權完成後會印出近 30 天每個 job 的統計表(封數、成功失敗、時刻),拿來核對系統清單。</li>
+  <li>KM 只開 Innovue OAuth 登入,程式沒辦法自己登入,所以要貼瀏覽器的 <code>jwt</code>。伺服器先跟 KM 確認有效才收下,存進 <code>data/config/xfer690_secrets.json</code> 的 <code>wiki_jwt</code>;KM 續期發的新憑證會自動寫回,失效時清掉、卡片要你重貼。</li>
+  <li>不開 VPN 也能用 KM:那時 KM 走 Cloudflare,它擋 Python 預設的 User-Agent,程式送自己的 <code>flow-check-xfer690/1</code>。被閘道擋下(HTTP 401/403)算網路問題,不會清掉 <code>wiki_jwt</code>。</li>
+  <li>三個機密檔(<code>gmail_credentials.json</code>、<code>gmail_token_&lt;機器&gt;.json</code>、<code>xfer690_secrets.json</code>)都不在版控內,也不會同步到 TIPO flow check。KM 登入憑證網頁送出後不會再回傳或顯示。</li>
+</ul>
+
+<h3>畫面細節</h3>
+<ul>
+  <li><strong>每日資轉</strong>:磚裡有狀態、收信或最晚時間,以及步驟一顆點(步驟和它的 <code>-check</code> 併成一顆,兩個都成功才算綠)。系統有設定 <code>reruns</code> 的(目前是搜尋後續),磚塊底下多一行「補跑」:近 7 天每個補跑作業只看最新一次,成功的一顆綠點,失敗的寫出作業名稱和「失敗」log 連結,算在每日資轉的警示。設了 <code>rerun_date</code> 的(目前是技術報告)補跑前幾天的資料時,也列在「補跑」,並算回資料那一天;KM 上那天原本填的「-」(<code>nodata_value</code>)補跑成功後改成 v,其他人填的值照樣不覆寫。</li>
+  <li><strong>TWA 公開 / TWB 公告</strong>:只追蹤最近一個月(TWA 2 期、TWB 3 期);近一個月內補跑的舊期列在「更早的期」。</li>
+  <li><strong>其他作業</strong>:手動作業依作業名稱(去掉 <code>-stepN-…</code>)一個作業一塊磚(新的在前,失敗的整塊淡紅底),同名的不論成功或失敗只列最新一次(失敗會算警示);維運 99xxxx 只列最後一次。</li>
+  <li>「失敗」連結打開那封信附的 <code>.log</code>,自動捲到 <code>error:</code> 那一行(伺服器當下抓,不存檔)。主頁籤的 ⚠ = 有轉置警示(690資轉)或連線問題(信件與連線)。</li>
+</ul>
+
+<h3>狀態的意思</h3>
+<table>
+  <thead><tr><th>狀態</th><th>意思</th></tr></thead>
+  <tbody>
+    <tr><td>成功</td><td>步驟與它的 check 都成功</td></tr>
+    <tr><td>無資料</td><td>step1-raw 失敗,原因是 <code>GCS 資料夾無檔案</code>。<strong>每日系統</strong>不算警示,KM 那幾格填 <code>-</code>(<code>wiki.nodata_value</code>),不打 v;<strong>期別系統</strong>代表那期檔案還沒到,算警示、不寫 KM</td></tr>
+    <tr><td>失敗</td><td>有失敗信。之後的步驟顯示「沒有執行」</td></tr>
+    <tr><td>該到沒到</td><td>過了 <code>expect_by</code> 還沒收到信;或一次執行收到幾步之後就沒信了(期別系統以最後一封信後 2 小時為期限)</td></tr>
+    <tr><td>還沒跑到</td><td>還沒到 <code>expect_by</code></td></tr>
+    <tr><td>無法判定</td><td>主旨的狀態字不是 SUCCESS / FAILURE</td></tr>
+  </tbody>
+</table>
+<p>同一期跑了好幾次(例如前一天無資料、隔天重跑成功)以最後一次為準。<strong>不定期</strong>的系統(全文、英譯)沒有排程,不會報「該到沒到」。</p>
+
+<h3>期別怎麼對應到 KM 的列</h3>
+<ul>
+  <li>每日系統:一天一列,列鍵是執行日期(<code>2026/10/01</code>)。</li>
+  <li>書目、雜項、全文:列鍵是<strong>公告期數</strong>,取自 log 的 <code>RUNDECK:DATA:VOL</code>(手動補跑舊期也會歸到正確的期,不看收信日期)。期數與日期互換:TWB 每月 1、11、21 日,<code>VOL = (年−1973)×100 + (月−1)×3 + 第幾旬</code>;TWA 每月 1、16 日,<code>VOL = (年−2002)×100 + (月−1)×2 + 上/下半月</code>。</li>
+  <li>英譯(TW英譯En 頁):列鍵是<strong>期數區間</strong>(<code>5325 ~ 5327</code>),取自 log 的 <code>FILE_I</code>(公告)/ <code>FILE</code>(公開)檔名 <code>TW__I_20260901_5325_to_20260921_5327_complete</code>。同一個區間重跑好幾次是同一列,每個步驟以最後一次為準。無資料(那批檔案還沒到)跟期別系統一樣算警示、不寫 KM。</li>
+  <li>TW影像GCS 頁:列跟書目的期數走(書目有收到信的期),說明書 / 代表圖由 s690 抽查(見下面)。</li>
+  <li>一次手動執行可能連跑好幾期,所以同一系統的信以「step1-raw 那封」或「跟上一封相隔超過 2 小時」切段,段裡其他信沿用該段的期數。</li>
+</ul>
+
+<h3>寫 KM 的規則</h3>
+<ul>
+  <li><strong>只填空格</strong>:格子已經有值就不動(<code>2026xxxx</code> 這種佔位字當空格);值不同在預覽裡用波浪底線標出。</li>
+  <li>打 <code>v</code> 的格:那一步<strong>和它的 check</strong> 都成功才打。</li>
+  <li>筆數欄(書目頁的 Biblio、Gazette SUD):填 L1 那封信 log 的 <code>writes</code>,而且<strong>整期每一步都成功</strong>才填。</li>
+  <li>缺列就照列鍵順序插入;列鍵比表格最舊的一列還舊時不插入。</li>
+  <li>目標列以外的每一行逐位元組不變;欄名對不上時整張表不寫;內容沒變不送更新;一頁失敗不影響其他頁。</li>
+  <li><strong>手動修改</strong>:KM 登記頁點任一格可改(Enter 存、Esc 取消),寫入時一起送出。這是唯一會覆寫非空值的路徑,而且伺服器會先確認頁面上那格還是你看到的值,不是就整筆不寫、列為衝突。</li>
+  <li><code>xfer690.json</code> 的 <code>wiki.dry_run</code> 是 <code>true</code> 時,按「寫入 KM」只算結果、不真的寫。</li>
+  <li><strong>s690 查詢</strong>(抓完信後在背景查,整期成功才查;結果存在快取,同一期不重查,重跑過才重查):
+    <ul>
+      <li>690查詢筆數:進階檢索、案件類型 TWA / TWB、<code>PD:[那期日期 TO 那期日期]</code> 的總筆數。跟 Biblio 不同時照填,預覽標波浪線。</li>
+      <li>SUD抽測案例 / 備註:從雜項 log 取這期有的雜項類型(不含公告目錄、發明公開目錄),<code>MS:(類型…) AND MS:&lt;卷&gt; AND MS:&lt;期&gt;</code> 取第一筆「雜項真的刊在這一期」的案件(最多看 120 筆)。讓與比對書目的目前專利權人、消滅比對案件狀態,其他類型只確認查得到。正確 → 案例填 <code>TW</code> + 公開 / 公告號、備註填 <code>成功</code>;不符或找不到 → 兩格都不填,預覽的 tooltip 寫原因。</li>
+      <li>TW影像GCS:<code>OGV:&lt;卷&gt; AND OGN:&lt;期&gt;</code> 的第一筆,有說明書 / 代表圖就打 <code>v</code>;「抽查案號」填那一筆的 <code>TW</code> + 公開 / 公告號(說明書 / 代表圖沒有也照填)。</li>
+      <li>s690 連不上不影響抓信與其他欄;<code>s690_enabled</code> 可以關掉。</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>流量預算</h3>
+<p>抓信一律先只抓主旨與時間(每封約 2 KB),只有三種信才下載全文:失敗信、期別系統與英譯每段的第一封(帶出期數)、要填筆數的步驟。單封超過 <code>max_raw_kb</code>(預設 512 KB)也不下載。實測:第一次抓 45 天 495 封共 2.75 MB,之後每輪幾 KB。</p>
 
 <h2>設定速查</h2>
 
@@ -112,20 +182,20 @@
     <tr><td><code>port</code></td><td>網頁埠(預設 8765)</td></tr>
     <tr><td><code>sample_interval_sec</code></td><td>NIC 計費取樣間隔秒數(預設 60)</td></tr>
     <tr><td><code>lan_probe_interval_sec</code></td><td>內網 ESTATS 高頻探測間隔秒數(預設 1;越短越接得住短命內網連線)</td></tr>
-    <tr><td><code>exclude_nics</code></td><td>計流量時要略過的網卡關鍵字(預設 <code>["Loopback","isatap","Teredo"]</code>,排除回環/隧道介面)</td></tr>
-    <tr><td><code>lan_ranges</code></td><td>★ 視為內網、要排除的網段(預設 <code>10.0.0.0/8</code> / <code>172.16.0.0/12</code> / <code>192.168.0.0/16</code> / <code>169.254.0.0/16</code>。<code>10.0.0.0/8</code> 是刻意涵蓋所有 <code>10.x</code> 內網,見 7.0.2 的修正)</td></tr>
+    <tr><td><code>exclude_nics</code></td><td>計流量時要略過的網卡關鍵字(預設 <code>["Loopback","isatap","Teredo"]</code>)</td></tr>
+    <tr><td><code>lan_ranges</code></td><td><span class="star">★</span> 視為內網、要排除的網段(預設 <code>10.0.0.0/8</code> / <code>172.16.0.0/12</code> / <code>192.168.0.0/16</code> / <code>169.254.0.0/16</code>。<code>10.0.0.0/8</code> 是刻意涵蓋所有 <code>10.x</code> 內網 —— 7.0.2 以前只排除 <code>10.75/16</code>,其他 <code>10.x</code> 內網漏排除、單日一度衝到 ~6GB)</td></tr>
     <tr><td><code>count_ranges</code></td><td>強制計入白名單,優先於 <code>lan_ranges</code>(預設空清單)。落在 <code>lan_ranges</code> 內、但實際走對外線路要算進額度的網段寫在這裡</td></tr>
     <tr><td><code>local_ranges</code></td><td>本機(loopback)網段(預設 <code>127.0.0.0/8</code>、<code>::1/128</code>):不經網卡、不吃額度,整筆不列入計算與歸因</td></tr>
-    <tr><td><code>speed_floor_mbps</code></td><td>限速偵測:低於此(Mbps)判定「疑似被限速」(預設 5,可在頁面臨時覆蓋)</td></tr>
+    <tr><td><code>speed_floor_mbps</code></td><td>限速偵測:低於此(Mbps)判定「疑似被限速」(預設 5;頁面可臨時覆蓋)</td></tr>
     <tr><td><code>peak_window_min</code></td><td>被動「最高下載速率」的觀測視窗分鐘數(預設 10)</td></tr>
-    <tr><td><code>speedtest_url</code></td><td>主動測速來源(預設 Cloudflare;被擋可換)</td></tr>
+    <tr><td><code>speedtest_url</code></td><td>主動測速來源(預設 Cloudflare <code>https://speed.cloudflare.com/__down</code>;被擋可換)</td></tr>
     <tr><td><code>speedtest_bytes</code> / <code>speedtest_timeout</code></td><td>主動測速最多抓的位元組(預設 8MB)/ 最長秒數(預設 6)</td></tr>
-    <tr><td><code>report_apps</code></td><td>流量報表要分開統計的程式(選填)。格式 <code>{"類別": ["程序檔名.exe", …]}</code>,預設 <code>ssh</code> → <code>ssh.exe</code>、<code>vscode</code> → <code>code.exe</code>、<code>claude</code> → <code>claude.exe</code>。可更換這三類的程序檔名；目前圖表只單獨顯示這三類，新增類別不會自動增加圖表系列</td></tr>
+    <tr><td><code>report_apps</code></td><td>分類 → 程序檔名清單(選填):<code>{"類別": ["程序檔名.exe", …]}</code>,預設 <code>ssh</code> → <code>ssh.exe</code>、<code>vscode</code> → <code>code.exe</code>、<code>claude</code> → <code>claude.exe</code>。目前圖表只單獨顯示 <code>ssh</code>、<code>claude</code>、<code>vscode</code>;可更換檔名,新增類別不會自動增加圖表系列。只算 ESTATS 對得到的外網 TCP 連線;「未歸因」大代表各程式的量偏低</td></tr>
   </tbody>
 </table>
 
 <blockquote>
-  <p><strong>流量暴增預警 / 用量通知 / 外觀的設定不放這裡</strong>:<code>surge_enabled</code> / <code>surge_min_mb</code> / <code>surge_factor</code> / <code>surge_window_min</code> / <code>surge_cooldown_sec</code>、<code>notify_enabled</code> / <code>notify_threshold</code> 與 <code>theme</code> 以本機偏好 <code>data/machines/prefs_&lt;機器&gt;.json</code> 為權威來源(各台獨立、頁面即時切換),<code>config.json</code> 未設時走程式內建預設(暴增 50MB、4×、視窗 30 分、冷卻 300 秒;通知門檻 80%;外觀深色)。另有 <code>debug_lan</code>(預設 <code>false</code>):開啟後每次取樣把內網扣除明細印到主控台。</p>
+  <p><strong>流量暴增預警 / 用量通知 / 外觀不放這裡</strong>:<code>surge_enabled</code> / <code>surge_min_mb</code> / <code>surge_factor</code> / <code>surge_window_min</code> / <code>surge_cooldown_sec</code>、<code>notify_enabled</code> / <code>notify_threshold</code> 與 <code>theme</code> 以<strong>本機偏好</strong> <code>data/machines/prefs_&lt;機器&gt;.json</code> 為權威來源(各台獨立、頁面即時切換);<code>config.json</code> 未設時走程式內建預設(暴增門檻 50MB、4×、視窗 30 分、冷卻 300 秒;通知門檻 80%;外觀深色)。另有 <code>debug_lan</code>(預設 <code>false</code>):開啟後每次取樣把內網扣除明細印到主控台。</p>
 </blockquote>
 
 <p><strong><code>data/config/xfer690.json</code>(690 資轉監控,進版控)</strong></p>
@@ -147,11 +217,35 @@
   </tbody>
 </table>
 
-<p><strong>690 的機密檔</strong>(都不在版控內、不同步到 TIPO flow check):<code>data/config/gmail_credentials.json</code>(GCP OAuth 用戶端)、<code>data/machines/gmail_token_&lt;機器&gt;.json</code>(網頁或 <code>690授權.bat</code> 授權後產生)、<code>data/config/xfer690_secrets.json</code>(KM 登入憑證 <code>wiki_jwt</code>)。JWT 確認有效才存檔，續期與失效時同步更新，重開不用重貼；不會回傳或顯示在網頁。</p>
+<p><strong>KM 表格改結構時</strong>:欄位順序變了 → 改 <code>cols</code> 的欄號與 <code>label</code>(欄名對不上時程式會整張表不寫,在預覽裡顯示原因);表格前的標題改了 → 改 <code>after</code>;新增系統 → 在 <code>systems</code> 加一筆,要登記的話在 <code>tables</code> 加對應的 target。一個不在清單上的 job 想固定追蹤 → 加進 <code>systems</code>,它就從「其他作業」移到每日資轉或 TWA / TWB;是某個系統的補跑 → 加進那個系統的 <code>reruns</code>,就從「其他作業」移到那一列底下的「補跑」。</p>
 
-<blockquote>
-  <p>改完 <code>config.json</code> 或 <code>program/core/</code>、<code>program/common/</code>、<code>program/xfer690/</code> 下的任何 <code>.py</code> 後需<strong>重新啟動</strong>才生效(網頁上方會自動跳「需重啟」橫幅提醒);改 <code>web/</code> 下的網頁檔重整即可。<code>xfer690.json</code> 每輪抓信都會重讀。</p>
-</blockquote>
+<h2>使用者會用到的檔案</h2>
+
+<pre><code>flow_check/
+├─ README.html                       說明首頁
+├─ doc/
+│  ├─ 進階參考.html                   690 規則、設定速查、HTTP API
+│  ├─ 版本紀錄.html                   更新紀錄
+│  └─ TIPO flow check README.md       TIPO 使用者說明來源
+├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉
+├─ diag_lan.bat                       內網排除診斷
+├─ 690授權.bat                        Gmail 授權與信箱統計(也可在網頁授權)
+├─ 同步到TIPO flow check.bat           產生 TIPO flow check(雙擊只預覽)
+├─ requirements.txt / requirements-690.txt   啟動時自動檢查的相依套件
+├─ config.json                       額度、埠、取樣間隔、網段
+└─ data/
+   ├─ config/machines.json           機器代號 → 友善名稱對照
+   ├─ config/xfer690.json            690 系統清單與 KM 表格設定
+   ├─ config/gmail_credentials.json  ★機密:GCP OAuth 用戶端
+   ├─ config/xfer690_secrets.json     ★機密:KM JWT(wiki_jwt)
+   └─ machines/
+      ├─ state_&lt;機器&gt;.json           當日用量
+      ├─ prefs_&lt;機器&gt;.json           本機偏好與外觀
+      ├─ daily_stats_&lt;機器&gt;.json     每日用量統計
+      ├─ gmail_token_&lt;機器&gt;.json     ★機密:Gmail 授權
+      └─ xfer690_&lt;機器&gt;.json         已抓信件與查詢結果快取</code></pre>
+
+<p><code>data/config/machines.json</code> 與 <code>data/config/xfer690.json</code> 進版控,其他資料與機密檔不進版控。逐分鐘明細另放本機 <code>%LOCALAPPDATA%\flow_check\traffic\</code>,不放同步夾(每分鐘都在長,放同步夾會讓 Drive 一直重傳)。</p>
 
 <h2>HTTP API 端點</h2>
 <p>常駐伺服器(預設 <code>http://127.0.0.1:8765</code>)的全部端點,定義在 <code>program/core/routes.py</code> 的 <code>build_routes()</code>。對不到的路徑一律回 404。</p>

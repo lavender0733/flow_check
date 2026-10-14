@@ -31,7 +31,7 @@ Windows 本機工具，Python 3.13 + psutil；690 另用 google-auth-oauthlib。
 | `common/webapp.py` | HTTP 分派、靜態檔、路徑穿越防護、例外處理、`serve()` |
 | `common/jsonio.py` | JSON 容錯讀取、原子寫入、檔案簽章 |
 | `common/ident.py` | 機器代號 |
-| `xfer690/periods.py` | 期數 ↔ 日期、民國日期 |
+| `xfer690/periods.py` | 期數 ↔ 日期 |
 | `xfer690/parser.py` | 通知信主旨 → 事件；原始信 → log 摘要 |
 | `xfer690/status.py` | 執行分段、資料日期／期數歸屬、系統／步驟狀態 |
 | `xfer690/wikitable.py` | Markdown 表格定位、欄名檢查、只填空格、插列、手改衝突檢查 |
@@ -133,8 +133,9 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as folder:
 
 ## 文件分工
 
-- `doc/README.md` 是完整使用者說明的正本：介紹、功能、安裝設定、執行、操作規則與設定速查。
-- 根目錄 `README.html` 是精簡使用者首頁；`doc/進階參考.html` 只放設定速查與 HTTP API。它們目前不是自動產生，相關內容變動時要一起更新，設定內容以正本為準。
+- 根目錄 `README.html` 是使用者首頁：介紹、安裝、啟動、功能與第一次設定。
+- `doc/進階參考.html` 放 690 規則、設定速查、使用者會用到的檔案與 HTTP API；設定說明只寫在這裡，不在其他文件重複。新增設定鍵或端點時要一起更新。
+- 這兩份目前不是自動產生，相關內容變動時要一起更新。
 - 本檔放 AI 開發需要的架構、模組職責、規範、測試與注意事項；README 不再複製完整模組表或開發流程。
 - `doc/TIPO flow check README.md` 是 TIPO 使用者說明的來源，由同步工具複製成目標的 README；只在來源修改。
 - 進度表 `doc/plans/進度.md` 只放未完成的事，做完就刪。更新時可直接整節改寫，不用另外問；長期規則放本檔，不放待辦。

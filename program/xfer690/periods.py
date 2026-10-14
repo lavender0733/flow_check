@@ -1,4 +1,4 @@
-"""期別換算:公告期數(VOL)與日期互換,以及民國日期。純函式。
+"""期別換算:公告期數(VOL)與日期互換。純函式。
 
 TWB(公告)一個月 3 期,落在 1、11、21 號;TWA(公開)一個月 2 期,落在 1、16 號。
 期數 = 年份基準 × 100 + 當年第幾期。公式用 KM 表格上的公告期數驗算過
@@ -33,9 +33,3 @@ def date_of_vol(kind: str, vol: int) -> date:
     vol = int(vol)
     n = vol % 100 - 1
     return date(vol // 100 + base, n // per_month + 1, (n % per_month) * span + 1)
-
-
-def roc_to_date(s: str) -> date:
-    """民國日期字串 → date。"1151001" → 2026-10-01。"""
-    s = str(s).strip()
-    return date(int(s[:-4]) + 1911, int(s[-4:-2]), int(s[-2:]))

@@ -1,7 +1,7 @@
 // ===== 690資轉 + 信件與連線 =====
 // 兩個頁籤共用 /api/xfer690 的快照(伺服器不定時抓信:網頁打開時自動抓一次,之後按「立即更新」才抓;
 // 這裡每 60 秒讀一次快照,只讀伺服器的快取,不會去 Gmail 抓信)。
-// 畫面依 doc/plans/2026-10-02-690資轉畫面草圖.html。信件內容一律用 textContent 放進畫面。
+// 信件內容一律用 textContent 放進畫面。
 // 相依 API:GET /api/xfer690、POST /api/xfer690/refresh、GET /api/xfer690/log、
 //          POST /api/xfer690/wiki/login({jwt})、POST /api/xfer690/wiki/logout、POST /api/xfer690/wiki/write。
 
