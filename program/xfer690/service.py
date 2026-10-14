@@ -39,7 +39,6 @@ DEFAULT_XFER_CONFIG = {
         "dry_run": True,
         "url": "https://km.innovue.ltd",
         "locale": "zh-tw",
-        "days": 14,
         "placeholder_re": r"^\d{4}x{4}$",
         "nodata_value": "-",        # 每日系統「GCS 資料夾無檔案」那天,要打 v 的格改填這個
         "sud_ok_value": "成功",     # SUD 抽測比對正確時「備註」填這個
@@ -58,6 +57,15 @@ S690_RULE = 2
 AUTH_WAIT = timedelta(minutes=10)      # 按「授權」後等 Google 導回來的時間
 AUTH_MSG = "Gmail 授權已失效或被管理員封鎖,請在「信件與連線」按「重新授權」"
 _MSG_ID_RE = re.compile(r"^[0-9a-fA-F]{6,32}$")
+# 一輪裡抓失敗幾封就不再抓(多半是網路斷了,不要每封都等逾時);已抓到的照樣存
+MAX_MISSED = 3
+
+
+def _note_missed(missed: list, e: Exception) -> None:
+    """記下一封沒抓到的信。授權失效不是單封的問題,往外拋讓整輪改成「要重新授權」。"""
+    if type(e).__name__ == "AuthError":
+        raise e
+    missed.append(str(e) or type(e).__name__)
 
 
 def load_xfer_config(path=XFER690_CONFIG_PATH) -> dict:
@@ -146,7 +154,6 @@ class Xfer690Service:
         self._lock = threading.Lock()         # 整個 poll()
         self._wiki_lock = threading.Lock()    # 登入 / 寫入 / 預覽
         self._jwt = None                      # KM 登入憑證;也存在 secrets 檔(重開不用重貼)
-        self._contents = {}                   # 上次讀到的 KM 頁面(預覽用,只放記憶體)
 
         cache = read_json(cache_path, default={})
         cache = cache if isinstance(cache, dict) else {}
@@ -240,11 +247,15 @@ class Xfer690Service:
                     return self.snapshot()
                 max_list = int(self.cfg["max_list"])
                 ids = gmail.list_ids(self._query(), max_list)
-                new = {}
+                new, missed = {}, []
                 for mid in ids:
-                    if mid in self.events:
+                    if mid in self.events or len(missed) >= MAX_MISSED:
                         continue
-                    meta = gmail.fetch_meta(mid)
+                    try:
+                        meta = gmail.fetch_meta(mid)
+                    except Exception as e:
+                        _note_missed(missed, e)
+                        continue
                     spent += META_BYTES
                     ev = parse_subject(meta["subject"], meta["date"], mid, self.cfg)
                     ev["size"] = meta["size"]
@@ -252,15 +263,21 @@ class Xfer690Service:
                 limit = int(self.cfg["max_raw_kb"]) * 1024
                 for mid in sorted(self._raw_wanted(new)):
                     ev = new.get(mid) or self.events[mid]
-                    if not ev.get("code") or ev["size"] > limit:
+                    if not ev.get("code") or ev["size"] > limit or len(missed) >= MAX_MISSED:
                         continue
-                    raw = gmail.fetch_raw(mid)
+                    try:
+                        raw = gmail.fetch_raw(mid)
+                    except Exception as e:
+                        _note_missed(missed, e)
+                        new.pop(mid, None)      # 新信整封不收,下次重新列到再抓;舊信下次還會要 log
+                        continue
                     spent += ev["size"] or len(raw)
                     try:
                         new[mid] = parse_raw(raw, ev, self.cfg)
                     except Exception as e:      # 解析不了的信照樣留下 metadata
                         ev["error"] = f"解析失敗:{e}"[:200]
-                self.events.update(new)
+                # 換整個 dict(不就地改):snapshot / status 不拿鎖,正在走訪舊的也不會出錯
+                self.events = dict(self.events, **new)
                 self._prune()
                 if not self.account and hasattr(gmail, "account"):
                     try:
@@ -268,7 +285,10 @@ class Xfer690Service:
                     except Exception:
                         pass        # 只是顯示用,抓不到下次再試
                 self.auth = "ok"
-                if len(ids) >= max_list:
+                if missed:
+                    # 有信沒抓到:已抓到的照樣存;last_poll 不前進,下次的 after: 才會再列到沒抓到的
+                    self.last_error = f"{len(missed)} 封信沒抓到,下次抓信再補:{missed[0]}"[:300]
+                elif len(ids) >= max_list:
                     # Gmail 由新到舊列,超過上限的是最舊的那些。last_poll 不前進:下次的 after:
                     # 才會再涵蓋它們(調高上限後補齊)
                     self.last_error = (f"信件超過 {max_list} 封,較舊的沒抓到;"
@@ -295,9 +315,8 @@ class Xfer690Service:
 
     def _prune(self) -> None:
         cut = self.now() - timedelta(days=int(self.cfg["retain_days"]))
-        for mid in [m for m, e in self.events.items()
-                    if e.get("at") and datetime.fromisoformat(e["at"]) < cut]:
-            del self.events[mid]
+        self.events = {m: e for m, e in self.events.items()
+                       if not (e.get("at") and datetime.fromisoformat(e["at"]) < cut)}
         cut_at = cut.isoformat()
         self.s690 = {k: v for k, v in self.s690.items()
                      if max((x.get("at") or "" for x in v.values()), default="") >= cut_at}
@@ -375,7 +394,8 @@ class Xfer690Service:
             types = sud_types(log_text(raw))
             if types:
                 with self._lock:
-                    self.events[ev["id"]] = dict(self.events[ev["id"]], sud_types=types)
+                    if ev["id"] in self.events:     # 等鎖的時候可能剛好被 _prune 清掉
+                        self.events = dict(self.events, **{ev["id"]: dict(self.events[ev["id"]], sud_types=types)})
                 return sorted(types)
         return []
 
@@ -533,7 +553,6 @@ class Xfer690Service:
         with self._wiki_lock:
             self._set_jwt(None)
             self.wiki.update(tables=[], report=None, account=None)
-            self._contents = {}
             self._save()
         return {"ok": True}
 
@@ -577,7 +596,6 @@ class Xfer690Service:
                 finally:
                     if client.token != self._jwt:       # KM 續期發的新 token
                         self._set_jwt(client.token)
-                self._contents = res["contents"]
                 self.wiki.update(report=res["pages"], tables=res["tables"],
                                  last_sync=self.now().isoformat(), last_error=_all_pages_failed(res["pages"]))
             except WikiAuthError:
@@ -606,7 +624,6 @@ class Xfer690Service:
                 self.wiki["last_error"] = f"寫 KM 失敗:{e}"[:300]
                 return {"ok": False, "message": self.wiki["last_error"]}
             pages = res["pages"]
-            self._contents = res["contents"]
             self.wiki.update(report=pages, tables=res["tables"], last_sync=self.now().isoformat(),
                              last_error=None)
             self.wiki["last_write"] = {

@@ -48,7 +48,8 @@
 .x6-sn[aria-pressed="true"] .x6-badge.x6-info { background: rgba(255,255,255,.25); color: #fff; }
 /* 文字用 --warn-ink(--warn 是色塊用的亮琥珀,淺底上當文字太淡) */
 .tab .x6-warn { margin-left: 4px; color: var(--warn-ink, var(--warn)); font-weight: 700; }
-.tab.on .x6-warn { background: var(--warn-bg, #fff4e0); border-radius: 5px; padding: 0 4px; }
+/* 選中的頁籤是實色底:不加底色,⚠ 跟頁籤字同色(深棕字在紫 / 藍底上看不見) */
+.tab.on .x6-warn { color: inherit; }
 
 /* 卡片標題列 */
 .x6 .card > h2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

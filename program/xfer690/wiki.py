@@ -332,7 +332,14 @@ _BAD_VALUE_RE = re.compile(r"[|\r\n]")
 
 
 def _new_report():
-    return {"filled": 0, "inserted": 0, "edited": 0, "conflicts": [], "errors": [], "skipped": []}
+    return {"filled": 0, "inserted": 0, "edited": 0, "conflicts": [], "errors": [], "skipped": [],
+            "unapplied": []}
+
+
+def _unapplied(page: str, e: dict, reason: str) -> dict:
+    """沒有寫進去的手改(畫面依 page / table / key / col 留著,讓使用者看到、再處理)。"""
+    return {"page": page, "table": e.get("table") or "", "key": str(e.get("key")),
+            "col": e.get("col"), "system": e.get("system"), "reason": reason}
 
 
 def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edits=()) -> tuple:
@@ -353,52 +360,59 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
         tb = {"page": ts[0]["page"], "table": code, "title": title, "error": None,
               "key_col": int(ts[0].get("key_col", 0)), "columns": [], "rows": {}, "skipped": []}
         tables.append(tb)
+        mine = [e for e in edits if (e.get("table") or "") == code]
         try:
             labels = locate(content.splitlines(keepends=True), ts[0])["labels"]
         except TableNotFound as e:
             tb["error"] = str(e)
             report["errors"].append(f"{title}:{e}")
+            report["unapplied"] += [_unapplied(tb["page"], x, f"這張表沒有處理:{e}") for x in mine]
             continue
 
         # 使用者在畫面上明確改過的格(唯一會覆寫非空值的路徑)
         edited = set()
         new_row_edits = {}      # {列鍵: {欄號: 值}}:頁面上還沒有的列,改的值直接當成插入那列的內容
+        new_row_src = {}        # {列鍵: [原本的手改]}:那列最後沒插進去時回報用
         counted = set()
-        mine = [e for e in edits if (e.get("table") or "") == code]
         if mine:
             present = set(read_rows(content, ts[0])["rows"])
             key_col = int(ts[0].get("key_col", 0))
             resolved = []
             for e in mine:
-                if _BAD_VALUE_RE.search(str(e.get("value", ""))):
-                    report["conflicts"].append({"table": title, "key": e.get("key"), "col": e.get("col"),
-                                                "existing": None, "wanted": e.get("value"),
-                                                "reason": "值不能含 | 或換行"})
-                    continue
+                reason = None
                 ci = _col_index(labels, ts, e.get("col"), e.get("system"))
-                if ci is None:
+                if _BAD_VALUE_RE.search(str(e.get("value", ""))):
+                    reason = "值不能含 | 或換行"
+                elif ci is None:
+                    reason = "找不到這一欄"
+                elif str(e.get("key")) not in present and ci == key_col:
+                    reason = "列鍵不能改"
+                if reason:
                     report["conflicts"].append({"table": title, "key": e.get("key"), "col": e.get("col"),
-                                                "existing": None, "wanted": e.get("value"),
-                                                "reason": "找不到這一欄"})
+                                                "existing": None, "wanted": e.get("value"), "reason": reason})
+                    report["unapplied"].append(_unapplied(tb["page"], e, reason))
                     continue
                 if str(e.get("key")) not in present:
-                    if ci == key_col:
-                        report["conflicts"].append({"table": title, "key": e.get("key"), "col": e.get("col"),
-                                                    "existing": None, "wanted": e.get("value"),
-                                                    "reason": "列鍵不能改"})
-                        continue
                     new_row_edits.setdefault(str(e["key"]), {})[ci] = str(e.get("value", "")).strip()
+                    new_row_src.setdefault(str(e["key"]), []).append(e)
                     continue
-                resolved.append(dict(e, col=ci))
+                resolved.append(dict(e, col=ci, label=e.get("col")))
             try:
                 content, er = apply_edits(content, ts[0], resolved)
             except (TableNotFound, LabelMismatch) as e:
                 tb["error"] = str(e)
                 report["errors"].append(f"{title}:{e}")
+                report["unapplied"] += [_unapplied(tb["page"], dict(x, col=x.get("label", x.get("col"))),
+                                                   f"這張表沒有處理:{e}")
+                                        for x in resolved + sum(new_row_src.values(), [])]
                 continue
             report["edited"] += er["edited"]
             for c in er["conflicts"]:
                 report["conflicts"].append(dict(c, table=title, reason="頁面上的值已經被改過"))
+                for x in resolved:
+                    if str(x["key"]) == str(c["key"]) and x["col"] == c["col"]:
+                        report["unapplied"].append(_unapplied(tb["page"], dict(x, col=x["label"]),
+                                                              "頁面上的值已經被改過"))
             edited = {(str(e["key"]), e["col"]) for e in resolved}
 
         # 顯示的欄:列鍵與新列範本的欄(資訊),加上程式負責的欄
@@ -489,6 +503,11 @@ def process_page(content: str, targets: list, status: dict, wiki_cfg: dict, edit
                     if note and cell is not None:
                         cell["note"] = note
 
+        # 頁面上還沒有、最後也沒插進去的列(找不到插入位置、或這張表沒處理):手改沒寫
+        for key, src in new_row_src.items():
+            if key not in counted:
+                report["unapplied"] += [_unapplied(tb["page"], x, "這一列沒有新增到頁面上") for x in src]
+
         # 每列帶上頁面上(套用後)的整列值,畫面才能顯示列鍵、日期等資訊欄
         final = read_rows(content, ts[0])["rows"]
         rows = []
@@ -504,12 +523,12 @@ def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True) -> 
     """依頁分組,每頁讀一次、處理完內容有變才更新(dry_run 或 write=False 時不更新)。
     一頁失敗不影響其他頁;WikiAuthError 往外拋,讓呼叫端清掉登入狀態。
 
-    回傳 {"pages": {頁名: report + updated/id}, "tables": [...], "contents": {頁名: 目前內容}}。
+    回傳 {"pages": {頁名: report + updated/id}, "tables": [...]}。
     """
     pages = {}
     for t in wiki_cfg.get("tables", []):
         pages.setdefault(t["page"], []).append(t)
-    out ={"pages": {}, "tables": [], "contents": {}}
+    out = {"pages": {}, "tables": []}
     for page, targets in pages.items():
         rep = dict(_new_report(), updated=False, id=None)
         out["pages"][page] = rep
@@ -520,11 +539,9 @@ def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True) -> 
             old = p.get("content") or ""
             new, r, tables = process_page(old, targets, status, wiki_cfg, mine)
             rep.update(r)
-            out["contents"][page] = old
             if new != old and write and not wiki_cfg.get("dry_run", True):
                 client.update_content(p, new)
                 rep["updated"] = True
-                out["contents"][page] = new
             # 預覽:寫入後看新頁面;沒寫時不含使用者的編輯(那些只存在前端)
             if rep["updated"]:
                 _, _, tables = process_page(new, targets, status, wiki_cfg)
@@ -535,22 +552,5 @@ def sync(client, status: dict, wiki_cfg: dict, edits=(), write: bool = True) -> 
             raise
         except Exception as e:      # 一頁失敗不影響其他頁
             rep["errors"].append(str(e)[:300])
-    return out
-
-
-def preview(contents: dict, status: dict, wiki_cfg: dict) -> dict:
-    """用上次讀到的頁面內容算預覽(不連網)。沒讀過的頁標 read=False。"""
-    pages = {}
-    for t in wiki_cfg.get("tables", []):
-        pages.setdefault(t["page"], []).append(t)
-    out = {"pages": {}, "tables": []}
-    for page, targets in pages.items():
-        content = (contents or {}).get(page)
-        if content is None:
-            out["pages"][page] = {"read": False}
-            continue
-        new, rep, tables = process_page(content, targets, status, wiki_cfg)
-        rep.update(read=True, changed=new != content)
-        out["pages"][page] = rep
-        out["tables"] += tables
+            rep["unapplied"] = [_unapplied(page, x, f"這一頁沒有處理:{e}"[:300]) for x in mine]
     return out

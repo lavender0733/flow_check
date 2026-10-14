@@ -68,14 +68,27 @@ def _fit(orig: str, value: str) -> str:
     return " " * left + value + " " * right
 
 
+_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})(\s|$)")
+
+
+def _heading_level(line: str):
+    m = _HEADING_RE.match(line)
+    return len(m.group(1)) if m else None
+
+
 def locate(lines: list, target: dict) -> dict:
-    """找表。回傳 {"header", "labels"(欄名列的格), "label_idx", "rows": [行號…]}。"""
+    """找表。回傳 {"header", "labels"(欄名列的格), "label_idx", "rows": [行號…]}。
+
+    有 after 時只在那一節裡找(遇到同級或更上層的標題就停):那節的表被刪掉時,
+    不會跑去下一節找到別的表(例如 TWA 的表不見了卻寫進 TWB 的表)。"""
     after = target.get("after") or ""
     start = 0
+    level = None
     if after:
         for i, line in enumerate(lines):
             if after in line:
                 start = i + 1
+                level = _heading_level(line)
                 break
         else:
             raise TableNotFound(f"找不到「{after}」")
@@ -91,12 +104,16 @@ def locate(lines: list, target: dict) -> dict:
             if "-->" not in line.split("<!--", 1)[1]:
                 in_comment = True
             continue
+        h = _heading_level(line)
+        if level and h and h <= level:
+            break
         if (_is_row(line) and all(h in line for h in target.get("header_has", []))
                 and i + 1 < len(lines) and _SEP_RE.match(_body(lines[i + 1])[0])):
             header = i
             break
     if header is None:
-        raise TableNotFound("找不到表頭含 " + "、".join(target.get("header_has", [])) + " 的表格")
+        where = f"「{after}」底下" if after else ""
+        raise TableNotFound(f"{where}找不到表頭含 " + "、".join(target.get("header_has", [])) + " 的表格")
     first = header + 2
     if target.get("label_row") == "first":
         if first >= len(lines) or not _is_row(lines[first]):

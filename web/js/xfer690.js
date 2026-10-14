@@ -19,6 +19,8 @@ let x6Back = "daily";      // 從哪個分類點進 KM 登記(預覽卡片的「
 const x6Sel = { twa: null, twb: null };
 let x6Edits = {};          // 還沒寫入的手動修改,key = 頁|表|列鍵|欄號
 let x6Busy = { refresh: false, login: false, write: false };
+let x6Typing = false;      // 正在格子裡打字:自動更新先不重畫(重畫會把輸入框拿掉),打完再畫
+let x6Stale = false;
 let x6Result = null;       // 上次寫入的結果訊息
 
 const x6$ = (id) => document.getElementById(id);
@@ -208,6 +210,8 @@ function x6connProblem() {
 // ── 畫面 ──
 function x6render() {
   if (!x6$("panel-xfer690")) return;
+  if (x6Typing) { x6Stale = true; return; }
+  x6Stale = false;
   const a = x6alerts();
   x6renderToolbar();
   x6renderNav(a);
@@ -826,11 +830,13 @@ function x6startEdit(td) {
   inp.setAttribute("aria-label", "修改這一格,Enter 存、Esc 取消");
   td.replaceChildren(inp);
   x6$("x6-tip").hidden = true;
+  x6Typing = true;
   inp.focus(); inp.select();
   let done = false;
   const finish = (save) => {
     if (done) return;
     done = true;
+    x6Typing = false;
     if (save) {
       const val = inp.value.trim();
       // 跟「不手改的結果」一樣才算沒改。跟頁面原值一樣不算:那是「維持原值、不要自動填」
@@ -1119,17 +1125,23 @@ async function x6wikiWrite() {
       const sum = (k) => pages.reduce((a, p) => a + (p[k] || 0), 0);
       const conf = pages.flatMap(p => (p.conflicts || []).filter(c => c.reason === "頁面上的值已經被改過"));
       const errs = pages.flatMap(p => p.errors || []);
+      // 沒寫進去的手改(頁面上的值被改過、表或整頁沒處理、那列沒新增上去):留在畫面上
+      const unapplied = pages.flatMap(p => p.unapplied || []);
       const head = j.dry_run ? "乾跑模式(xfer690.json 的 wiki.dry_run),沒有真的寫入;"
                              : `已寫入 ${pages.filter(p => p.updated).length} 頁:`;
       let text = `${head}填 ${sum("filled")} 格、新增 ${sum("inserted")} 列${sum("edited") ? `、手改 ${sum("edited")} 格` : ""}。`;
       if (conf.length) text += ` ${conf.length} 格沒有改:頁面上的值已經被別人改過,請重新看過。`;
+      const lost = unapplied.length - conf.length;
+      if (lost > 0) text += ` ${lost} 格手改沒有寫入(${unapplied.find(u => u.reason !== "頁面上的值已經被改過").reason}),修改都還在。`;
       if (errs.length) text += ` 有錯誤:${errs.join(";")}`;
-      x6Result = { ok: !errs.length, text };
+      x6Result = { ok: !errs.length && !unapplied.length, text };
       if (!j.dry_run) {
-        // 衝突的格留著讓使用者重看;其他送出的已經寫進去了
+        // 沒寫進去的格留著讓使用者重看;其他送出的已經寫進去了
+        const same = (e, u) => e.page === u.page && (e.table || "") === u.table && String(e.key) === u.key
+                               && e.col === u.col && (e.system || null) === (u.system || null);
         const keep = {};
         for (const [ek, e] of Object.entries(x6Edits)) {
-          if (conf.some(c => String(e.key) === String(c.key))) keep[ek] = e;
+          if (unapplied.some(u => same(e, u))) keep[ek] = e;
         }
         x6Edits = keep;
       }

@@ -64,7 +64,6 @@
     "dry_run": false,
     "url": "https://km.innovue.ltd",
     "locale": "zh-tw",
-    "days": 14,
     "placeholder_re": "^\\d{4}x{4}$",
     "nodata_value": "-",
     "sud_ok_value": "成功",
