@@ -37,9 +37,10 @@ REPO = Path(__file__).resolve().parents[1]
 SPEC_PATH = Path(__file__).with_name("sync_tipo.json")
 
 # 「程式範圍」:dst 裡落在這些地方、但不在這次 copy 清單裡的檔案,視為過時的程式,會被刪掉。
-# 範圍外的東西(同事自己放的筆記等)一律不碰。
+# 範圍外的東西(同事自己放的筆記等)一律不碰。根目錄的 .bat 不算:同事可能自己放捷徑用的 .bat,
+# 只更新 copy 清單裡的那幾個;清單拿掉的 .bat 要刪的話,在預覽裡列出來由人處理。
 _SCOPE_DIRS = ("program", "web")
-_SCOPE_ROOT_GLOBS = ("*.bat", "requirements.txt", "README.md")
+_SCOPE_ROOT_GLOBS = ("requirements.txt", "README.md")
 
 # 啟動驗證時放進 TIPO 格式 state 的特定值,用來證明讀到的是 data/state_*.json。
 PROBE_RECV = 123_456_789
@@ -136,7 +137,7 @@ def plan(src: Path, dst: Path, spec: dict) -> dict:
     # 以不分大小寫的鍵對應 dst 實際的檔名:dst 的 Paths.py 就是 staged 的 paths.py,
     # 不能一邊寫進去、一邊又當成過時檔刪掉。
     existing = {r.casefold(): r for r in _files(dst)}
-    out = {"add": [], "update": [], "remove": [], "same": []}
+    out = {"add": [], "update": [], "remove": [], "same": [], "extra_bat": []}
     for rel in staged:
         cur = existing.get(rel.casefold())
         if cur is None:
@@ -148,6 +149,8 @@ def plan(src: Path, dst: Path, spec: dict) -> dict:
     staged_keys = {r.casefold() for r in staged}
     out["remove"] = sorted(r for k, r in existing.items()
                            if k not in staged_keys and _in_scope(r) and not _is_protected(r, spec))
+    out["extra_bat"] = sorted(r for k, r in existing.items()
+                              if k not in staged_keys and "/" not in r and k.endswith(".bat"))
     return out
 
 
@@ -201,11 +204,14 @@ def _machine_id(root: Path) -> str:
 
 
 def _get(url: str):
+    """(狀態碼, 內容)。連不上、逾時回 (None, 原因):呼叫端記成驗證失敗,不噴 traceback。"""
     try:
         with urllib.request.urlopen(url, timeout=10) as r:
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
+    except (urllib.error.URLError, OSError) as e:      # 逾時(TimeoutError)、連線被重設等
+        return None, str(getattr(e, "reason", e)).encode("utf-8", "replace")
 
 
 def verify_startup(built: Path, src: Path, port: int = 8799, config: dict = None) -> dict:
@@ -248,26 +254,29 @@ def verify_startup(built: Path, src: Path, port: int = 8799, config: dict = None
                                     stdout=log, stderr=subprocess.STDOUT, env=env)
             base = f"http://127.0.0.1:{port}"
             try:
-                status = None
+                status, body = None, b""
                 for _ in range(60):
                     if proc.poll() is not None:
                         break
-                    try:
-                        status, body = _get(base + "/api/status")
+                    status, body = _get(base + "/api/status")
+                    if status is not None:
                         break
-                    except (urllib.error.URLError, ConnectionError):
-                        time.sleep(0.5)
+                    time.sleep(0.5)
                 if status != 200:
-                    result["errors"].append(f"/api/status 回 {status}")
+                    why = f"({body.decode('utf-8', 'replace')[:200]})" if status is None and body else ""
+                    result["errors"].append(f"/api/status 回 {status}{why}")
                 else:
                     result["used_bytes"] = json.loads(body).get("used_bytes")
                     code, page = _get(base + "/")
-                    m = re.search(r"系統版本 v([0-9][^<\s]*)", page.decode("utf-8", "replace"))
+                    m = re.search(r"系統版本 v([0-9][^<\s]*)", page.decode("utf-8", "replace")) if code == 200 else None
                     result["version"] = m.group(1) if m else None
                     code, body = _get(base + "/api/config")
                     result["config_status"] = code
                     if code == 200:
-                        result["config"] = json.loads(body)
+                        try:
+                            result["config"] = json.loads(body)
+                        except ValueError:
+                            result["config_status"] = "回應不是 JSON"
             finally:
                 proc.kill()
                 proc.wait()
@@ -296,6 +305,19 @@ def _print_plan(p: dict, dst: Path) -> None:
             print(f"    {rel}")
     print(f"  不變 {len(p['same'])} 個")
     print("  data/、config.json、desktop.ini 一律不碰。")
+    if p.get("extra_bat"):
+        print("  根目錄這些 .bat 不在同步清單裡(不會刪;確定是過時的程式再自己刪):")
+        for rel in p["extra_bat"]:
+            print(f"    {rel}")
+
+
+def target_config(dst: Path):
+    """TIPO 自己的 config.json(啟動驗證用它,才驗得到同事那份設定);讀不到回 None。"""
+    try:
+        cfg = json.loads((Path(dst) / "config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return cfg if isinstance(cfg, dict) else None
 
 
 def main(argv) -> int:
@@ -317,8 +339,10 @@ def main(argv) -> int:
         except (RewriteError, FileNotFoundError, ValueError) as e:
             print(f"[錯誤] build 失敗,不寫入:{e}")
             return 1
-        print(f"build 完成:{len(_files(staged))} 個檔案。啟動驗證中(8799 埠)…")
-        v = verify_startup(staged, REPO, port=8799)
+        cfg = target_config(dst)
+        print(f"build 完成:{len(_files(staged))} 個檔案。啟動驗證中(8799 埠,用"
+              + ("TIPO" if cfg is not None else "flow_check(TIPO 的讀不到)") + " 的 config.json)…")
+        v = verify_startup(staged, REPO, port=8799, config=cfg)
         if not v["ok"]:
             print("[錯誤] 啟動驗證失敗,不寫入:")
             for e in v["errors"]:

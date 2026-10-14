@@ -1,6 +1,6 @@
-"""機器身分與驗證碼遮罩。
+"""機器身分。
 
-零專案內相依的葉模組。取代原本重複的四份 machine_id() 與三份 mask_code()。
+零專案內相依的葉模組。取代原本重複的四份 machine_id()。
 """
 
 import re
@@ -17,13 +17,3 @@ def machine_id() -> str:
     raw = socket.gethostname() or "PC"
     mid = re.sub(r"[^A-Za-z0-9]+", "-", raw).strip("-")
     return mid or "PC"
-
-
-def mask_code(code) -> str:
-    """只顯示前 4 碼，其餘以 * 取代（保留長度）。
-
-    統一自三份實作；採用其中「有 strip」的版本——額度卡與月進度卡
-    兩張都用它，顯示必須對齊。
-    """
-    code = str(code or "").strip()
-    return code if len(code) <= 4 else code[:4] + "*" * (len(code) - 4)

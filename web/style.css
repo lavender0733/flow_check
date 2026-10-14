@@ -1,5 +1,5 @@
 /* ==========================================================================
-   流量監控 + GPSS 控制台 —— Raycast × Y2K 紫
+   流量監控 —— Raycast × Y2K 紫
    ------------------------------------------------------------------------
    結構分三段,改東西前先認清要改哪一段:
      1) Token 區    只有值,沒有選擇器。換配色、換字級、換圓角都改這裡。
@@ -18,7 +18,7 @@
      警示色     --danger|--ok 色塊 / --danger-ink|--ok-ink 文字
                 --warn 琥珀(黃) / --warn-ink 文字
    文字版在淺色模式另外壓深 —— 底色與文字對比的需求方向相反,一個值兩用不夠。
-   色相語意固定:紅=超標、黃=接近上限、綠=正常、藍=資訊、金=達標。
+   色相語意固定:紅=超標、黃=接近上限、綠=正常、藍=資訊。
    ------------------------------------------------------------------------
    字體一律系統內建 —— 這支程式在管流量額度,開頁去外網抓字型會扣自己的量。
    ========================================================================== */
@@ -78,10 +78,9 @@
   --ff-display: var(--ff-ui);
   --ff-label: var(--ff-ui);
   --focus-ring: 0 0 0 3px var(--btn-weak);
-  /* 字級階梯沿用專案原本那 8 級,hero 改成隨寬度伸縮;卡片標題 h2 原本縮成 12px 標籤級太小,8.1.0 放大到 15px */
+  /* 字級階梯沿用專案原本那幾級,hero 改成隨寬度伸縮;卡片標題 h2 原本縮成 12px 標籤級太小,8.1.0 放大到 15px */
   --fs-hero: clamp(34px,4.6vw,44px);
   --fs-donut: 30px;
-  --fs-xl: 26px;
   --fs-num: 19px;
   --fs-h2: 15px;
   --fs-body: 14px;
@@ -91,9 +90,6 @@
   --fw-hero: 600;
   --fw-label: 600;
   --fw-num: 600;
-  /* 達標獎勵色:範本沒有這組,從專案保留下來(改成和紫底相配的暖金) */
-  --gold: #e0a500;
-  --gold-ink: #9a6f00;
   --hd-pad: 10px 13px;
   --hole-size: 166px;
   --hole-bg: #f6f1fe;          /* 圓環中央的洞:實色,不可半透明(環色會透進來) */
@@ -112,12 +108,9 @@
   --knob-sh: 0 1px 3px rgba(88,50,160,.35);
   --lh-body: 1.55;
   --line: rgba(88,50,160,.14);
-  --log-bg: rgba(255,255,255,.55);
-  --log-fg: #3c3357;
   --ls-hero: -.02em;
   --ls-label: .06em;
   --ls-num: -.01em;
-  --mask: rgba(38,26,62,.45);
   /* 範本原值是 #7b7196,但那在卡片上的對比只有 4.03(未達 4.5)。
      這個色用在區塊標題、表頭與 .hint 小字,量不小 —— 同色相壓暗到 6b6180,
      對比拉到 5.14(頁底上 4.65),看得清楚但仍明顯次於主文字。 */
@@ -209,8 +202,6 @@ html[data-theme="dark"] {
   --danger-line: rgba(255,95,174,.36);
   --danger-ink: #ff5fae;
   --dim: #b8b0cc;
-  --gold: #ffcc4d;
-  --gold-ink: #ffcc4d;
   --info-bg: rgba(43,108,176,.22);
   --info-line: rgba(91,155,213,.5);
   --info-ink: #9ecbf5;
@@ -221,9 +212,6 @@ html[data-theme="dark"] {
   --knob-sh: 0 1px 3px rgba(0,0,0,.5);
   --hole-bg: #18102a;
   --line: rgba(196,170,255,.13);
-  --log-bg: rgba(255,255,255,.04);
-  --log-fg: #cfc7e0;
-  --mask: rgba(8,4,16,.6);
   /* 範本原值 #8e87a3 在卡片上是 5.27 —— 過得了門檻,但這個色幾乎都用在
      12px 的標題、表頭與 hint,深底上細字本來就比淺底難讀,實際看仍偏灰。
      同色相提亮到 a49db8(6.95),小字看得清楚,又還是明顯次於白色主文。 */
@@ -290,18 +278,7 @@ h3 { margin: 0; font-size: var(--fs-num); font-weight: var(--fw-label); color: v
        letter-spacing: var(--ls-hero); line-height: 1.04; color: var(--txt); }
 .big .unit { font-size: var(--fs-num); color: var(--muted); font-weight: var(--fw-body); letter-spacing: 0; }
 .sub { color: var(--muted); font-size: var(--fs-sm); margin-top: var(--sp-xs); }
-.headline { font-size: var(--fs-xl); font-weight: var(--fw-hero); letter-spacing: var(--ls-hero); }
-.meta { font-size: var(--fs-sm); color: var(--muted); }
 .hint { color: var(--muted); font-size: var(--fs-hint); }
-.collabel { font-size: var(--fs-hint); color: var(--muted); font-weight: var(--fw-label);
-            letter-spacing: var(--ls-label); }
-.code { font-family: var(--ff-mono); letter-spacing: .04em; color: var(--txt); }
-
-/* ─── 骨架:進度條 ───────────────────────────────────────────────── */
-.bar { height: 8px; background: var(--track); border-radius: var(--r-pill); overflow: hidden;
-       margin: var(--sp-md) 0 var(--sp-sm); }
-.bar > div { height: 100%; width: 0; background: var(--btn);
-             transition: width var(--dur) var(--ease), background var(--dur) var(--ease); }
 
 /* ─── 骨架:主區(左數字 + 右圓環)──────────────────────────────── */
 .calc-hero { display: flex; gap: var(--sp-xl); align-items: center; flex-wrap: wrap;
@@ -373,15 +350,6 @@ tbody tr:hover > td { background: var(--row-hover); }
 .nic-scroll > table > thead > tr > th {
   position: sticky; top: 0; z-index: 2;
   background: var(--th-solid); box-shadow: inset 0 -1px 0 var(--line); }
-/* 月進度那張三列小表:數值欄用主色、首列加重 */
-.mtable { width: 100%; border-collapse: collapse; margin-top: 0; }
-.mtable td { padding: 9px 4px; border-bottom: var(--row-bd); font-size: var(--fs-body); color: var(--txt); }
-.mtable td.num { text-align: right; font-variant-numeric: tabular-nums;
-                 font-weight: var(--fw-num); white-space: nowrap; }
-.mtable tr:first-child td { font-weight: var(--fw-label); }
-.mtable tr:first-child td.num { color: var(--btn-ink); font-size: var(--fs-num); }
-.mtable tr:last-child td { border-bottom: none; }
-.mtable tr:hover > td { background: none; }
 
 /* ─── 骨架:輸入框 / 下拉 / textarea ─────────────────────────────── */
 input[type=number], input[type=text], select, textarea {
@@ -401,8 +369,6 @@ html[data-theme="dark"] input { color-scheme: dark; }
 html[data-theme="dark"] { color-scheme: dark; }
 input:hover, select:hover, textarea:hover { border-color: var(--btn-line); }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--btn); box-shadow: var(--focus-ring); }
-textarea#patents { width: 100%; height: 30vh; min-height: 160px; resize: vertical;
-                   font-family: var(--ff-mono); line-height: 1.6; }
 hr.sep { border: none; border-top: var(--row-bd); margin: var(--sp-lg) 0; }
 
 /* ─── 骨架:開關 ─────────────────────────────────────────────────── */
@@ -482,7 +448,7 @@ html[data-theme="dark"] .picker-btn {
 .picker-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* 展開時按鈕維持高亮,和面板連成一體 */
 .picker.open .picker-btn { border-color: var(--btn-line); background-color: var(--tab-hover); }
-/* 空的驗證碼池等情況:select disabled 時整顆變灰不可點 */
+/* select disabled 時整顆變灰不可點 */
 .picker.disabled .picker-btn { opacity: .5; cursor: not-allowed; }
 
 /* 面板:和卡片同一套語彙(毛玻璃、同圓角家族、同陰影) */
@@ -493,11 +459,10 @@ html[data-theme="dark"] .picker-btn {
   background: var(--pop-bg); box-shadow: var(--sh-pop);
   backdrop-filter: blur(22px) saturate(190%); }
 .picker.open .picker-menu { display: block; }
-/* 展開的面板要蓋過後面的兄弟區塊。招牌招式給 .apibox/.patbox 等都加了
-   backdrop-filter,那會各自建立堆疊環境 —— DOM 在後面的(.patbox)就會蓋住
+/* 展開的面板要蓋過後面的兄弟區塊。招牌招式給卡片等都加了
+   backdrop-filter,那會各自建立堆疊環境 —— DOM 在後面的區塊就會蓋住
    前面區塊裡的面板,單靠 .picker-menu 的 z-index 壓不過去。所以把「裝著展開
    選單的那個容器」整個抬起來。 */
-.apibox:has(.picker.open),
 .goal-chart-head:has(.picker.open),
 .tabbar:has(.picker.open) { position: relative; z-index: 41; }
 /* 用量明細的日期選單在 .detailbox 裡,而 .detailbox 有 overflow:hidden(圓角裁切),展開時放開 */
@@ -530,7 +495,6 @@ html[data-theme="dark"] .picker-btn {
 .tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 /* ─── 骨架:暴增列與明細 ────────────────────────────────────────── */
-.surge-tag { color: var(--warn-ink); font-weight: var(--fw-label); }
 .surge-expand-col { width: 34px; padding-right: 0; text-align: center; }
 .surge-expand { width: 23px; height: 23px; border: 0; border-radius: var(--r-sm); background: transparent;
                 color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1;
@@ -564,7 +528,6 @@ html[data-theme="dark"] .picker-btn {
 .info:hover::after, .info:focus::after { opacity: 1; }
 .info:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .info.down::after { top: calc(100% + 8px); bottom: auto; }
-.info.left::after { left: 0; right: auto; transform: none; }
 
 /* ─── 今日程式排行 / 用量明細(逐分鐘)──────────────────────────── */
 /* 用量明細的日期/篩選:放在頁籤列最右,只在用量明細頁籤顯示 */
@@ -614,86 +577,7 @@ td.dim { color: var(--muted); }
 .btn-go { background: var(--btn); color: #fff; }
 .btn-go:hover:not(:disabled) { background: var(--btn-hover); }
 .btn-go:disabled { opacity: .38; cursor: not-allowed; box-shadow: none; }
-.btn-stop { background: var(--danger); color: #fff; }
-.btn-stop:hover:not(:disabled) { box-shadow: 0 0 20px var(--danger-line); }
-.btn-stop:disabled { opacity: .38; cursor: not-allowed; box-shadow: none; }
-.btn-plain { background: transparent; color: var(--dim); border: 1px solid var(--line); }
-.btn-plain:hover { background: var(--tab-hover); color: var(--txt); }
 .btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.actions { display: flex; gap: var(--sp-sm); align-items: center; }
-.btnrow { display: flex; gap: var(--sp-sm); align-items: center; }
-.toast { color: var(--warn); font-size: var(--fs-sm); min-height: 18px; }
-
-/* ─── 骨架:控制台 ───────────────────────────────────────────────── */
-.ctl { display: grid; gap: 14px; }
-.modes { display: flex; gap: 6px; }
-.modes button { flex: 1; padding: 10px; border-radius: var(--r-md); border: 1px solid transparent;
-                background: var(--surface); color: var(--dim); cursor: pointer; font-size: var(--fs-sm);
-                font-family: var(--ff-label); font-weight: var(--fw-label);
-                transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
-.modes button:hover { background: var(--tab-hover); color: var(--txt); }
-.modes button.on { border-color: var(--tab-on-bd); color: var(--tab-on-fg); background: var(--tab-on-bg); }
-.field { display: none; gap: 8px; align-items: center; flex-wrap: wrap; }
-.field.show { display: flex; }
-.field label { color: var(--muted); font-size: var(--fs-sm); min-width: 92px; }
-.apibox, .patbox, .jobstat { padding: 13px 16px; background: var(--surface);
-                             border: var(--inset-bd); border-radius: var(--r-md); }
-.apibox-row { display: flex; align-items: center; gap: var(--sp-sm); flex-wrap: wrap; }
-.apicfg { font-size: var(--fs-sm); }
-.patbox { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.patbox .cnt { font-size: var(--fs-sm); }
-.patbox .cnt b { font-size: var(--fs-num); color: var(--btn-ink); font-family: var(--ff-mono); }
-.runblock { display: grid; gap: var(--sp-sm); }
-.runbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-.runbar .field { display: flex; }
-.runbar .field label { min-width: auto; }
-.runbar #count { width: 110px; }
-.jobstat { font-size: var(--fs-sm); color: var(--muted); display: flex; flex-wrap: wrap;
-           gap: 8px 18px; align-items: center; }
-.jobstat b { color: var(--txt); font-family: var(--ff-mono); }
-.js-item { white-space: nowrap; }
-.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-       background: var(--muted); margin-right: 7px; vertical-align: middle;
-       transition: background var(--dur) var(--ease); }
-/* 執行中沿用原專案的橘(--accent):紫已經是主色到處都是,執行中要跳出來就不能也用紫 */
-.dot.run  { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.2s ease-in-out infinite; }
-.dot.done { background: var(--ok); }
-.dot.stop { background: var(--warn); }
-.dot.idle { background: var(--muted); }
-.st-run { color: var(--accent); } .st-done { color: var(--ok-ink); }
-.st-stop { color: var(--warn); } .st-idle { color: var(--muted); }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
-@keyframes spin { to { transform: rotate(360deg); } }
-pre.log { background: var(--log-bg); border: var(--inset-bd); border-radius: var(--r-md);
-          padding: 13px 15px; height: 240px; overflow: auto; margin: var(--sp-sm) 0 0;
-          font-family: var(--ff-mono); font-size: var(--fs-hint); color: var(--log-fg);
-          white-space: pre-wrap; word-break: break-word; max-width: 100%; }
-
-/* ─── 骨架:載入動畫 ─────────────────────────────────────────────── */
-.an-loading { display: none; flex-direction: column; align-items: center; gap: 12px;
-              padding: 36px 0 28px; color: var(--muted); font-size: var(--fs-sm); }
-.an-loading.on { display: flex; }
-.spinner { width: 34px; height: 34px; border: 3px solid var(--track); border-top-color: var(--blue);
-           border-radius: 50%; animation: spin .8s linear infinite; }
-.spinner-sm { width: 14px; height: 14px; border-width: 2px; display: inline-block;
-              vertical-align: middle; margin-left: 7px; }
-
-/* ─── 骨架:篩選列 ───────────────────────────────────────────────── */
-.mfilter { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
-           margin: var(--sp-md) 0 0; font-size: var(--fs-sm); color: var(--muted); }
-.mfilter label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--txt); }
-.mfilter input { accent-color: var(--btn); width: 15px; height: 15px; }
-
-/* ─── 骨架:modal ────────────────────────────────────────────────── */
-.modal-mask { position: fixed; inset: 0; background: var(--mask); z-index: 50;
-              display: none; align-items: center; justify-content: center; padding: 20px;
-              backdrop-filter: blur(4px); }
-.modal-mask.show { display: flex; }
-.modal { background: var(--card); border: var(--card-bd); border-radius: var(--r-lg);
-         padding: 22px 24px; width: min(680px, 100%); max-height: 88vh;
-         display: flex; flex-direction: column; gap: 14px; box-shadow: var(--sh-pop);
-         backdrop-filter: blur(30px) saturate(190%); }
-.modal .btnrow { justify-content: flex-end; }
 
 /* ─── 骨架:達標情況分析(SVG 折線圖)──────────────────────────── */
 .goal-chart-head { display: flex; align-items: center; justify-content: space-between;
@@ -709,28 +593,12 @@ pre.log { background: var(--log-bg); border: var(--inset-bd); border-radius: var
              transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
 .goal-mode:hover { background: var(--tab-hover); color: var(--txt); }
 .goal-mode.on { background: var(--tab-on-bg); border-color: var(--tab-on-bd); color: var(--tab-on-fg); }
-.goal-display-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
-                       margin-top: var(--sp-sm); color: var(--muted); font-size: var(--fs-sm); }
-.goal-display-toggle label { display: inline-flex; align-items: center; gap: 5px; color: var(--txt); cursor: pointer; }
-.goal-display-toggle input { width: 15px; height: 15px; accent-color: var(--btn); }
 .goal-chart-wrap { position: relative; margin-top: var(--sp-sm); padding: 10px;
                    border: var(--inset-bd); border-radius: var(--r-md); background: var(--surface);
                    overflow: hidden; }
 .goal-chart { display: block; width: 100%; height: auto; min-height: 220px; }
 .goal-chart .grid { stroke: var(--line); stroke-width: 1; }
 .goal-chart .axis-label { fill: var(--muted); font: var(--fs-hint) var(--ff-ui); }
-.goal-chart .actual-line { fill: none; stroke: var(--btn); stroke-width: 3;
-                           stroke-linejoin: round; stroke-linecap: round; }
-.goal-chart .simple-line { fill: none; stroke: var(--blue); stroke-width: 3;
-                           stroke-linejoin: round; stroke-linecap: round; }
-.goal-chart .api-line { fill: none; stroke: var(--accent); stroke-width: 3;
-                        stroke-linejoin: round; stroke-linecap: round; }
-.goal-chart .target-line { fill: none; stroke: var(--gold); stroke-width: 2.5; stroke-dasharray: 7 5;
-                           stroke-linejoin: round; stroke-linecap: round; }
-.goal-chart .point { stroke: var(--card); stroke-width: 2; cursor: pointer; }
-.goal-chart .point.total { fill: var(--btn); }
-.goal-chart .point.simple { fill: var(--blue); }
-.goal-chart .point.api { fill: var(--accent); }
 .goal-tooltip { position: absolute; z-index: 2; max-width: 220px; padding: 8px 11px;
                 border-radius: var(--r-sm); background: var(--pop-bg); color: var(--pop-fg);
                 border: var(--pop-bd); font-size: var(--fs-hint); line-height: 1.5;
@@ -739,25 +607,7 @@ pre.log { background: var(--log-bg); border: var(--inset-bd); border-radius: var
                color: var(--muted); font-size: var(--fs-hint); min-height: 18px; }
 .goal-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .goal-legend i { width: 20px; height: 3px; border-radius: 2px; background: var(--btn); }
-.goal-legend i.simple { background: var(--blue); }
-.goal-legend i.api { background: var(--accent); }
-.goal-legend i.target { background: repeating-linear-gradient(90deg, var(--gold) 0 7px, transparent 7px 12px); }
 @media (max-width: 620px) { .goal-chart { min-height: 190px; } .goal-chart-head { align-items: flex-start; } }
-
-/* ─── 骨架:今日達標慶祝 ────────────────────────────────────────── */
-#goalfx { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: hidden; display: none; }
-#goalfx.on { display: block; }
-#goalfx .confetti { position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px;
-                    opacity: .92; animation: goalfall linear forwards; }
-@keyframes goalfall { 0% { transform: translateY(-20px) rotate(0deg); }
-                      100% { transform: translateY(102vh) rotate(720deg); } }
-#goaltoast { position: fixed; left: 50%; top: 84px; transform: translateX(-50%) translateY(-16px);
-             z-index: 81; background: linear-gradient(135deg, var(--gold), #d18f00); color: #2a1c00;
-             font-size: var(--fs-sm); font-weight: var(--fw-label); letter-spacing: .03em;
-             padding: 12px 22px; border-radius: var(--r-pill);
-             box-shadow: 0 8px 28px rgba(224,165,0,.4);
-             opacity: 0; pointer-events: none; transition: opacity .35s, transform .35s; }
-#goaltoast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
@@ -771,7 +621,7 @@ pre.log { background: var(--log-bg); border: var(--inset-bd); border-radius: var
    這樣滑鼠掃過整頁時版面是死的,只有光跟著游標亮起來,不會有東西在跳。
    這一整區可以整塊刪掉,刪掉後仍是一頁完整可用的介面(只是變樸素)。 */
 body { background: var(--bg-soft); background-attachment: fixed; }
-.card, .detailbox, .apibox, .patbox, .jobstat, .hist-scroll, .goal-chart-wrap, pre.log {
+.card, .detailbox, .hist-scroll, .goal-chart-wrap {
   backdrop-filter: blur(22px) saturate(190%); }
 
 /* 主卡:平放不傾斜,靜止時就帶一圈底光,滑入時光暈擴散變亮 */
@@ -821,31 +671,12 @@ body { background: var(--bg-soft); background-attachment: fixed; }
 
 /* 鍵盤焦點一律蓋過上面那些裝飾光暈 —— 上面的光是「狀態」,這圈是「你現在在這」,
    兩者撞在一起時必須看得出焦點在哪,所以放最後並加一層 :is() 提高優先序。 */
-:is(.btn, .tab, .subtab, .switch, .goal-mode, .modes button, .surge-expand, .info):focus-visible {
+:is(.btn, .tab, .subtab, .switch, .goal-mode, .surge-expand, .info):focus-visible {
   outline: none; box-shadow: var(--focus-ring), 0 0 18px var(--glow-ring); }
 
 /* ─── 分頁微調 ───────────────────────────────────────────────────
    骨架給的是共通尺寸,這裡只補各分頁真正不一樣的地方(沿用原版的調整)。 */
-/* 檢索進度的圓環在按鈕列下方,給它一段間距(監控頁的 calc-hero 緊貼標題,不套用) */
-#panel-calc .calc-hero { margin-top: var(--sp-md); }
-/* 檢索進度左欄只有 3 列表格,比右邊圓環矮;置中讓左右視覺高度一致 */
-#panel-calc .calc-hero .col { justify-content: center; }
-/* 爬取統計的「檢索筆數」是該頁主角數字,用主色標出來(今日與本月兩張卡同樣處理) */
-#an-q, #an-mq { color: var(--btn-ink); }
-/* 控制台的欄位標籤比別處短,輸入框也略緊一些 */
-#panel-control .field label { min-width: 80px; }
-#panel-control input { padding: 8px 12px; }
-/* 驗證碼選單:名稱可長可短,靠內容決定寬度(不吃 .picker-btn 的最小寬) */
-#panel-control .picker-btn { padding: 8px 30px 8px 14px; min-width: 0; text-align: left; }
-#panel-control .actions .btn { padding: 9px 16px; }
-/* 筆數 + 開始停止 + 提示為一排,狀態列在下,彼此距離縮小 */
-.runblock .actions { margin-top: 0; justify-content: flex-start; }
-.runblock .toast { min-height: 0; }
-.modes button .info { margin-left: 6px; }
 .goal-chart-head h2 { margin: 0; }
-/* modal 主要按鈕對齊控制台的開始/停止尺寸 */
-.modal .btn { padding: 9px 16px; }
-.modal h3 { font-size: var(--fs-h2); color: var(--txt); letter-spacing: 0; }
 
 /* ─── 流量報表(每日堆疊柱狀圖,js/report.js)────────────────────── */
 /* 系列色依「ssh → Claude Code → VS Code」固定順序取色(藍、橘、青綠),深淺兩組都跑過

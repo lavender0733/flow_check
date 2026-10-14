@@ -166,6 +166,29 @@ class PlanApplyTest(SyncTestCase):
             self.assertEqual((dst / rel).read_bytes(), body, rel)
         self.assertTrue((dst / "program" / "core" / "traffic_monitor.py").exists())
 
+    def test_root_bat_not_in_list_is_reported_not_deleted(self):
+        # 同事自己放的 .bat(或清單拿掉的舊 .bat)不刪,只在預覽列出來
+        staged = self._staged()
+        dst = self.tmp / "dst"
+        dst.mkdir()
+        (dst / "我的捷徑.bat").write_text("x", encoding="utf-8")
+        (dst / "start_monitor.bat").write_text("old", encoding="utf-8")
+        p = sync_tipo.plan(staged, dst, load_spec())
+        self.assertNotIn("我的捷徑.bat", p["remove"])
+        self.assertEqual(p["extra_bat"], ["我的捷徑.bat"])
+        self.assertIn("start_monitor.bat", p["update"])
+        sync_tipo.apply(staged, dst, p)
+        self.assertTrue((dst / "我的捷徑.bat").exists())
+
+    def test_target_config_read_from_tipo(self):
+        dst = self.tmp / "dst"
+        dst.mkdir()
+        self.assertIsNone(sync_tipo.target_config(dst))
+        (dst / "config.json").write_text(json.dumps(OLD_TIPO_CONFIG), encoding="utf-8")
+        self.assertEqual(sync_tipo.target_config(dst), OLD_TIPO_CONFIG)
+        (dst / "config.json").write_text("{壞掉", encoding="utf-8")
+        self.assertIsNone(sync_tipo.target_config(dst))
+
     def test_removes_stale_program_files_only(self):
         staged = self._staged()
         dst = self.tmp / "dst"
@@ -196,6 +219,33 @@ class PlanApplyTest(SyncTestCase):
         self.assertEqual((dst / "program" / "core" / "paths.py").read_bytes(),
                          (staged / "program" / "core" / "paths.py").read_bytes())
         self.assertEqual((dst / "web" / "Desktop.ini").read_text(encoding="utf-8"), "old")
+
+
+class GetTest(unittest.TestCase):
+    def test_timeout_returns_none_not_traceback(self):
+        # 伺服器接了連線卻不回:逾時要變成驗證失敗,不能往外噴 traceback
+        import socket
+        srv = socket.socket()
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(1)
+        port = srv.getsockname()[1]
+        old = sync_tipo.urllib.request.urlopen
+        sync_tipo.urllib.request.urlopen = lambda url, timeout: old(url, timeout=0.3)
+        try:
+            status, why = sync_tipo._get(f"http://127.0.0.1:{port}/api/status")
+        finally:
+            sync_tipo.urllib.request.urlopen = old
+            srv.close()
+        self.assertIsNone(status)
+        self.assertTrue(why)
+
+    def test_refused_returns_none(self):
+        import socket
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        self.assertEqual(sync_tipo._get(f"http://127.0.0.1:{port}/")[0], None)
 
 
 class StartupTest(SyncTestCase):
