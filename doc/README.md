@@ -1,5 +1,7 @@
 # Flow Check — 流量監控 + 690 資轉監控  `v8.1.0`
 
+> 本檔是完整使用者說明的正本。[精簡首頁](../README.html)方便瀏覽，[進階參考](進階參考.html)提供設定速查與 HTTP API；開發架構與規範見 [.claude/CLAUDE.md](../.claude/CLAUDE.md)。
+
 一個本機小工具:**量測當日網路用量**(對每日 2GB 額度),並提供**流量報表**,拿來跟公司反映連線問題。背景常駐、開瀏覽器即看。
 **690 資轉監控**讀 s690 Rundeck 的通知信,顯示每個轉置系統每天 / 每期的狀態,並在 KM 的「資料轉置登記」表格裡登記。
 
@@ -26,7 +28,7 @@
 ## 啟動 / 關閉
 
 | 動作 | 做法 |
-|---|---|
+| --- | --- |
 | 啟動 | 雙擊 **`start_monitor.bat`**(第一次會跳一次 **UAC**,按「是」;之後自動開瀏覽器到 `http://127.0.0.1:8765`) |
 | 關閉 | 雙擊 **`stop_monitor.bat`**(同樣跳一次 UAC;只關本工具,不影響其他 Python) |
 | 內網排除診斷 | 雙擊 **`diag_lan.bat`**(需管理員)。每 10 秒逐連線列出對方 IP、內外網分類與收發量,並和執行中主工具的實扣量對照 |
@@ -70,6 +72,7 @@
 - 資料來自**每日用量統計** `data/machines/daily_stats_<機器>.json`:每天一筆、長期保存,換日時結算(今天那筆即時算)。
   每筆有總量、各程式量、未歸因、監控未執行期間、已排除內網量,以及逐時明細。
 - 要分開統計的程式在 `config.json` 的 `report_apps` 調整(預設 `ssh` → `ssh.exe`、`vscode` → `code.exe`、`claude` → `claude.exe`)。
+  可更換這三類的程序檔名;目前圖表只單獨顯示 `ssh`、`claude`、`vscode`,新增類別不會自動增加圖表系列。
   只算 ESTATS 對得到的外網 TCP 連線;「未歸因」大代表各程式的量偏低。
 
 ## 外觀
@@ -92,7 +95,7 @@ Rundeck 在內網連不到,所以只靠信。
 2. 在「信件與連線」的 Gmail 卡片按 **授權**(或雙擊 **`690授權.bat`**)→ 新分頁跳出 Google 登入,用 `alicia.huang@innovue.ltd` 同意唯讀權限。
    Gmail 走公開的 Google 端點,不用開 VPN、不用換網路。分頁被關掉就按「重新開啟授權頁」。
    已授權時卡片顯示 **登出**(刪掉 token、停止抓信)。
-   完成後會印出近 30 天每個 job 的統計表(封數、成功失敗、時刻),拿來核對系統清單。
+   使用 `690授權.bat` 完成後會印出近 30 天每個 job 的統計表(封數、成功失敗、時刻),拿來核對系統清單。
    token 存在 `data/machines/gmail_token_<機器>.json`。
 3. 要寫 KM 的話,`xfer690.json` 的 `wiki.enabled` 要是 `true`。KM 只開 **Innovue OAuth** 登入,程式沒辦法自己登入:
    在瀏覽器用 Innovue OAuth 登入 KM → F12 → Application → Cookies → 複製 `jwt` 的值 →
@@ -108,14 +111,15 @@ Rundeck 在內網連不到,所以只靠信。
 ### 畫面
 
 - **690資轉**頁籤,分類列:
-  - **每日資轉**:今天每個每日系統一列,步驟一顆點(步驟和它的 `-check` 併成一顆,兩個都成功才算綠)。
-    系統有設定 `reruns` 的(目前是搜尋後續),那一列底下多一行「補跑」:近 7 天每個補跑作業只看最新一次,
+  - **每日資轉**:今天每個每日系統一塊磚,依最晚時間排;失敗、該到沒到等需要處理的整塊淡紅底。
+    磚裡有狀態、收信或最晚時間,以及步驟一顆點(步驟和它的 `-check` 併成一顆,兩個都成功才算綠)。
+    系統有設定 `reruns` 的(目前是搜尋後續),磚塊底下多一行「補跑」:近 7 天每個補跑作業只看最新一次,
     成功的一顆綠點,失敗的寫出作業名稱和「失敗」log 連結,算在每日資轉的警示。
     設了 `rerun_date` 的(目前是技術報告)補跑前幾天的資料時,也列在「補跑」,並算回資料那一天;
     KM 上那天原本填的「-」(`nodata_value`)補跑成功後改成 v,其他人填的值照樣不覆寫。
   - **TWA 公開 / TWB 公告**:資料種類(全文、書目、雜項、英譯)× 公告期數。只追蹤最近一個月(TWA 2 期、TWB 3 期);
     近一個月內補跑的舊期列在「更早的期」。點一格看那期的細節。
-  - **其他作業**:信裡出現、但不在系統清單裡的 job。手動作業依作業名稱(去掉 `-stepN-…`)一個作業一列,
+  - **其他作業**:信裡出現、但不在系統清單裡的 job。手動作業依作業名稱(去掉 `-stepN-…`)一個作業一塊磚(新的在前,失敗的整塊淡紅底),
     同名的不論成功或失敗只列最新一次(失敗會算警示);維運 99xxxx 只列最後一次。
   - **KM 登記**:登入 KM 後顯示「填好之後」的表格預覽,按「寫入 KM」才寫。
 - **信件與連線**頁籤:Gmail 授權狀態、KM 登入(在這裡按「登入 KM」)、最近 20 封信。
@@ -125,7 +129,7 @@ Rundeck 在內網連不到,所以只靠信。
 ### 狀態的意思
 
 | 狀態 | 意思 |
-|---|---|
+| --- | --- |
 | 成功 | 步驟與它的 check 都成功 |
 | 無資料 | step1-raw 失敗,原因是 `GCS 資料夾無檔案`。**每日系統**不算警示,KM 那幾格填 `-`(`wiki.nodata_value`),不打 v;**期別系統**代表那期檔案還沒到,算警示、不寫 KM |
 | 失敗 | 有失敗信。之後的步驟顯示「沒有執行」 |
@@ -156,7 +160,7 @@ Rundeck 在內網連不到,所以只靠信。
 - 目標列以外的每一行逐位元組不變;欄名對不上時整張表不寫;內容沒變不送更新;一頁失敗不影響其他頁。
 - **手動修改**:KM 登記頁點任一格可改(Enter 存、Esc 取消),寫入時一起送出。這是唯一會覆寫非空值的路徑,
   而且伺服器會先確認頁面上那格還是你看到的值,不是就整筆不寫、列為衝突。
-- 登入在「信件與連線」做一次,換到的憑證只放伺服器記憶體(不寫檔),伺服器重開要重新登入。
+- 登入在「信件與連線」做一次,憑證存進 `data/config/xfer690_secrets.json` 的 `wiki_jwt`,重開不用重貼;失效時需重新登入。
 - `xfer690.json` 的 `wiki.dry_run` 是 `true` 時,按「寫入 KM」只算結果、不真的寫。
 - **s690 查詢**(抓完信後在背景查,整期成功才查;結果存在快取,同一期不重查,重跑過才重查):
   - 690查詢筆數:進階檢索、案件類型 TWA / TWB、`PD:[那期日期 TO 那期日期]` 的總筆數。跟 Biblio 不同時照填,預覽標波浪線。
@@ -175,7 +179,7 @@ Rundeck 在內網連不到,所以只靠信。
 ### `data/config/xfer690.json`
 
 | 鍵 | 意義 |
-|---|---|
+| --- | --- |
 | `enabled` | 690 監控開關 |
 | `retain_days` / `history_days` | 快取保留天數(45)/ 每日系統往回看幾天(14) |
 | `gmail_query` | Gmail 搜尋條件 |
@@ -196,85 +200,47 @@ Rundeck 在內網連不到,所以只靠信。
 
 ---
 
-## 檔案結構
+## 使用者會用到的檔案
 
-> **要加新功能時:**
-> - **新增一個 HTTP 端點** → 在 `program/core/routes.py` 寫一個函式,在 `build_routes()` 加一行註冊。路徑是**精確比對**,註冊順序無關緊要。
-> - **新增一個網頁頁籤** → 丟兩個新檔:`web/partials/xxx.html`(面板,外層 `<div class="panel hidden" id="panel-xxx">`)與
->   `web/js/xxx.js`(結尾呼叫 `registerTab({id, label, order, onInit?, onFirstShow?, onShow?})`)。**現有檔案零改動**,重整即生效。
-> - **TIPO flow check** 由 `同步到TIPO flow check.bat` 從這裡產生。在 `program/core/` 新增檔案時,要想清楚 TIPO flow check 需不需要
->   (`tools/sync_tipo.json` 的 `copy` / `exclude`)。
-
-```
+```text
 flow_check/
-├─ README.html            本說明文件(雙擊即可在瀏覽器看)
+├─ README.html                       精簡說明首頁
 ├─ doc/
-│  ├─ README.md            本說明文件的 Markdown 版
-│  ├─ 進階參考.html         設定速查、檔案結構、HTTP API 端點
-│  ├─ 版本紀錄.html         各版更新紀錄
-│  ├─ TIPO flow check README.md       TIPO flow check 的 README 來源(同步時複製成 TIPO flow check 的 README.md)
-│  ├─ specs/               設計文件
-│  └─ plans/               實作計畫與進度筆記
-├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉(啟動時自動檢查並安裝 psutil 與 690 的套件)
-├─ diag_lan.bat           內網排除診斷(需管理員)
-├─ 690授權.bat            690:Gmail 唯讀授權 + 印出近 30 天信箱統計(每台電腦一次)
-├─ 同步到TIPO flow check.bat        產生 TIPO flow check(雙擊只預覽;命令列加 --apply 才寫入)
-├─ requirements.txt       第三方相依套件(psutil;會同步到 TIPO flow check)
-├─ requirements-690.txt   690 的相依套件(google-auth-oauthlib;只在這裡)
-├─ config.json            主設定:額度、port、取樣間隔、網段
-├─ tests/                 單元測試(690;只放本機、不進版控);fixtures/xfer690/ 是真實的 KM 頁面原文與 log
-├─ tools/                 開發用工具:sync_tipo.py(同步腳本)、sync_tipo.json(清單與路徑對應)、test_sync_tipo.py
-├─ web/                   網頁介面(免打包純 HTML/JS;頁籤:流量監控 / 流量報表 / 690資轉 / 信件與連線)
-│  ├─ index.html          外殼:頁籤列由註冊表生成,面板與 js 由伺服器掃 partials/ 注入
-│  ├─ style.css           樣式:深色 / 淺色共用一份骨架,靠 <html data-theme> 切 token
-│  ├─ style-classic.css   「原版」外觀
-│  ├─ partials/           各分頁 HTML(monitor / report / xfer690;xfer690 自帶 x6- 開頭的樣式)
-│  └─ js/                 util / monitor / report / xfer690 / main(載入順序即相依順序、共用全域作用域)
-├─ data/                  (不在版控內,除了下面標「版控」的)
-│  ├─ config/machines.json 機器代號 → 友善名稱對照(如「桌機」;空值則顯示代號)
-│  ├─ config/xfer690.json  690 的系統清單與 KM 表格設定(版控)
-│  ├─ config/gmail_credentials.json  ★機密:GCP 的 OAuth 用戶端
-│  ├─ config/xfer690_secrets.json    ★機密:KM 登入憑證(wiki_jwt)
-│  └─ machines/            各電腦執行期資料(檔名含機器代號,同步不互相覆蓋)
-│     ├─ state_<機器>.json        當日用量(跨重啟保留、跨日歸零)
-│     ├─ prefs_<機器>.json        本機偏好:通知 / 暴增預警開關與門檻、外觀
-│     ├─ daily_stats_<機器>.json  每日用量統計(流量報表)
-│     ├─ gmail_token_<機器>.json  ★機密:690 的 Gmail 授權
-│     └─ xfer690_<機器>.json      690 抓過的信(主旨、時間、log 摘要;不存整份 log)
-└─ program/
-   ├─ core/
-   │  ├─ traffic_monitor.py   進入點:組裝與啟動(載設定 → 造 Monitor → 起背景迴圈 → 開伺服器;VERSION 版號唯一來源)
-   │  ├─ routes.py            HTTP 端點,各一個函式,最下方 build_routes() 一張註冊表
-   │  ├─ sampler.py           流量取樣與計費(Monitor)、ESTATS 高頻探測迴圈、主動測速
-   │  ├─ daily_stats.py       每日用量統計(流量報表)
-   │  ├─ estats.py            Windows ESTATS 逐 TCP 連線收/發位元組(內網排除底層)
-   │  ├─ procinfo.py          程序 → 軟體名稱 / Windows 服務名稱
-   │  ├─ health.py            錯誤收集與「程式碼已更新、需重啟」偵測(掃 core/ + common/ + xfer690/)
-   │  ├─ lan_diag.py          內網排除診斷工具(由 diag_lan.bat 啟動)
-   │  ├─ paths.py             路徑常數與機器身分
-   │  └─ storage.py           資料層:設定 / 偏好 / 機器標籤
-   ├─ common/
-   │  ├─ webapp.py            HTTP 底座:路由分派、靜態檔、路徑穿越防護、錯誤收斂、serve()
-   │  ├─ jsonio.py            JSON 原子寫入 / 容錯讀取 / 檔案簽章
-   │  └─ ident.py             機器代號 machine_id()
-   └─ xfer690/                690 資轉監控(不同步到 TIPO flow check;不存在時主程式照常啟動)
-      ├─ periods.py           期數 ↔ 日期、民國日期
-      ├─ parser.py            通知信主旨 → 事件;原始信 → log 摘要(VOL、TAG、writes、error)
-      ├─ status.py            事件 → 各系統各期各步驟的狀態
-      ├─ wikitable.py         markdown 表格:找表、只填空格、插列、使用者的手動修改
-      ├─ wiki.py              填格規劃、Wiki.js GraphQL 用戶端、整頁同步與預覽
-      ├─ gmail_client.py      Gmail REST 唯讀用戶端
-      ├─ service.py           組裝:設定、抓信、快取、背景迴圈、KM 登入與寫入
-      └─ authorize.py         一次性 Gmail 授權與信箱統計(690授權.bat)
+│  ├─ README.md                      完整使用者說明正本
+│  ├─ 進階參考.html                   設定速查、HTTP API
+│  ├─ 版本紀錄.html                   更新紀錄
+│  └─ TIPO flow check README.md       TIPO 使用者說明來源
+├─ start_monitor.bat / stop_monitor.bat   啟動 / 關閉
+├─ diag_lan.bat                       內網排除診斷
+├─ 690授權.bat                        Gmail 授權與信箱統計(也可在網頁授權)
+├─ 同步到TIPO flow check.bat           產生 TIPO flow check(雙擊只預覽)
+├─ requirements.txt / requirements-690.txt   啟動時自動檢查的相依套件
+├─ config.json                       額度、埠、取樣間隔、網段
+└─ data/
+   ├─ config/machines.json           機器代號 → 友善名稱對照
+   ├─ config/xfer690.json            690 系統清單與 KM 表格設定
+   ├─ config/gmail_credentials.json  ★機密:GCP OAuth 用戶端
+   ├─ config/xfer690_secrets.json     ★機密:KM JWT(wiki_jwt)
+   └─ machines/
+      ├─ state_<機器>.json           當日用量
+      ├─ prefs_<機器>.json           本機偏好與外觀
+      ├─ daily_stats_<機器>.json     每日用量統計
+      ├─ gmail_token_<機器>.json     ★機密:Gmail 授權
+      └─ xfer690_<機器>.json         已抓信件與查詢結果快取
 ```
+
+`data/config/machines.json` 與 `data/config/xfer690.json` 進版控,其他資料與機密檔不進版控。
+逐分鐘明細另放本機 `%LOCALAPPDATA%\flow_check\traffic\`,不放同步夾。
+`program/`、`web/` 與 `tools/` 的開發分工見 [.claude/CLAUDE.md](../.claude/CLAUDE.md)。
 
 ---
 
 ## 設定速查
 
 **`config.json`**
+
 | 鍵 | 意義 |
-|---|---|
+| --- | --- |
 | `quota_gb` | 每日流量額度(預設 2) |
 | `port` | 網頁埠(預設 8765) |
 | `sample_interval_sec` | NIC 計費取樣間隔秒數(預設 60) |
@@ -287,7 +253,7 @@ flow_check/
 | `peak_window_min` | 被動「最高下載速率」的觀測視窗分鐘數(預設 10) |
 | `speedtest_url` | 主動測速來源(預設 Cloudflare `https://speed.cloudflare.com/__down`;被擋可換) |
 | `speedtest_bytes` / `speedtest_timeout` | 主動測速最多抓的位元組(預設 8MB)/ 最長秒數(預設 6) |
-| `report_apps` | 流量報表要分開統計的程式(選填):`{"類別": ["程序檔名.exe", …]}` |
+| `report_apps` | 分類 → 程序檔名清單(選填):`{"類別": ["程序檔名.exe", …]}`。目前圖表只單獨顯示 `ssh`、`claude`、`vscode`;可更換檔名,新增類別不會自動增加圖表系列 |
 
 > **流量暴增預警 / 用量通知 / 外觀不放這裡**:`surge_enabled`/`surge_min_mb`/`surge_factor`/`surge_window_min`/`surge_cooldown_sec`、
 > `notify_enabled`/`notify_threshold` 與 `theme` 以**本機偏好** `data/machines/prefs_<機器>.json` 為權威來源(各台獨立、頁面即時切換);
@@ -296,30 +262,7 @@ flow_check/
 
 ---
 
-## HTTP API 端點(供開發 / 排查;一般使用者不需碰)
-
-> 端點定義在 `program/core/routes.py` 的 `build_routes()`,一個端點一個函式。
-> 路徑為**精確比對**;對不到的路徑一律回 404。
-
-| 方法 | 路徑 | 用途 |
-|---|---|---|
-| GET | `/api/status` | 當日流量 / 即時速率 / 各網卡明細 / 健康狀態 / 暴增事件 / 今日程式排行 / `lan_excluded_bytes` 等(前端 5 秒輪詢) |
-| GET | `/api/traffic/log?date=YYYY-MM-DD&after=N` | 某天的逐分鐘用量明細(網頁用到的欄位;`after` = 從第 N 筆起,網頁看今天時只補新增的),外加有明細的日期清單 |
-| GET | `/api/traffic/daily` | 每日用量統計(流量報表),今天那筆即時計算 |
-| GET | `/api/config` | 額度、速率下限、本機偏好(`notify_*`、`surge_*`、`theme`) |
-| POST | `/api/prefs` | 寫回本機偏好,即時套用到執行中的監控(不必重啟) |
-| POST | `/api/speedtest` | 主動測速:抓一小段量實際 Mbps、判斷有無被限速(每次約耗 8MB) |
-| GET | `/api/xfer690` | 690 快照:各系統狀態、最近 20 封信、Gmail 與 KM 的狀態、KM 預覽(前端每 60 秒讀) |
-| POST | `/api/xfer690/refresh` | 690「立即更新」:前景抓一次信,回傳新快照 |
-| GET | `/api/xfer690/log?id=<信件 id>` | 那封通知信附的 `.log` 純文字(當下從 Gmail 抓,不存檔) |
-| POST | `/api/xfer690/wiki/login` | body `{"jwt": "…"}`:使用者從瀏覽器複製的 KM jwt。確認有效才存進 `xfer690_secrets.json`,回應不回顯 |
-| POST | `/api/xfer690/wiki/logout` | 清掉 KM 登入憑證(記憶體與 `xfer690_secrets.json`) |
-| POST | `/api/xfer690/gmail/authorize` | 回傳 Google 同意頁網址 `{"ok", "url"}`(網頁在新分頁開;10 分鐘內有效,再按一次換新的) |
-| GET | `/api/xfer690/gmail/callback` | Google 同意後導回這裡(帶 `state`、`code`):換 token 存檔、背景抓一次信,回一句純文字給那個分頁 |
-| POST | `/api/xfer690/gmail/logout` | 刪掉這台電腦的 Gmail token,停止抓信 |
-| POST | `/api/xfer690/wiki/write` | 寫入 KM(body `{"edits": [...]}` 是使用者手改的格);沒登入回 409 `{"error": "not_logged_in"}` |
-
----
+HTTP API 端點與排查參考見 [進階參考.html](進階參考.html)。
 
 ## 版本紀錄
 

@@ -134,7 +134,7 @@
     <tr><td>啟動</td><td>雙擊 <strong><code>start_monitor.bat</code></strong>,會自動打開瀏覽器到 <code>http://127.0.0.1:8765</code></td></tr>
     <tr><td>關閉</td><td>雙擊 <strong><code>stop_monitor.bat</code></strong>(只關這個工具,不影響其他程式)</td></tr>
     <tr><td>內網排除診斷</td><td>雙擊 <strong><code>diag_lan.bat</code></strong>(需管理員)。每 10 秒逐連線列出對方 IP、內外網分類與收發量,並和執行中主工具的實扣量對照。平常不必開,內網排除算得怪怪的時候再用。</td></tr>
-    <tr><td>690 Gmail 授權</td><td>雙擊 <strong><code>690授權.bat</code></strong>(每台電腦一次,或授權失效時)。瀏覽器跳出 Google 登入,同意唯讀權限即可。</td></tr>
+    <tr><td>690 Gmail 授權</td><td>在「信件與連線」的 Gmail 卡片按<strong>授權</strong>(也可雙擊 <code>690授權.bat</code>)。瀏覽器跳出 Google 登入,同意唯讀權限即可。</td></tr>
   </tbody>
 </table>
 
@@ -163,7 +163,7 @@
   <li><strong>每日流量</strong>:每天一根堆疊柱,分出 <strong>ssh</strong>、<strong>Claude Code</strong>、<strong>VS Code</strong> 與其他;可切「合計 / 上傳 / 下載」、期間「最近 14 天 / 31 天 / 全部」。</li>
   <li><strong>逐時</strong>:點某一天,換成那天 8–20 點的逐時折線圖,看幾支程式是不是同時段一起升降。按「← 每日」回來。</li>
   <li><strong>看每日數字</strong>:展開表格看每天的數字,方便截圖或抄給公司。</li>
-  <li>每日統計長期保存(不像用量明細只留 31 天),一天只寫一次。要分開統計的程式可在 <code>config.json</code> 的 <code>report_apps</code> 調整。</li>
+  <li>每日統計長期保存(不像用量明細只留 31 天),一天只寫一次。可在 <code>config.json</code> 的 <code>report_apps</code> 更換三類程式的檔名；新增類別不會自動增加圖表系列。</li>
 </ul>
 
 <h3>外觀</h3>
@@ -177,9 +177,9 @@
 <ul>
   <li><strong>690資轉</strong>:
     <ul>
-      <li><strong>每日資轉</strong>:今天每個每日系統一列,每個步驟一顆點。搜尋後續的補跑列在那一列底下(成功一顆點,失敗附 log)。</li>
+      <li><strong>每日資轉</strong>:今天每個每日系統一塊磚,需要處理的整塊淡紅底,每個步驟一顆點。搜尋後續的補跑列在磚塊底下(成功一顆點,失敗附 log)；技術報告補跑舊資料算回資料那一天。</li>
       <li><strong>TWA 公開 / TWB 公告</strong>:全文、書目、雜項、英譯 × 公告期數,只追蹤最近一個月;補跑的舊期列在「更早的期」。點一格看那期的細節。</li>
-      <li><strong>其他作業</strong>:不在系統清單上的手動作業(同名的只列最新一次),以及維運 99xxxx。</li>
+      <li><strong>其他作業</strong>:不在系統清單上的手動作業,一個作業一塊磚(同名的只列最新一次),以及維運 99xxxx。</li>
       <li><strong>KM 登記</strong>:登入 KM 後顯示填好的表格預覽,按「寫入 KM」才寫。點任一格可以手動修改。</li>
     </ul>
   </li>
@@ -191,17 +191,18 @@
 <p><strong>第一次設定</strong>(每台電腦一次):</p>
 <ol class="steps">
   <li>確認 <code>data/config/gmail_credentials.json</code> 在(GCP 的 OAuth 用戶端)。</li>
-  <li>雙擊 <code>690授權.bat</code>,用 <code>alicia.huang@innovue.ltd</code> 同意唯讀權限。</li>
+  <li>在「信件與連線」的 Gmail 卡片按<strong>授權</strong>(也可雙擊 <code>690授權.bat</code>),用 <code>alicia.huang@innovue.ltd</code> 同意唯讀權限。</li>
   <li>要寫 KM 的話,<code>data/config/xfer690.json</code> 的 <code>wiki.enabled</code> 要是 <code>true</code>。在瀏覽器用 Innovue OAuth 登入 KM,按 F12 → Application → Cookies 複製 <code>jwt</code> 的值,貼到「信件與連線」的 KM 卡片按「登入 KM」(存在 <code>data/config/xfer690_secrets.json</code>,重開不用重貼)。</li>
   <li>重開 <code>start_monitor.bat</code>(第一次會自動安裝 690 需要的套件;裝不起來只停用 690,流量監控照常)。</li>
 </ol>
-<p>規則與設定的細節見<a href="doc/進階參考.html">進階參考</a>與 <code>doc/README.md</code> 的「690 資轉監控」一節。</p>
+<p>規則與設定的細節見<a href="doc/進階參考.html">進階參考</a>與 <a href="doc/README.md">完整使用者說明</a>的「690 資轉監控」一節。</p>
 
 <hr>
 
 <h2>進階參考</h2>
 <ul>
-  <li>📑 <a href="doc/進階參考.html"><strong>進階參考</strong></a> —— 設定速查、檔案結構、HTTP API 端點</li>
+  <li><a href="doc/README.md"><strong>完整使用者說明</strong></a> —— 安裝、操作與設定的正本</li>
+  <li>📑 <a href="doc/進階參考.html"><strong>進階參考</strong></a> —— 設定速查、HTTP API 端點</li>
   <li>🗒️ <a href="doc/版本紀錄.html"><strong>版本紀錄</strong></a></li>
 </ul>
 
