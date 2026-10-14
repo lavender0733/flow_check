@@ -54,7 +54,7 @@
 - **逐時**:點某一天,換成那天 8–20 點的逐時折線圖。按「← 每日」回來。
 - **看每日數字**:展開表格看每天的數字,方便截圖。
 - 資料存在 `data/daily_stats_<機器>.json`,每天一筆、長期保存。
-- 要分開統計的程式可在 `config.json` 加 `report_apps` 調整(見下方設定速查)。
+- 三類程式各自對應的程式檔名可在 `config.json` 的 `report_apps` 調整(預設 `ssh` → `ssh.exe`、`vscode` → `code.exe`、`claude` → `claude.exe`;見下方設定速查)。
 
 ## 外觀
 
@@ -99,7 +99,7 @@ TIPO flow check/
 | `peak_window_min` | 被動「最高下載速率」的觀測視窗分鐘數(預設 10) |
 | `speedtest_url` | 主動測速來源(預設 Cloudflare;被擋可換) |
 | `speedtest_bytes` / `speedtest_timeout` | 主動測速最多抓的位元組(預設 8MB)/ 最長秒數(預設 6) |
-| `report_apps` | 流量報表要分開統計的程式(選填),例如 `{"ssh": ["ssh.exe"], "vscode": ["code.exe"], "claude": ["claude.exe"]}` |
+| `report_apps` | 分類 → 程式檔名清單(選填):`{"類別": ["程式檔名.exe", …]}`。圖表只單獨顯示 `ssh`、`claude`、`vscode`;可更換檔名,新增類別不會自動增加圖表系列 |
 
 > 用量通知、流量暴增預警的開關與門檻、外觀不放這裡,存在 `data/prefs_<機器>.json`,在網頁上切換即可。
 
@@ -113,6 +113,7 @@ TIPO flow check/
 - 每頁卡片標題放大(12px → 15px)。
 - 流量報表逐時畫面的「← 每日」改成淡紫膠囊按鈕。
 - 淺色主題:外觀選單的「外觀」標題、「暴增紀錄」的 🔺 數字改成看得清楚的顏色。
+- 同步更新時,這個資料夾根目錄自己放的 `.bat` 不會被刪掉。
 
 ### 8.0.0 — 2026-10-02
 - 版號改成跟 flow_check 一致(原本的 3.3.0 之後直接是 8.0.0)。之後由 flow_check 同步產生。
