@@ -279,25 +279,35 @@ function x6renderDaily() {
     const p = x6todayPeriod(s) || { key: today, state: "none", steps: {} };
     counts[p.state] = (counts[p.state] || 0) + 1;
     const fail = p.state === "fail" ? x6failInfo(s, p) : null;
-    const row = x6el("div", "x6-sys");
-    row.append(x6el("i", "x6-dot " + p.state));
+    // 一個系統一塊磚;只有異常(含補跑失敗)整塊上色
+    const reruns = x6rerunItems(s);
+    const bad = X6_BAD.includes(p.state) || reruns.some(r => r.state === "fail");
+    const row = x6el("div", "x6-brick" + (bad ? " bad" : ""));
+    const head = x6el("div", "x6-brick-h");
     const nm = x6el("div", "name", s.label);
     nm.append(x6el("small", null, (s.auto || []).join(" · ")));
-    row.append(nm, x6stateEl("div", p.state, fail));
-    const steps = x6el("div", "x6-steps");
-    for (const pr of s.pairs || []) {
-      const st = x6pairState(p, pr);
-      const lab = x6stepLabel(s, pr[0]);
-      const at = ((p.steps || {})[pr[1] || pr[0]] || (p.steps || {})[pr[0]] || {}).at;
-      const sp = x6el("span", "x6-step" + (st === "fail" ? " failed" : ""));
-      sp.append(x6dot(st, `${s.label} · ${lab}(${pr.filter(Boolean).join(" / ")})\n${X6_LABEL[st]}${at ? `,${x6hm(at)} 收到` : ""}`),
-                document.createTextNode(lab));
-      steps.append(sp);
+    head.append(x6el("i", "x6-dot " + p.state), nm,
+                x6el("div", "when", p.last_at ? `收信 ${x6hm(p.last_at)}` : `最晚 ${s.expect_by}`));
+    // 全部成功只留綠色「成功」,不列步驟小點
+    const stEl = x6stateEl("div", p.state, fail);
+    if (p.state === "ok") stEl.classList.add("ok");
+    row.append(head, stEl);
+    if (p.state !== "ok") {
+      const steps = x6el("div", "x6-steps");
+      for (const pr of s.pairs || []) {
+        const st = x6pairState(p, pr);
+        const lab = x6stepLabel(s, pr[0]);
+        const at = ((p.steps || {})[pr[1] || pr[0]] || (p.steps || {})[pr[0]] || {}).at;
+        const sp = x6el("span", "x6-step" + (st === "fail" ? " failed" : ""));
+        sp.append(x6dot(st, `${s.label} · ${lab}(${pr.filter(Boolean).join(" / ")})\n${X6_LABEL[st]}${at ? `,${x6hm(at)} 收到` : ""}`),
+                  document.createTextNode(lab));
+        steps.append(sp);
+      }
+      row.append(steps);
     }
-    row.append(steps, x6el("div", "when", p.last_at ? `收信 ${x6hm(p.last_at)}` : `最晚 ${s.expect_by}`));
     const box2 = x6explain(s, p);
     if (box2) row.append(box2);
-    if (x6rerunItems(s).length) row.append(x6reruns(s));
+    if (reruns.length) row.append(x6reruns(s));
     box.append(row);
   }
   const done = counts.ok + counts.nodata;
@@ -331,8 +341,8 @@ function x6adhocFail(s, p, job) {
 function x6reruns(s) {
   const box = x6el("div", "x6-reruns");
   box.append(x6el("span", "k", "補跑"));
-  // 失敗的排前面
-  for (const p of x6rerunItems(s).sort((a, b) => (b.state === "fail") - (a.state === "fail"))) {
+  // 成功的點排前面接在「補跑」後面,失敗的(名稱、時間、失敗連結)排後面各自換行
+  for (const p of x6rerunItems(s).sort((a, b) => (a.state === "fail") - (b.state === "fail"))) {
     const it = x6el("span", "it");
     const codes = Object.keys(p.steps || {}).sort().join(" · ");
     const label = p.day ? p.job : x6rerunLabel(p.job);
@@ -564,21 +574,28 @@ function x6renderAdhoc() {
   for (const [s, p] of runs) {
     const codes = Object.keys(p.steps || {}).sort();
     const job = p.job || s.id;
-    const row = x6el("div", "x6-sys wide");
-    row.append(x6el("i", "x6-dot " + p.state));
+    // 跟每日資轉同一款磚塊,依收信時間新的在前
+    const row = x6el("div", "x6-brick" + (X6_BAD.includes(p.state) ? " bad" : ""));
+    const head = x6el("div", "x6-brick-h");
     const nm = x6el("div", "name", job);
     nm.append(x6el("small", null, `${s.id} · ${(s.groups || []).join("、")}`));
+    head.append(x6el("i", "x6-dot " + p.state), nm, x6el("div", "when", `收信 ${x6mdhm(p.last_at)}`));
     const fail = p.state === "fail" ? x6adhocFail(s, p, job) : null;
-    row.append(nm, x6stateEl("div", p.state, fail));
-    const steps = x6el("div", "x6-steps");
-    for (const c of codes) {
-      const st = p.steps[c].state;
-      const lab = ((s.names || {})[c] || c).replace(job + "-", "");
-      const sp = x6el("span", "x6-step" + (st === "fail" ? " failed" : ""));
-      sp.append(x6dot(st, `${c}-${(s.names || {})[c] || ""}\n${X6_LABEL[st] || st}`), document.createTextNode(lab));
-      steps.append(sp);
+    // 全部成功只留綠色「成功」,不列步驟小點
+    const stEl = x6stateEl("div", p.state, fail);
+    if (p.state === "ok") stEl.classList.add("ok");
+    row.append(head, stEl);
+    if (p.state !== "ok") {
+      const steps = x6el("div", "x6-steps");
+      for (const c of codes) {
+        const st = p.steps[c].state;
+        const lab = ((s.names || {})[c] || c).replace(job + "-", "");
+        const sp = x6el("span", "x6-step" + (st === "fail" ? " failed" : ""));
+        sp.append(x6dot(st, `${c}-${(s.names || {})[c] || ""}\n${X6_LABEL[st] || st}`), document.createTextNode(lab));
+        steps.append(sp);
+      }
+      row.append(steps);
     }
-    row.append(steps, x6el("div", "when", `收信 ${x6mdhm(p.last_at)}`));
     box.append(row);
   }
   const m = x6$("x6-maint");

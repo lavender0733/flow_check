@@ -96,21 +96,15 @@ html[data-theme="light"] .x6-lgd-pop { background: var(--hole-bg, #fff); }
   .x6-lgd { position: static; }
   .x6-lgd-pop { left: 12px; right: 12px; top: 52px; max-width: none; width: auto; } }
 
-/* 每日 / 其他作業:一列一個系統 */
-.x6-sys { display: grid; grid-template-columns: 14px minmax(7.5em, 9em) minmax(5em, 6.5em) minmax(0, 1fr) auto;
-          gap: 6px 14px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
-.x6-sys:last-child { border-bottom: 0; }
-.x6-sys.wide { grid-template-columns: 14px minmax(11em, 16em) minmax(3.5em, 4.5em) minmax(0, 1fr) auto; }
-.x6-sys .name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.x6-sys .name small { display: block; font-weight: 400; color: var(--muted, var(--dim)); font-size: 11px; font-family: var(--ff-mono, monospace); }
+/* 每日 / 其他作業共用的狀態、步驟、補跑、說明 */
 .x6-state { font-size: 13px; color: var(--dim); }
 .x6-state.bad { color: var(--danger-ink, var(--danger)); font-weight: 600; }
+.x6-state.ok { color: var(--ok-ink, var(--ok)); }
 .x6-reruns { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 2px 16px; align-items: center; font-size: 12px; color: var(--muted, var(--dim)); }
 .x6-reruns .k { font-weight: 600; color: var(--dim); }
 .x6-reruns .it { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .x6-reruns .t { font-variant-numeric: tabular-nums; }
 .x6-reruns .x6-state { font-size: 12px; }
-.x6-sys .when { font-size: 12px; color: var(--muted, var(--dim)); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .x6-steps { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; min-width: 0; }
 .x6-step { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; color: var(--muted, var(--dim)); white-space: nowrap; }
 .x6-step.failed { color: var(--danger-ink, var(--danger)); font-weight: 700; }
@@ -127,12 +121,25 @@ html[data-theme="light"] .x6-lgd-pop { background: var(--hole-bg, #fff); }
 .x6-faillink:hover .lg { background: var(--danger); color: #fff; }
 .x6-link { font: inherit; font-size: 12px; font-weight: 600; background: none; border: 0; padding: 0;
            color: var(--btn-ink, var(--btn)); cursor: pointer; white-space: nowrap; text-decoration: underline; }
-@media (max-width: 680px) {
-  .x6-sys, .x6-sys.wide { grid-template-columns: 14px minmax(0, 1fr) auto; }
-  .x6-sys .x6-state { grid-column: 2; }
-  .x6-sys .when { grid-row: 1; grid-column: 3; }
-  .x6-sys .x6-steps { grid-column: 2 / -1; }
-}
+/* 每日資轉 / 其他作業:一個系統(作業)一塊磚;異常整塊淡紅底,其他維持一般底色 */
+.x6-bricks { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 10px; margin-top: 14px; }
+.x6-brick { display: grid; gap: 6px; align-content: start; min-width: 0; padding: 11px 13px; border-radius: 14px;
+            border: 1px solid var(--line); background: var(--surface, var(--card)); }
+/* 其他作業的作業名稱較長、收信時間帶日期:磚塊放寬 */
+.x6-bricks.wide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); }
+.x6-bricks > .hint { grid-column: 1 / -1; margin: 0; }
+.x6-brick.bad { background: var(--danger-bg, #fdecee); border-color: var(--danger-line, var(--danger)); }
+.x6-brick-h { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.x6-brick-h .x6-dot { margin-top: 5px; }
+.x6-brick .name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.x6-brick .name small { display: block; font-weight: 400; color: var(--muted, var(--dim)); font-size: 11px; font-family: var(--ff-mono, monospace); }
+.x6-brick .when { font-size: 12px; color: var(--muted, var(--dim)); font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 2px; }
+.x6-brick > .x6-state, .x6-brick > .x6-steps, .x6-brick > .x6-detail, .x6-brick > .x6-reruns { margin-left: 18px; }
+.x6-brick .x6-steps { margin-left: 13px; gap: 0 6px; }
+/* 磚塊本身已上色,說明框不再加底色與外框,只留文字和「查看 log」 */
+.x6-brick .x6-detail { grid-column: auto; background: none; border: 0; padding: 0; font-size: 12px; }
+.x6-brick .x6-reruns { grid-column: auto; border-top: 1px dashed var(--line); padding-top: 4px; gap: 0 10px; }
+.x6-brick .x6-reruns .it:has(.x6-state) { flex-basis: 100%; flex-wrap: wrap; white-space: normal; column-gap: 6px; }
 
 /* 表格 */
 .x6-wrap { overflow-x: auto; margin-top: 12px; }
@@ -273,7 +280,7 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
           <span><i class="x6-dot none"></i>沒有執行(前一步失敗)</span>
         </span></span><button type="button" class="x6-sn x6-wikibtn" data-v="wiki">KM 登記<span class="x6-badge x6-info" hidden></span></button></h2>
       <div class="x6-summary" id="x6-d-summary"></div>
-      <div id="x6-systems" style="margin-top:8px"></div>
+      <div class="x6-bricks" id="x6-systems"></div>
     </section>
 
     <section class="card" id="x6-v-period" hidden>
@@ -298,7 +305,7 @@ dialog.x6-log::backdrop { background: rgba(12,7,20,.55); }
         </span></span><button type="button" class="x6-sn x6-wikibtn" data-v="wiki">KM 登記<span class="x6-badge x6-info" hidden></span></button></h2>
       <div class="x6-summary" id="x6-a-summary"></div>
       <h3 style="margin:20px 0 0;font-size:14px">不在清單上的作業</h3>
-      <div id="x6-adhoc"></div>
+      <div class="x6-bricks wide" id="x6-adhoc"></div>
       <h3 style="margin:20px 0 0;font-size:14px">維運 99xxxx <span class="hint">只列最後一次,不算警示</span></h3>
       <div class="x6-mail" id="x6-maint"></div>
       <p class="hint" style="margin:16px 0 0">某個作業之後要固定追蹤,就把它加進 data/config/xfer690.json 的系統清單:它會移到每日資轉或 TWA / TWB,開始判斷「該到沒到」,也可以設定要寫 KM 的欄。是某個系統的補跑,就加進那個系統的 reruns,會顯示在那一列底下的「補跑」。</p>
